@@ -1,0 +1,29 @@
+name: acme
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  # acme runtime requirements
+  - python>=3.7
+  - pip
+  - numpy >= 1.0, < 2.0
+  - dask >= 2.25, < 2.26
+  - distributed >= 2.25, < 2.26
+  - dask-jobqueue >= 0.7.1, < 0.8
+  - fsspec >= 0.3.3
+  - bokeh
+  - h5py >= 2.9
+  - jupyter
+  - jupyterlab
+  - tqdm >= 4.31
+  # Optional packages required for running the test-suite and building the HTML docs
+  - numpydoc
+  - sphinx_bootstrap_theme
+  - pytest
+  - pylint
+  - ipdb
+  - tox
+  - ruamel.yaml
+  - pip:
+    # Optional: only necessary when building the HTML documentation
+    - sphinx_automodapi
