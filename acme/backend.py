@@ -9,5 +9,14 @@ import os
 # Main context manager for parallel execution of user-defined functions
 class ACMEdaemon(object):
     
-    def __init__(self, file_name, method):
-        self.file_obj = open(file_name, method)
+    def __init__(
+        self, 
+        n_calls,
+        n_jobs="auto", 
+        write_worker_results=True, 
+        partition="auto", 
+        mem_per_job="auto",
+        setup_timeout=180, 
+        setup_interactive=True, 
+        start_client=True):
+        pass

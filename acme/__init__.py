@@ -15,3 +15,11 @@ try:
     __worker__ = True
 except ValueError:
     __worker__ = False
+
+# Import local modules
+from . import frontend
+from .frontend import *
+
+# Manage user-exposed namespace imports
+__all__ = []
+__all__.extend(frontend.__all__)
