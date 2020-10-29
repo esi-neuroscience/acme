@@ -43,25 +43,25 @@ class ParallelMap(object):
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`        
-        self.prep_input(func, n_inputs, *args, **kwargs)
+        self.prepare_input(func, n_inputs, *args, **kwargs)
         
-        self.daemon = ACMEdaemon(n_inputs, 
-                                 n_jobs=n_jobs, 
-                                 write_worker_results=write_worker_results,
-                                 partition=partition,
-                                 mem_per_job=mem_per_job,
-                                 setup_timeout=setup_timeout,
-                                 setup_interactive=setup_interactive,
-                                 start_client=start_client)
+        # self.daemon = ACMEdaemon(n_inputs, 
+        #                          n_jobs=n_jobs, 
+        #                          write_worker_results=write_worker_results,
+        #                          partition=partition,
+        #                          mem_per_job=mem_per_job,
+        #                          setup_timeout=setup_timeout,
+        #                          setup_interactive=setup_interactive,
+        #                          start_client=start_client)
         
         
-    def prep_input(self, func, n_inputs, *args, **kwargs):
+    def prepare_input(self, func, n_inputs, *args, **kwargs):
         
         # Ensure `func` really is a function and `n_inputs` makes sense
         if not callable(func):
             msg = "{} first input has to be a callable function, not {}"
             raise TypeError(msg.format(self.msgName, str(type(func))))
-        msg = "{} `n_inputs` has to be 'auto' or an integer number >= 2, not {}"
+        msg = "{} `n_inputs` has to be 'auto' or an integer >= 2, not {}"
         if isinstance(n_inputs, str):
             if n_inputs != "auto":
                 raise ValueError(msg.format(self.msgName, n_inputs))
@@ -166,7 +166,7 @@ class ParallelMap(object):
             
             
     def __enter__(self):
-        return self.file_obj
+        return self.daemon
     
     def __exit__(self, type, value, traceback):
         self.file_obj.close()
