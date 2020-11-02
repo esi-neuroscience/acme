@@ -4,9 +4,13 @@
 #
 
 # Builtin/3rd party package imports
-import numbers
-import subprocess
+import time
 import dask.distributed as dd
+
+# Local imports
+from .dask_helpers import esi_cluster_setup
+import acme.shared as acs
+
 
 # Main context manager for parallel execution of user-defined functions
 class ACMEdaemon(object):
@@ -62,12 +66,10 @@ class ACMEdaemon(object):
             raise TypeError(msg.format(self.msgName, str(type(func))))
 
         # Next, vet `n_calls` which is needed to validate `argv` and `kwargv`
-        msg = "{} `n_calls` has to be an integer >= 2, not {}"
-        if isinstance(n_calls, numbers.Number):
-            if n_calls < 1 or round(n_calls) != n_calls:
-                raise ValueError(msg.format(self.msgName, n_calls))
-        else:
-            raise TypeError(msg.format(self.msgName, n_calls))
+        try:
+            acs._scalar_parser(n_calls, varname="n_calls", ntype="int_like", lims=[2, np.inf])
+        except Exception as exc:
+            raise exc
 
         # Ensure all elements of `argv` are list-like with length `n_calls`
         msg = "{} `argv` has to be a list with list-like elements of length {}"
@@ -116,53 +118,30 @@ class ACMEdaemon(object):
         setup_timeout=180,
         setup_interactive=True):
 
-        # Check, if we're running on a SLURM-enabled node - if yes, retrieve available queues
-        out, err = subprocess.Popen("sinfo -h -o %P",
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    text=True, shell=True).communicate()
-        if len(err) > 0:
-
-            # SLURM is not installed, proceed with `LocalCluster`
-            if "sinfo: not found" in err:
-                if interactive:
-                    msg = "{name:s} SLURM does not seem to be installed on this machine " +\
-                        "({host:s}). Do you want to start a local multi-processing " +\
-                        "computing client instead? "
-                    startLocal = user_yesno(msg.format(name=funcName, host=socket.gethostname()),
-                                            default="no")
-                else:
-                    startLocal = True
-                if startLocal:
-                    client = Client()
-                    successMsg = "{name:s} Local parallel computing client ready. \n" + successMsg
-                    print(successMsg.format(name=funcName, dash=client.cluster.dashboard_link))
-                    if start_client:
-                        return client
-                    return client.cluster
-                return
-
-            # SLURM is installed, but something's wrong
-            msg = "SLURM queuing system from node {node:s}. " +\
-                "Original error message below:\n{error:s}"
-            raise SPYIOError(msg.format(node=socket.gethostname(), error=err))
-        options = out.split()
-
-
-        if not isinstance(partition, str):
-            msg = "{} `partition` has to be 'auto' or a valid SLURM partition name, not {}"
-            raise TypeError(msg.format(self.msgName, str(partition)))
-        if partition == "auto":
-            self.select_queue()
-
-        msg = "{} `n_jobs` has to be 'auto' or an integer >= 2, not {}"
-        if isinstance(n_jobs, str):
-            if n_jobs != "auto":
-                raise ValueError(msg.format(self.msgName, n_jobs))
-        elif isinstance(n_jobs, numbers.Number):
-            if n_jobs < 1 or round(n_jobs) != n_jobs:
-                raise ValueError(msg.format(self.msgName, n_jobs))
+        # If things are running locally, simply fire up a dask-distributed client,
+        # otherwise go through the motions of preparing a full cluster job swarm
+        if not acs.is_slurm_node:
+            self.client = esi_cluster_setup(interactive=False)
         else:
-            raise TypeError(msg.format(self.msgName, n_jobs))
+
+            # If `partition` is "auto", use `select_queue` to heuristically determine
+            # the "best" SLURM queue for the job at hand
+            if not isinstance(partition, str):
+                msg = "{} `partition` has to be 'auto' or a valid SLURM partition name, not {}"
+                raise TypeError(msg.format(self.msgName, str(partition)))
+            if partition == "auto":
+                self.select_queue()
+
+            # Either use `n_jobs = n_calls` (default) or parse provided value
+            if isinstance(n_jobs, str):
+                if n_jobs != "auto":
+                    raise ValueError(msg.format(self.msgName, n_jobs))
+                self.n_jobs = self.n_calls
+            else:
+                try:
+                    acs._scalar_parser(n_jobs, varname="n_jobs", ntype="int_like", lims=[2, np.inf])
+                except Exception as exc:
+                    raise exc
 
         cleanup = False
         if parallel is None or parallel is True:
@@ -215,6 +194,8 @@ class ACMEdaemon(object):
         args = [arg[dryRun0] for arg in self.argv]
         kwargs = [{key:value[dryRun0] for key, value in self.kwargv.items()}][0]
 
+        tic = time.perf_counter()
         self.func(*args, **kwargs)
+        toc = time.perf_counter()
 
         pass
