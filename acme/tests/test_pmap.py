@@ -23,7 +23,7 @@ def medium_func(x, y, z=3, w=np.ones((3, 3))):
   return (x + y) * z * w.max()
 
 def hard_func(x, y, z=3, w=np.zeros((3, 1))):
-  return (x + y) * z * w.max()
+  return (x + sum(y)) * z * w.max()
 
 
 # Prepare code to be executed using, e.g., iPython's `%run` magic command

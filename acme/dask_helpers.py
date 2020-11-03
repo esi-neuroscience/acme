@@ -62,7 +62,7 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job=None,
     mem_per_job : None or str
         Memory booking for each job. Can be specified either in megabytes
         (e.g., ``mem_per_job = 1500MB``) or gigabytes (e.g., ``mem_per_job = "2GB"``).
-        If `mem_per_job` is `None`, it is attempted to infer a sane default value
+        If `mem_per_job` is `None`, or `"auto"` it is attempted to infer a sane default value
         from the chosen queue, e.g., for ``partition = "8GBS"`` `mem_per_job` is
         automatically set to the allowed maximum of `'8GB'`. However, even in
         queues with guaranted memory bookings, it is possible to allocate less
@@ -180,6 +180,9 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job=None,
         raise exc
 
     # Get requested memory per job
+    if isinstance(mem_per_job, str):
+        if mem_per_job == "auto":
+            mem_per_job = None
     if mem_per_job is not None:
         msg = "{} `mem_per_job` has to be a valid memory specifier (e.g., '8GB', '12000MB'), not {}"
         if not isinstance(mem_per_job, str):

@@ -5,7 +5,15 @@
 
 # Builtin/3rd party package imports
 import time
+import getpass
+import datetime
+import inspect
+import warnings
+import os
+import h5py
 import dask.distributed as dd
+import dask.bag as db
+import numpy as np
 
 # Local imports
 from .dask_helpers import esi_cluster_setup
@@ -43,13 +51,15 @@ class ACMEdaemon(object):
                         getattr(pmap, "kwargv", kwargv),
                         getattr(pmap, "n_inputs", n_calls))
 
+        # Set up output handler
+        self.prepare_output(write_worker_results)
 
-        # Check if a dask client is already running
-        try:
-            self.client = dd.get_client()
-        except ValueError:
-            self.prepare_client()
-
+        # Either use existing dask client or start a fresh instance
+        self.prepare_client(n_jobs=n_jobs,
+                            partition=partition,
+                            mem_per_job=mem_per_job,
+                            setup_timeout=setup_timeout,
+                            setup_interactive=setup_interactive)
 
         # # >>>>>>>>>>>>>> DICT CONVERSION
         # tt = [[{key: val} for val in testDict[key]] for key in testDict.keys()]
@@ -97,40 +107,64 @@ class ACMEdaemon(object):
         self.kwargv = kwargv
         self.n_calls = n_calls
 
-    def allocate_output(self, write_worker_results):
+    def prepare_output(self, write_worker_results):
 
         if not isinstance(write_worker_results, bool):
             msg = "{} `write_worker_results` has to be `True` or `False`, not {}"
             raise TypeError(msg.format(self.msgName, str(write_worker_results)))
 
         if write_worker_results:
-            acmeFunc = self.wrappedFunc
+            outDir = "/mnt/hpx/home/{usr:s}/ACME_{date:s}"
+            self.outDir = outDir.format(usr=getpass.getuser(),
+                                        date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
+            try:
+                os.makedirs(self.outDir)
+            except Exception as exc:
+                msg = "{} automatic creation of output folder {} failed. Original error message below:\n{}"
+                raise OSError(msg.format(self.msgName, self.outDir, str(exc)))
+            self.acmeFunc = self.func_wrapper
         else:
-            acmeFunc = self.func
+            if self.kwargv.get("workerID") is None:
+                msg = "{} `write_worker_results` is `False` and `workerID` is not a keyword argument of {}." +\
+                    "Results will be collected in memory by caller - this might be slow and can lead " +\
+                    "to excessive memory consumption. "
+                warnings.showwarning(msg.format(self.msgName, self.func.__name__),
+                                     RuntimeWarning, __file__, inspect.currentframe().f_lineno)
+            self.acmeFunc = self.func
 
-    # def wrappedFunc()
-
-
-    def prepare_client(self, ncalls, n_jobs,
-        write_worker_results=True,
+    def prepare_client(
+        self,
+        n_jobs="auto",
         partition="auto",
         mem_per_job="auto",
         setup_timeout=180,
         setup_interactive=True):
 
+        # Check if a dask client is already running
+        try:
+            self.client = dd.get_client()
+            return
+        except ValueError:
+            pass
+
         # If things are running locally, simply fire up a dask-distributed client,
         # otherwise go through the motions of preparing a full cluster job swarm
         if not acs.is_slurm_node:
             self.client = esi_cluster_setup(interactive=False)
+
         else:
 
             # If `partition` is "auto", use `select_queue` to heuristically determine
-            # the "best" SLURM queue for the job at hand
+            # the "best" SLURM queue
             if not isinstance(partition, str):
                 msg = "{} `partition` has to be 'auto' or a valid SLURM partition name, not {}"
                 raise TypeError(msg.format(self.msgName, str(partition)))
             if partition == "auto":
-                self.select_queue()
+                msg = "{} WARNING: Automatic SLURM queueing selection not implemented yet. " +\
+                    "Falling back on default '8GBS' partition. "
+                print(msg.format(self.msgName))
+                partition = "8GBS"
+                # self.select_queue()
 
             # Either use `n_jobs = n_calls` (default) or parse provided value
             if isinstance(n_jobs, str):
@@ -143,50 +177,16 @@ class ACMEdaemon(object):
                 except Exception as exc:
                     raise exc
 
-        cleanup = False
-        if parallel is None or parallel is True:
-            if spy.__dask__:
-                try:
-                    dd.get_client()
-                    parallel = True
-                except ValueError:
-                    if parallel is True:
-                        objList = []
-                        argList = list(args)
-                        nTrials = 0
-                        for arg in args:
-                            if hasattr(arg, "trials"):
-                                objList.append(arg)
-                                nTrials = max(nTrials, len(arg.trials))
-                                argList.remove(arg)
-                        nObs = len(objList)
-                        msg = "Syncopy <{fname:s}> Launching parallel computing client " +\
-                            "to process {no:d} objects..."
-                        print(msg.format(fname=func.__name__, no=nObs))
-                        client = esi_cluster_setup(n_jobs=nTrials, interactive=False)
-                        cleanup = True
-                        if len(objList) > 1:
-                            for obj in objList:
-                                results.append(func(obj, *argList, **kwargs))
-                    else:
-                        parallel = False
-            else:
-                wrng = \
-                "dask seems not to be installed on this system. " +\
-                "Parallel processing capabilities cannot be used. "
-                SPYWarning(wrng)
-                parallel = False
+            # All set, remaining input processing is done by `esi_cluster_setup`
+            self.client = esi_cluster_setup(partition=partition, n_jobs=n_jobs,
+                                            mem_per_job=mem_per_job, timeout=setup_timeout,
+                                            interactive=setup_interactive, start_client=True)
 
-        # Add/update `parallel` to/in keyword args
-        kwargs["parallel"] = parallel
-
-        if len(results) == 0:
-            results = func(*args, **kwargs)
-        if cleanup:
-            cluster_cleanup(client=client)
 
     def select_queue(self):
 
+        # FIXME: Very much WIP
+        # Scratchpad, nothing final yet
         nSamples = min(self.n_calls, max(5, min(1, int(0.05*self.n_calls))))
         dryRunInputs = np.random.choice(self.n_calls, size=nSamples, replace=False).tolist()
 
@@ -194,8 +194,26 @@ class ACMEdaemon(object):
         args = [arg[dryRun0] for arg in self.argv]
         kwargs = [{key:value[dryRun0] for key, value in self.kwargv.items()}][0]
 
+        # use multi-processing module to launch `func` in background; terminate after
+        # 60sec, get memory consumption, do this for all `dryRunInputs` -> pick
+        # "shortest" queue w/appropriate memory (e.g., 16GBS, not 16GBXL)
         tic = time.perf_counter()
         self.func(*args, **kwargs)
         toc = time.perf_counter()
 
-        pass
+    def compute(self):
+
+        # argBag = db.from_sequence(self.argv, npartitions=self.n_calls)
+        argBag = [[arg[k] for arg in self..argv] for k in range(self.n_calls)]
+        kwargBag = db.from_sequence(zip(*[[{key: val} for val in self.kwargv[key]] for key in kwargv.keys()]))
+
+        # FIXME: check client for alive workers...
+        results = mainBag.map(self.computeFunction, *bags, **self.cfg)
+
+    @staticmethod
+    def func_wrapper(func, outDir, *args, **kwargs):
+        result = func(*args, **kwargs)
+        if outDir is not None:
+            fname = "{}_{}.h5".format(func.__name__, kwargs["workerID"])
+            with h5py.File(os.path.join(outDir, fname), "w") as h5f:
+                h5f.create_dataset("result", data=result)
