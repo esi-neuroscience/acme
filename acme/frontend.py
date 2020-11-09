@@ -21,9 +21,8 @@ class ParallelMap(object):
 
     msgName = "<ParallelMap>"
     argv = None
-    # ArgV = []
     kwargv = None
-    # KwargV = {}
+    func = None
     n_inputs = None
     _maxArgSize = 1024
 
@@ -38,7 +37,6 @@ class ParallelMap(object):
         mem_per_job="auto",
         setup_timeout=180,
         setup_interactive=True,
-        start_client=True,
         **kwargs):
         """
         Coming soon...
@@ -48,15 +46,14 @@ class ParallelMap(object):
         # and set class attributes `n_inputs`, `argv` and `kwargv`
         self.prepare_input(func, n_inputs, *args, **kwargs)
 
-        # self.daemon = ACMEdaemon(n_inputs,
-        #                          n_jobs=n_jobs,
-        #                          write_worker_results=write_worker_results,
-        #                          partition=partition,
-        #                          mem_per_job=mem_per_job,
-        #                          setup_timeout=setup_timeout,
-        #                          setup_interactive=setup_interactive,
-        #                          start_client=start_client)
-
+        # Create an instance of `ACMEdaemon` that does the actual parallel computing work
+        self.daemon = ACMEdaemon(self,
+                                 n_jobs=n_jobs,
+                                 write_worker_results=write_worker_results,
+                                 partition=partition,
+                                 mem_per_job=mem_per_job,
+                                 setup_timeout=setup_timeout,
+                                 setup_interactive=setup_interactive)
 
     def prepare_input(self, func, n_inputs, *args, **kwargs):
 
@@ -79,7 +76,7 @@ class ParallelMap(object):
         # Get `func`'s signature to extract its positional/keyword arguments
         funcSignature = inspect.signature(func)
         funcPosArgs = [name for name, value in funcSignature.parameters.items()\
-            if value.default is value.empty]
+            if value.default is value.empty and value.name != "kwargs"]
         funcKwargs = [name for name, value in funcSignature.parameters.items()\
             if value.default is not value.empty]
 
@@ -183,10 +180,11 @@ class ParallelMap(object):
                     continue
             self.kwargv[name] = [value] * self.n_inputs
 
+        # Finally, attach user-provided function to class instance
+        self.func = func
 
     def __enter__(self):
         return self.daemon
 
-    def __exit__(self, type, value, traceback):
-        self.file_obj.close()
-
+    def __exit__(self, exception_type, exception_value, exception_traceback):
+        self.daemon.cleanup()

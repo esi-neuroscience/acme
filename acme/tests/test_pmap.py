@@ -17,17 +17,19 @@ if acme_path not in sys.path:
 from acme import ParallelMap
 
 def simple_func(x, y, z=3):
-  return (x + y) * z
+    return (x + y) * z
 
 def medium_func(x, y, z=3, w=np.ones((3, 3))):
-  return (x + y) * z * w.max()
+    return (sum(x) + y) * z * w.max()
 
-def hard_func(x, y, z=3, w=np.zeros((3, 1))):
-  return (x + sum(y)) * z * w.max()
+def hard_func(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+    return (sum(x) + y) * z * w.max()
 
 
 # Prepare code to be executed using, e.g., iPython's `%run` magic command
 if __name__ == "__main__":
+
+    sys.exit()
 
     # Test stuff within here...
     pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4)

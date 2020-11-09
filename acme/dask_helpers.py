@@ -33,14 +33,15 @@ if isSpyModule:
     from syncopy.shared.errors import (SPYValueError, SPYTypeError, SPYIOError,
                                     SPYWarning)
     from syncopy.shared.queries import user_input, user_yesno
-    if __dask__:
-        from dask_jobqueue import SLURMCluster
-        from dask.distributed import Client, get_client
-        from datetime import datetime, timedelta
 else:
     import warnings
     from .shared import user_input, user_yesno
     from .shared import _scalar_parser as scalar_parser
+    __dask__ = True
+if __dask__:
+    from dask_jobqueue import SLURMCluster
+    from dask.distributed import Client, get_client
+    from datetime import datetime, timedelta
 
 __all__ = ["esi_cluster_setup", "cluster_cleanup"]
 
@@ -129,13 +130,16 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job=None,
     successMsg = "{name:s} Cluster dashboard accessible at {dash:s}"
 
     # Retrieve all partitions currently available in SLURM
-    out, err = subprocess.Popen("sinfo -h -o %P",
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                text=True, shell=True).communicate()
-    if len(err) > 0:
+    proc = subprocess.Popen("sinfo -h -o %P",
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, shell=True)
+    out, err = proc.communicate()
 
-        # SLURM is not installed, either allocate `LocalCluster` or just leave
-        if "sinfo: not found" in err:
+    # Any non-zero return-code means SLURM is not ready to use
+    if proc.returncode != 0:
+
+        # SLURM is not installed: either allocate `LocalCluster` or just leave
+        if proc.returncode == 1:
             if interactive:
                 msg = "{name:s} SLURM does not seem to be installed on this machine " +\
                     "({host:s}). Do you want to start a local multi-processing " +\
