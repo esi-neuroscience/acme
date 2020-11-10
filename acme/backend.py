@@ -242,17 +242,8 @@ class ACMEdaemon(object):
                                             mem_per_job=mem_per_job, timeout=setup_timeout,
                                             interactive=setup_interactive, start_client=True)
 
-            # Set `n_jobs` to no. of active workers in the initialized cluster
-            self.n_jobs = len(self.client.cluster.workers)
-
-            # In some cases distributed SLURM workers suffer from spontaneous
-            # dementia and forget the `sys.path` of their parent process. Fun!
-            def init_acme(dask_worker):
-                acme_path = os.path.abspath(os.path.split(__path__[0])[0])
-                if acme_path not in sys.path:
-                    sys.path.insert(0, acme_path)
-            self.client.register_worker_callbacks(init_acme)
-
+        # Set `n_jobs` to no. of active workers in the initialized cluster
+        self.n_jobs = len(self.client.cluster.workers)
 
     def select_queue(self):
 
@@ -291,6 +282,14 @@ class ACMEdaemon(object):
         if not len(self.client.cluster.workers):
             msg = "{} no active workers found in distributed computing cluster {}"
             raise RuntimeError(msg.format(self.msgName, self.client))
+
+        # In some cases distributed SLURM workers suffer from spontaneous
+        # dementia and forget the `sys.path` of their parent process. Fun!
+        def init_acme(dask_worker):
+            acme_path = os.path.abspath(os.path.split(__path__[0])[0])
+            if acme_path not in sys.path:
+                sys.path.insert(0, acme_path)
+        self.client.register_worker_callbacks(init_acme)
 
         # Convert positional/keyword arg lists to dask bags
         firstArg = db.from_sequence(self.argv[0])
