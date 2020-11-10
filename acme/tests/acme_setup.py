@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 
+#
 # Simple script for testing acme w/o pip-installing it
 #
 
@@ -14,11 +14,10 @@ if acme_path not in sys.path:
     sys.path.insert(0, acme_path)
 
 # Import package
-import acme
-# from acme import xyz
+from acme import ParallelMap
 
 # Prepare code to be executed using, e.g., iPython's `%run` magic command
 if __name__ == "__main__":
-    
+
     # Test stuff within here...
     pass

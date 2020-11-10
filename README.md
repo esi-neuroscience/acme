@@ -53,19 +53,17 @@ def g(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
     return (max(x) + y) * z * w.sum()
 
 n_jobs = 200
-client = esi_cluster_setup(partition="16GB", n_jobs=n_jobs)
+client = esi_cluster_setup(partition="8GBXS", n_jobs=n_jobs)
 
 x = [2, 4, 6, 8]
 z = range(n_jobs)
 w = np.ones((8, 1))
 
-pmap = ParallelMap(f, x, np.random.rand(n_jobs), z=z, , w=w, n_inputs=n_jobs)
+pmap = ParallelMap(f, x, np.random.rand(n_jobs), z=z, w=w, n_inputs=n_jobs)
 with pmap as p:
     p.compute()
 
-pmap = ParallelMap(g, x, np.random.rand(n_jobs), z=z, , w=w, n_inputs=n_jobs)
+pmap = ParallelMap(g, x, np.random.rand(n_jobs), z=z, w=w, n_inputs=n_jobs)
 with pmap as p:
     p.compute()
 ```
-
-
