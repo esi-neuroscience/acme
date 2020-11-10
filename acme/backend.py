@@ -10,7 +10,7 @@ import datetime
 import inspect
 import warnings
 import os
-from distributed.deploy import cluster
+import sys
 import h5py
 import glob
 import tqdm
@@ -20,6 +20,7 @@ import dask.bag as db
 import numpy as np
 
 # Local imports
+from acme import __path__
 from .dask_helpers import esi_cluster_setup, cluster_cleanup
 import acme.shared as acs
 
@@ -209,7 +210,6 @@ class ACMEdaemon(object):
         # otherwise go through the motions of preparing a full cluster job swarm
         if not self.has_slurm:
             self.client = esi_cluster_setup(interactive=False)
-            self.n_jobs = len(self.client.cluster.workers)
 
         else:
 
@@ -230,18 +230,29 @@ class ACMEdaemon(object):
             if isinstance(n_jobs, str):
                 if n_jobs != "auto":
                     raise ValueError(msg.format(self.msgName, n_jobs))
-                self.n_jobs = self.n_calls
+                n_jobs = self.n_calls
             else:
                 try:
                     acs._scalar_parser(n_jobs, varname="n_jobs", ntype="int_like", lims=[2, np.inf])
                 except Exception as exc:
                     raise exc
-                self.n_jobs = n_jobs
 
             # All set, remaining input processing is done by `esi_cluster_setup`
             self.client = esi_cluster_setup(partition=partition, n_jobs=n_jobs,
                                             mem_per_job=mem_per_job, timeout=setup_timeout,
                                             interactive=setup_interactive, start_client=True)
+
+            # Set `n_jobs` to no. of active workers in the initialized cluster
+            self.n_jobs = len(self.client.cluster.workers)
+
+            # In some cases distributed SLURM workers suffer from spontaneous
+            # dementia and forget the `sys.path` of their parent process. Fun!
+            def init_acme(dask_worker):
+                acme_path = os.path.abspath(os.path.split(__path__[0])[0])
+                if acme_path not in sys.path:
+                    sys.path.insert(0, acme_path)
+            self.client.register_worker_callbacks(init_acme)
+
 
     def select_queue(self):
 

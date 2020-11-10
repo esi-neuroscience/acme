@@ -13,7 +13,7 @@ acme_path = os.path.abspath(".." + os.sep + "..")
 if acme_path not in sys.path:
     sys.path.insert(0, acme_path)
 
-# Import package
+# Import main actor here
 from acme import ParallelMap
 
 def simple_func(x, y, z=3):
@@ -25,12 +25,10 @@ def medium_func(x, y, z=3, w=np.ones((3, 3))):
 def hard_func(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
     return (sum(x) + y) * z * w.max()
 
+# Imports for tests
 from scipy import signal
-import tempfile
 import h5py
-# def lowpass(arr, b, a=None, padlen=200):
-#     res = signal.filtfilt(b, a, arr.T, padlen=padlen).T
-#     return res
+import shutil
 
 def lowpass_h5dset(arr_like, b, a, channel_no, padlen=200):
     channel = arr_like[:, channel_no]
@@ -68,30 +66,32 @@ if __name__ == "__main__":
     orig = np.repeat(orig.reshape(-1, 1), axis=1, repeats=nChannels)
     orig = np.tile(orig, (nTrials, 1))
 
-    with tempfile.TemporaryDirectory() as tdir:
-        sigName = os.path.join(tdir, "sigdata.h5")
-        origName = os.path.join(tdir, "origdata.h5")
+    tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
+    os.makedirs(tempDir, exist_ok=True)
 
-        with h5py.File(sigName, "w") as sigFile:
-            dset = sigFile.create_dataset("data", data=sig)
-            dset.attrs["b"] = b
-            dset.attrs["a"] = a
+    sigName = os.path.join(tempDir, "sigdata.h5")
+    origName = os.path.join(tempDir, "origdata.h5")
 
-        with h5py.File(origName, "w") as origFile:
-            origFile.create_dataset("data", data=sig)
+    with h5py.File(sigName, "w") as sigFile:
+        dset = sigFile.create_dataset("data", data=sig)
+        dset.attrs["b"] = b
+        dset.attrs["a"] = a
 
-        with ParallelMap(lowpass_simple, sigName, range(nChannels)) as pmap:
-            pmap.compute()
+    with h5py.File(origName, "w") as origFile:
+        origFile.create_dataset("data", data=sig)
 
-        sigData = h5py.File(sigName, "r")["data"]
-        with ParallelMap(lowpass_h5dset, sigData, b, a, range(nChannels), n_inputs=nChannels) as pmap:
-            pmap.compute()
+    with ParallelMap(lowpass_simple, sigName, range(nChannels)) as pmap:
+        pmap.compute()
 
-        # Close any open HDF5 files to not trigger any `WinError`s
-        sigData.file.close()
+    sigData = h5py.File(sigName, "r")["data"]
+    with ParallelMap(lowpass_h5dset, sigData, b, a, range(nChannels), n_inputs=nChannels) as pmap:
+        pmap.compute()
+
+    # Close any open HDF5 files to not trigger any `WinError`s and clean up the tmp dir
+    sigData.file.close()
+    shutil.rmtree(tempDir, ignore_errors=True)
 
     sys.exit()
-
 
     # Test stuff within here...
     pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4)

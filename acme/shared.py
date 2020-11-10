@@ -79,7 +79,7 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
     """
 
     # Get name of calling method/function
-    caller = "<{}>".format(inspect.currentframe().f_code.co_name)
+    caller = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
 
     # Make sure `var` is a scalar-like number
     msg = "{caller:s} `{varname:s}` has to be {scalartype:s} between {lower:s} and {upper:s}, not {var:s}"
