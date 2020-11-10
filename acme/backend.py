@@ -10,6 +10,7 @@ import datetime
 import inspect
 import warnings
 import os
+from distributed.deploy import cluster
 import h5py
 import glob
 import tqdm
@@ -19,7 +20,7 @@ import dask.bag as db
 import numpy as np
 
 # Local imports
-from .dask_helpers import esi_cluster_setup
+from .dask_helpers import esi_cluster_setup, cluster_cleanup
 import acme.shared as acs
 
 
@@ -50,7 +51,8 @@ class ACMEdaemon(object):
         partition="auto",
         mem_per_job="auto",
         setup_timeout=180,
-        setup_interactive=True):
+        setup_interactive=True,
+        stop_client="auto"):
 
         # The only error checking happening in `__init__`
         if pmap is not None:
@@ -72,14 +74,8 @@ class ACMEdaemon(object):
                             partition=partition,
                             mem_per_job=mem_per_job,
                             setup_timeout=setup_timeout,
-                            setup_interactive=setup_interactive)
-
-        # # >>>>>>>>>>>>>> DICT CONVERSION
-        # tt = [[{key: val} for val in testDict[key]] for key in testDict.keys()]
-        # bag <- zip(*tt)
-        # testDict = {'a':[2,2,2], 'b':[5,6,7]}
-        # tt = [[{'a': 2}, {'a': 2}, {'a': 2}], [{'b': 5}, {'b': 6}, {'b': 7}]]
-        # list(zip(*tt)) = [({'a': 2}, {'b': 5}), ({'a': 2}, {'b': 6}), ({'a': 2}, {'b': 7})]
+                            setup_interactive=setup_interactive,
+                            stop_client=stop_client)
 
     def initialize(self, func, argv, kwargv, n_calls):
 
@@ -183,18 +179,29 @@ class ACMEdaemon(object):
         partition="auto",
         mem_per_job="auto",
         setup_timeout=180,
-        setup_interactive=True):
+        setup_interactive=True,
+        stop_client="auto"):
 
         # Check if a dask client is already running
         try:
             self.client = dd.get_client()
             self.stop_client = False
             self.n_jobs = len(self.client.cluster.workers)
-            msg = "{} global parallel computing client detected: {}, attaching to it"
+            msg = "{} Attaching to global parallel computing client {}"
             print(msg.format(self.msgName, str(self.client)))
             return
         except ValueError:
             self.stop_client = True
+
+        # Modify automatic setting of `stop_client` if requested
+        msg = "{} `stop_client` has to be 'auto' or Boolean, not {}"
+        if isinstance(stop_client, str):
+            if stop_client != "auto":
+                raise ValueError(msg.format(self.msgName, stop_client))
+        elif isinstance(stop_client, bool):
+            self.stop_client = stop_client
+        else:
+            raise TypeError(msg.format(self.msgName, stop_client))
 
         # If things are running locally, simply fire up a dask-distributed client,
         # otherwise go through the motions of preparing a full cluster job swarm
@@ -217,6 +224,7 @@ class ACMEdaemon(object):
                 # self.select_queue()
 
             # Either use `n_jobs = n_calls` (default) or parse provided value
+            msg = "{} `n_jobs` has to be 'auto' or an integer >= 2, not {}"
             if isinstance(n_jobs, str):
                 if n_jobs != "auto":
                     raise ValueError(msg.format(self.msgName, n_jobs))
@@ -232,7 +240,6 @@ class ACMEdaemon(object):
             self.client = esi_cluster_setup(partition=partition, n_jobs=n_jobs,
                                             mem_per_job=mem_per_job, timeout=setup_timeout,
                                             interactive=setup_interactive, start_client=True)
-
 
     def select_queue(self):
 
@@ -261,6 +268,12 @@ class ACMEdaemon(object):
             msg = "{} `debug` has to be `True` or `False`, not {}"
             raise TypeError(msg.format(self.msgName, str(debug)))
 
+        # If `client` attribute is not set, the daemon is being re-used: prepare
+        # everything for re-entry
+        if self.client is None:
+            self.prepare_output(write_worker_results=self.acme_func == self.func_wrapper)
+            self.prepare_client(n_jobs=self.n_jobs, stop_client=self.stop_client)
+
         # Check if the underlying parallel computing cluster hosts actually usable workers
         if not len(self.client.cluster.workers):
             msg = "{} no active workers found in distributed computing cluster {}"
@@ -286,18 +299,13 @@ class ACMEdaemon(object):
         else:
             logFiles = []
             logDir = os.path.dirname(self.client.cluster.dashboard_link) + "/info/main/workers.html"
-        msg = "{} Initiating {} parallel calls of `{}` using {} workers"
+        msg = "{} Preparing {} parallel calls of `{}` using {} workers"
         print(msg.format(self.msgName, self.n_calls, self.func.__name__, self.n_jobs))
         msg = "{} Log information available at {}"
         print(msg.format(self.msgName, logDir))
 
-        # If we're collecting by-worker output in memory, compute futures, otherwise persist
-        if self.collect_results:
-            values = results.compute()
-            futures = self.client.futures_of(values)
-        else:
-            values = None
-            futures = self.client.futures_of(results.persist())
+        # Persist task graph to cluster and keep track of futures
+        futures = self.client.futures_of(results.persist())
 
         # Set up progress bar: the while loop ensures all futures are executed
         totalTasks = len(futures)
@@ -358,6 +366,13 @@ class ACMEdaemon(object):
             # Finally, raise an error and get outta here
             raise RuntimeError(msg)
 
+        # If wanted (not recommended) collect computed results in local memory
+        if self.collect_results:
+            print("{} Gathering results in local memory".format(self.msgName))
+            values = self.client.gather(futures)
+        else:
+            values = None
+
         # Assemble final triumphant output message and get out
         msg = "{} SUCCESS! Finished parallel computation. "
         if "outDir" in self.kwargv.keys():
@@ -365,14 +380,13 @@ class ACMEdaemon(object):
             msg += msgRes
         print(msg.format(self.msgName))
 
-        # In case `self.collect_results` is `True` return by-worker results, otherwise
-        # just return `None`
+        # Either return collected by-worker results or just `None`
         return values
 
     def cleanup(self):
         if self.stop_client:
-            self.client.close()
-        # FIXME: other cleanup things
+            cluster_cleanup(self.client)
+            self.client = None
 
     @staticmethod
     def func_wrapper(*args, **kwargs):

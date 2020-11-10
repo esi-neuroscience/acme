@@ -4,7 +4,6 @@
 #
 
 # Builtin/3rd party package imports
-import numbers
 import inspect
 import warnings
 import numpy as np
@@ -37,6 +36,7 @@ class ParallelMap(object):
         mem_per_job="auto",
         setup_timeout=180,
         setup_interactive=True,
+        stop_client="auto",
         **kwargs):
         """
         Coming soon...
@@ -53,7 +53,8 @@ class ParallelMap(object):
                                  partition=partition,
                                  mem_per_job=mem_per_job,
                                  setup_timeout=setup_timeout,
-                                 setup_interactive=setup_interactive)
+                                 setup_interactive=setup_interactive,
+                                 stop_client=stop_client)
 
     def prepare_input(self, func, n_inputs, *args, **kwargs):
 
@@ -66,12 +67,12 @@ class ParallelMap(object):
             if n_inputs != "auto":
                 raise ValueError(msg.format(self.msgName, n_inputs))
             guessInputs = True
-        elif isinstance(n_inputs, numbers.Number):
-            if n_inputs < 1 or round(n_inputs) != n_inputs:
-                raise ValueError(msg.format(self.msgName, n_inputs))
-            guessInputs = False
         else:
-            raise TypeError(msg.format(self.msgName, n_inputs))
+            try:
+                acs._scalar_parser(n_inputs, varname="n_inputs", ntype="int_like", lims=[1, np.inf])
+            except Exception as exc:
+                raise exc
+            guessInputs = False
 
         # Get `func`'s signature to extract its positional/keyword arguments
         funcSignature = inspect.signature(func)
