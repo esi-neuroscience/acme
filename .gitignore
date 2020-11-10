@@ -1,0 +1,64 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# HTML documentation
+doc/build
+doc/source/_stubs
+*_stubs
+doc/source/api
+
+# Canonical /build directory
+/build
+
+# setuptools /dist directory
+/dist
+*.egg-info
+.eggs/
+
+# Python
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter notebook clutter
+.ipynb_checkpoints/
+
+# Dask-related stuff
+dask-worker-space
+
+# Test-related files
+.tox
+
+# Auto-generated files
+requirements.txt
+requirements-test.txt
+
+# Editor-related stuff
+.vscode
