@@ -23,6 +23,8 @@ import numpy as np
 from .dask_helpers import esi_cluster_setup, cluster_cleanup
 import acme.shared as acs
 
+__all__ = ["ACMEdaemon"]
+
 
 # Main context manager for parallel execution of user-defined functions
 class ACMEdaemon(object):

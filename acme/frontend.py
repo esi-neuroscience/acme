@@ -7,6 +7,7 @@
 import inspect
 import warnings
 import numpy as np
+from numpy.lib.arraysetops import isin
 
 # Local imports
 from .backend import ACMEdaemon
@@ -107,7 +108,11 @@ class ParallelMap(object):
         wrnLineNo = inspect.currentframe().f_lineno
 
         # Cycle through positional args
-        for arg in args:
+        args = list(args)
+        for k, arg in enumerate(args):
+            if isinstance(arg, range):
+                arg = list(arg)
+                args[k] = arg
             acs.callCount = 0
             argsize = acs.sizeOf(arg, "positional arguments")
             if argsize > self._maxArgSize:
@@ -123,6 +128,9 @@ class ParallelMap(object):
         # default value is not, interpret is as worker-arg list, and track its length
         for name, value in kwargs.items():
             defaultValue = funcSignature.parameters[name].default
+            if isinstance(value, range):
+                value = list(value)
+                kwargs[name] = value
             acs.callCount = 0
             valsize = acs.sizeOf(value, "keyword arguments")
             if valsize > self._maxArgSize:

@@ -13,6 +13,9 @@ import numpy as np
 callCount = 0
 callMax = 50000
 
+__all__ = []
+
+
 def sizeOf(obj, varname):
     """
     Estimate memory consumption of Python objects

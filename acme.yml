@@ -17,6 +17,7 @@ dependencies:
   - jupyterlab
   - tqdm >= 4.31
   # Optional packages required for running the test-suite and building the HTML docs
+  - scipy >= 1.5, < 1.6
   - numpydoc
   - sphinx_bootstrap_theme
   - pytest
