@@ -4,10 +4,14 @@
 #
 
 # Builtin/3rd party package imports
+import os
 import sys
 import subprocess
 import inspect
 import numbers
+import logging
+import warnings
+import datetime
 import numpy as np
 
 callCount = 0
@@ -156,3 +160,67 @@ def user_input(msg, valid, default=None):
             print("Please respond with '" + \
                   "or '".join(opt + "' " for opt in valid) + "\n")
 
+
+def prepare_log(func, logfile=False, verbose=True):
+    """
+    Coming soon...
+
+    return log
+    """
+
+    # Get name of calling method/function
+    caller = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
+
+    # Basal sanity check for Boolean flag
+    if verbose is not None and not isinstance(verbose, bool):
+        msg = "{} `verbose` has to be `True`, `False` or `None`, not {}"
+        raise TypeError(msg.format(caller, str(verbose)))
+
+    # Either parse provided `logfile` or set up an auto-generated file
+    msg = "{} `logfile` has to be `True`, `False` or a valid file-name, not {}"
+    if logfile is None or isinstance(logfile, bool):
+        if logfile is True:
+            logfile = os.path.dirname(os.path.abspath(inspect.getfile(func)))
+            logfile = os.path.join(logfile, "ACME_{func:s}_{date:s}.log")
+            logfile = logfile.format(func=func.__name__,
+                                     date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
+        else:
+            logfile = None
+    elif isinstance(logfile, str):
+        if os.path.isdir(logfile):
+            raise IOError(msg.format(caller, "a directory"))
+        logfile = os.path.abspath(os.path.expanduser(logfile))
+    else:
+        raise TypeError(msg.format(caller, str(logfile)))
+    if logfile is not None and os.path.isfile(logfile):
+        msg = "{} log-file {} already exists, appending to it"
+        warnings.showwarning(msg.format(caller, logfile), RuntimeWarning,
+                             __file__, inspect.currentframe().f_lineno)
+
+    # Set logging verbosity based on `verbose` flag
+    if verbose is None:
+        loglevel = logging.INFO
+    elif verbose is True:
+        loglevel = logging.DEBUG
+    else:
+        loglevel = logging.WARNING
+    log = logging.getLogger(caller)
+    log.setLevel(loglevel)
+
+    # Create logging formatter
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(name)s %(message)s",
+                                  datefmt="%Y-%m-%d %H:%M:%S")
+
+    # Output handlers: print log messages to `stderr` via `StreamHandler` as well
+    # as to a provided text file `logfile using a `FileHandler`
+    stdoutHandler = logging.StreamHandler()
+    stdoutHandler.setLevel(loglevel)
+    stdoutHandler.setFormatter(formatter)
+    log.addHandler(stdoutHandler)
+    if logfile is not None:
+        fileHandler = logging.FileHandler(logfile)
+        fileHandler.setLevel(loglevel)
+        fileHandler.setFormatter(formatter)
+        log.addHandler(fileHandler)
+
+    return log

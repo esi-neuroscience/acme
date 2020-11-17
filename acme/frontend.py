@@ -5,9 +5,7 @@
 
 # Builtin/3rd party package imports
 import inspect
-import warnings
 import numpy as np
-from numpy.lib.arraysetops import isin
 
 # Local imports
 from .backend import ACMEdaemon
@@ -24,6 +22,7 @@ class ParallelMap(object):
     kwargv = None
     func = None
     n_inputs = None
+    log = None
     _maxArgSize = 1024
 
     def __init__(
@@ -38,10 +37,15 @@ class ParallelMap(object):
         setup_timeout=180,
         setup_interactive=True,
         stop_client="auto",
+        verbose=None,
+        logfile=None,
         **kwargs):
         """
         Coming soon...
         """
+
+        # First and foremost, set up logging system (if wanted)
+        self.log = acs.prepare_log(func, logfile=logfile, verbose=verbose)
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`
@@ -103,9 +107,8 @@ class ParallelMap(object):
         # Prepare argument parsing: collect the the length of anything 1D-array-like
         # in `argLens` and check the size of all provided positional and keyword args
         argLens = []
-        wrnMsg = "{0} argument size {1:4.2f} MB exceeds recommended limit of {2} MB. " +\
+        wrnMsg = "argument size {0:4.2f} MB exceeds recommended limit of {1} MB. " +\
             "Distributing large variables across workers may result in poor performance. "
-        wrnLineNo = inspect.currentframe().f_lineno
 
         # Cycle through positional args
         args = list(args)
@@ -116,8 +119,7 @@ class ParallelMap(object):
             acs.callCount = 0
             argsize = acs.sizeOf(arg, "positional arguments")
             if argsize > self._maxArgSize:
-                warnings.showwarning(wrnMsg.format(self.msgName, argsize, self._maxArgSize),
-                                     ResourceWarning, __file__, wrnLineNo)
+                self.log.warning(wrnMsg.format(argsize, self._maxArgSize))
             if isinstance(arg, (list, tuple)):
                 argLens.append(len(arg))
             elif isinstance(arg, np.ndarray):
@@ -134,8 +136,7 @@ class ParallelMap(object):
             acs.callCount = 0
             valsize = acs.sizeOf(value, "keyword arguments")
             if valsize > self._maxArgSize:
-                warnings.showwarning(wrnMsg.format(self.msgName, valsize, self._maxArgSize),
-                                     ResourceWarning, __file__, wrnLineNo)
+                self.log.warning(wrnMsg.format(valsize, self._maxArgSize))
             if isinstance(value, (list, tuple)):
                 if isinstance(defaultValue, (list, tuple)):
                     if len(defaultValue) != len(value):
