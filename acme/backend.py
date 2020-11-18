@@ -8,6 +8,7 @@ import time
 import getpass
 import datetime
 import inspect
+import logging
 import os
 import sys
 import h5py
@@ -72,7 +73,8 @@ class ACMEdaemon(object):
 
         # If `log` is `None`, `prepare_log` has not been called yet
         if getattr(pmap, "log", None) is None:
-            self.log = acs.prepare_log(func, logfile=logfile, verbose=verbose)
+            self.log = acs.prepare_log(func, caller=self.msgName, logfile=logfile,
+                                       verbose=verbose)
         else:
             self.log = pmap.log
 
@@ -198,7 +200,7 @@ class ACMEdaemon(object):
             self.stop_client = False
             self.n_jobs = len(self.client.cluster.workers)
             msg = "Attaching to global parallel computing client {}"
-            self.log.info(msg.format(str.client))
+            self.log.info(msg.format(str(self.client)))
             return
         except ValueError:
             self.stop_client = True

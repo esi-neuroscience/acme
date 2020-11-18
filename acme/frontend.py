@@ -5,6 +5,7 @@
 
 # Builtin/3rd party package imports
 import inspect
+import logging
 import numpy as np
 
 # Local imports
@@ -44,8 +45,14 @@ class ParallelMap(object):
         Coming soon...
         """
 
-        # First and foremost, set up logging system (if wanted)
-        self.log = acs.prepare_log(func, logfile=logfile, verbose=verbose)
+        # First and foremost, set up logging system (unless logger is already present)
+        self.log = acs.prepare_log(func, caller=self.msgName, logfile=logfile,
+                                           verbose=verbose)
+        # if self.log is None:
+        #     self.log = acs.prepare_log(func, caller=self.msgName, logfile=logfile,
+        #                                    verbose=verbose)
+        # else:
+        #     self.log = logging.getLogger()
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`

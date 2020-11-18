@@ -83,15 +83,19 @@ if __name__ == "__main__":
     with ParallelMap(lowpass_simple, sigName, range(nChannels)) as pmap:
         pmap.compute()
 
+    # sys.exit()
+
     sigData = h5py.File(sigName, "r")["data"]
-    with ParallelMap(lowpass_h5dset, sigData, b, a, range(nChannels), n_inputs=nChannels) as pmap:
+    with ParallelMap(lowpass_h5dset, sigData, b, a, range(nChannels), n_inputs=nChannels, logfile=True) as pmap:
         pmap.compute()
+
+    print("here3")
 
     # Close any open HDF5 files to not trigger any `WinError`s and clean up the tmp dir
     sigData.file.close()
     shutil.rmtree(tempDir, ignore_errors=True)
 
-    sys.exit()
+    # sys.exit()
 
     # Test stuff within here...
     pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4)

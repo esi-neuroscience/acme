@@ -161,15 +161,20 @@ def user_input(msg, valid, default=None):
                   "or '".join(opt + "' " for opt in valid) + "\n")
 
 
-def prepare_log(func, logfile=False, verbose=True):
+def prepare_log(func, caller=None, logfile=False, verbose=True):
     """
     Coming soon...
 
     return log
     """
 
-    # Get name of calling method/function
-    caller = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
+    # If not provided, get name of calling method/function
+    if caller is None:
+        caller = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
+    elif not isinstance(caller, str):
+        msg = "{} `caller` has to be a string, not {}"
+        raise TypeError(msg.format(inspect.currentframe().f_back.f_code.co_name),
+                        str(caller))
 
     # Basal sanity check for Boolean flag
     if verbose is not None and not isinstance(verbose, bool):
@@ -208,16 +213,17 @@ def prepare_log(func, logfile=False, verbose=True):
     log.setLevel(loglevel)
 
     # Create logging formatter
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(name)s %(message)s",
-                                  datefmt="%Y-%m-%d %H:%M:%S")
+    formatter = logging.Formatter("%(name)s %(levelname)s: %(message)s")
 
     # Output handlers: print log messages to `stderr` via `StreamHandler` as well
     # as to a provided text file `logfile using a `FileHandler`
-    stdoutHandler = logging.StreamHandler()
-    stdoutHandler.setLevel(loglevel)
-    stdoutHandler.setFormatter(formatter)
-    log.addHandler(stdoutHandler)
-    if logfile is not None:
+    if len(log.handlers) == 0:
+        stdoutHandler = logging.StreamHandler()
+        stdoutHandler.setLevel(loglevel)
+        stdoutHandler.setFormatter(formatter)
+        log.addHandler(stdoutHandler)
+    if logfile is not None and \
+        all(not isinstance(handler, logging.FileHandler) for handler in log.handlers):
         fileHandler = logging.FileHandler(logfile)
         fileHandler.setLevel(loglevel)
         fileHandler.setFormatter(formatter)
