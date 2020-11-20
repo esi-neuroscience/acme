@@ -80,26 +80,21 @@ if __name__ == "__main__":
     with h5py.File(origName, "w") as origFile:
         origFile.create_dataset("data", data=sig)
 
-    with ParallelMap(lowpass_simple, sigName, range(nChannels)) as pmap:
+    with ParallelMap(lowpass_simple, sigName, range(nChannels), logfile=True) as pmap:
         pmap.compute()
-
-    # sys.exit()
 
     sigData = h5py.File(sigName, "r")["data"]
     with ParallelMap(lowpass_h5dset, sigData, b, a, range(nChannels), n_inputs=nChannels, logfile=True) as pmap:
         pmap.compute()
 
-    print("here3")
-
     # Close any open HDF5 files to not trigger any `WinError`s and clean up the tmp dir
     sigData.file.close()
     shutil.rmtree(tempDir, ignore_errors=True)
 
-    # sys.exit()
-
     # Test stuff within here...
     pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4)
     pmap = ParallelMap(simple_func, 0, 4, z=[3, 4, 5, 6])
+    sys.exit()
     pmap = ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=2)
 
     pmap = ParallelMap(medium_func, [2, 4, 6, 8], [2, 2], n_inputs=2)
