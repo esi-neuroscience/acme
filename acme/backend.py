@@ -388,11 +388,16 @@ class ACMEdaemon(object):
         # Assemble final triumphant output message and get out
         msg = "{} SUCCESS! Finished parallel computation. "
         if "outDir" in self.kwargv.keys():
-            msgRes = "Results have been saved to {}".format(self.kwargv["outDir"][0])
+            dirname = self.kwargv["outDir"][0]
+            msgRes = "Results have been saved to {}".format(dirname)
             msg += msgRes
+            # try to automatically collect filenames
+            if values is not None:
+                ext = 'h5'
+                values = [fn for fn in os.listdir(dirname) if fn.endswith(ext)]
         print(msg.format(self.msgName))
 
-        # Either return collected by-worker results or just `None`
+        # Either return collected by-worker results or the directory
         return values
 
     def cleanup(self):
