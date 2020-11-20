@@ -5,7 +5,6 @@
 
 # Builtin/3rd party package imports
 import inspect
-import logging
 import numpy as np
 
 # Local imports
@@ -48,11 +47,6 @@ class ParallelMap(object):
         # First and foremost, set up logging system (unless logger is already present)
         self.log = acs.prepare_log(func, caller=self.msgName, logfile=logfile,
                                            verbose=verbose)
-        # if self.log is None:
-        #     self.log = acs.prepare_log(func, caller=self.msgName, logfile=logfile,
-        #                                    verbose=verbose)
-        # else:
-        #     self.log = logging.getLogger()
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`
@@ -93,6 +87,16 @@ class ParallelMap(object):
         funcKwargs = [name for name, value in funcSignature.parameters.items()\
             if value.default is not value.empty]
 
+        # Account for positional args that were specified by name (keyword-like)
+        args = list(args)
+        posArgNames = []
+        for name, value in kwargs.items():
+            if name in funcPosArgs:
+                args.insert(funcPosArgs.index(name), value)
+                posArgNames.append(name)
+        for name in posArgNames:
+            kwargs.pop(name)
+
         # Compare provided `args`/`kwargs` to actually defined quantities in `func`
         if len(args) != len(funcPosArgs):
             msg = "{} {} expects {} positional arguments ({}), found {}"
@@ -118,7 +122,6 @@ class ParallelMap(object):
             "Distributing large variables across workers may result in poor performance. "
 
         # Cycle through positional args
-        args = list(args)
         for k, arg in enumerate(args):
             if isinstance(arg, range):
                 arg = list(arg)
@@ -199,6 +202,14 @@ class ParallelMap(object):
 
         # Finally, attach user-provided function to class instance
         self.func = func
+
+    def compute(self):
+        if hasattr(self, "daemon"):
+            self.daemon.compute()
+
+    def cleanup(self):
+        if hasattr(self, "daemon"):
+            self.daemon.cleanup
 
     def __enter__(self):
         return self.daemon

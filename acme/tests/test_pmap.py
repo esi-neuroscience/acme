@@ -23,7 +23,7 @@ def medium_func(x, y, z=3, w=np.ones((3, 3))):
     return (sum(x) + y) * z * w.max()
 
 def hard_func(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
-    return (sum(x) + y) * z * w.max()
+    return sum(x) + y,  z * w
 
 # Imports for tests
 from scipy import signal
@@ -93,8 +93,8 @@ if __name__ == "__main__":
 
     # Test stuff within here...
     pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4)
+    pmap = ParallelMap(simple_func, [2, 4, 6, 8], y=4)
     pmap = ParallelMap(simple_func, 0, 4, z=[3, 4, 5, 6])
-    sys.exit()
     pmap = ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=2)
 
     pmap = ParallelMap(medium_func, [2, 4, 6, 8], [2, 2], n_inputs=2)

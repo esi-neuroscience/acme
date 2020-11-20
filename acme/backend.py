@@ -8,7 +8,7 @@ import time
 import getpass
 import datetime
 import inspect
-import logging
+import numbers
 import os
 import sys
 import h5py
@@ -289,7 +289,8 @@ class ACMEdaemon(object):
 
         # Check if the underlying parallel computing cluster hosts actually usable workers
         if not len(self.client.cluster.workers):
-            msg = "{} no active workers found in distributed computing cluster {}"
+            msg = "{} no active workers found in distributed computing cluster {}" +\
+                "Consider running acme.cluster_cleanup()"
             raise RuntimeError(msg.format(self.msgName, self.client))
 
         # In some cases distributed SLURM workers suffer from spontaneous
@@ -418,4 +419,9 @@ class ACMEdaemon(object):
         if outDir is not None:
             fname = "{}_{}.h5".format(func.__name__, taskID)
             with h5py.File(os.path.join(outDir, fname), "w") as h5f:
-                h5f.create_dataset("result", data=result)
+                if isinstance(result, (list, tuple)):
+                    if not all(isinstance(value, (numbers.Number, str)) for value in result):
+                        for rk, res in enumerate(result):
+                            h5f.create_dataset("result_{}".format(rk), data=res)
+                else:
+                    h5f.create_dataset("result", data=result)
