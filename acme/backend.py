@@ -392,9 +392,13 @@ class ACMEdaemon(object):
             msgRes = "Results have been saved to {}".format(dirname)
             msg += msgRes
             # try to automatically collect filenames
-            if values is not None:
+            if values is None:
                 ext = 'h5'
-                values = [fn for fn in os.listdir(dirname) if fn.endswith(ext)]
+                values = []
+                for icall in range(self.n_calls):
+                    fname = "{}_{}.{}".format(self.kwargv["userFunc"][0].__name__, icall, ext)
+                    values.append(os.path.join(self.kwargv["outDir"][0], fname))
+                    #values = [fn for fn in os.listdir(dirname) if fn.endswith(ext)]
         print(msg.format(self.msgName))
 
         # Either return collected by-worker results or the directory
