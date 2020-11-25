@@ -11,6 +11,7 @@ import subprocess
 import getpass
 import time
 import inspect
+from warnings import showwarning
 import numpy as np
 from tqdm import tqdm
 if sys.platform == "win32":
@@ -34,7 +35,8 @@ if isSpyModule:
                                     SPYWarning)
     from syncopy.shared.queries import user_input, user_yesno
 else:
-    import warnings
+    import logging
+    from warnings import showwarning
     from .shared import user_input, user_yesno
     from .shared import _scalar_parser as scalar_parser
     __dask__ = True
@@ -119,6 +121,9 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job=None,
     --------
     cluster_cleanup : remove dangling parallel processing job-clusters
     """
+
+    # Re-direct printing/warnings to ACME logger outside SyNCoPy
+    print, showwarning = _logging_setup()
 
     # For later reference: dynamically fetch name of current function
     funcName = ""
@@ -235,8 +240,8 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job=None,
                 SPYWarning(msg.format(lim=mem_lim, par=partition))
             else:
                 msg = "{name:s} " + msg
-                warnings.showwarning(msg.format(name=funcName, lim=mem_lim, par=partition),
-                                     RuntimeWarning, __file__, inspect.currentframe().f_lineno)
+                showwarning(msg.format(name=funcName, lim=mem_lim, par=partition),
+                                       RuntimeWarning, __file__, inspect.currentframe().f_lineno)
             mem_per_job = str(int(mem_lim)) + "GB"
 
     # Parse requested timeout period
@@ -344,6 +349,9 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive):
     Local helper that can be called recursively
     """
 
+    # Re-direct printing/warnings to ACME logger outside SyNCoPy
+    print, showwarning = _logging_setup()
+
     # Wait until all workers have been started successfully or we run out of time
     wrkrs = _count_running_workers(cluster)
     to = str(timedelta(seconds=timeout))[2:]
@@ -408,6 +416,9 @@ def cluster_cleanup(client=None):
     esi_cluster_setup : Launch a SLURM jobs on the ESI compute cluster
     """
 
+    # Re-direct printing/warnings to ACME logger outside SyNCoPy
+    print, showwarning = _logging_setup()
+
     # For later reference: dynamically fetch name of current function
     funcName = ""
     if isSpyModule:
@@ -424,8 +435,8 @@ def cluster_cleanup(client=None):
                 SPYWarning(msg)
             else:
                 msg = "{name:s} " + msg
-                warnings.showwarning(msg.format(name=funcName), RuntimeWarning,
-                                     __file__, inspect.currentframe().f_lineno)
+                showwarning(msg.format(name=funcName), RuntimeWarning,
+                            __file__, inspect.currentframe().f_lineno)
             return
         except Exception as exc:
             raise exc
@@ -465,3 +476,18 @@ def _count_running_workers(cluster):
     Local replacement for the late `._count_active_workers` class method
     """
     return len(cluster.scheduler_info.get('workers'))
+
+
+def _logging_setup():
+    """
+    Local helper for in-place substitutions of `print` and `showwarning` in ACME standalone mode
+    """
+    if not isSpyModule:
+        allLoggers = list(logging.root.manager.loggerDict.keys())
+        idxList = [allLoggers.index(loggerName) for loggerName in allLoggers \
+            for moduleName in ["ACME", "ParallelMap"] if moduleName in loggerName]
+        if len(idxList) > 0:
+            logger = logging.getLogger(allLoggers[idxList[0]])
+            print = logger.info
+            showwarning = lambda msg, wrngType, fileName, lineNo: logger.warning(msg)
+        return print, showwarning

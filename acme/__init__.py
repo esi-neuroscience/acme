@@ -4,17 +4,34 @@
 #
 
 # Builtin/3rd party package imports
+import subprocess
+import warnings
+import inspect
 import dask.distributed as dd
+from importlib.metadata import version, PackageNotFoundError
 
-# Global version number
-__version__ = "0.1a0"
-
-# Check if we're being imported by a parallel worker process
+# Get package version: either via meta-information from egg or via latest git commit
 try:
-    dd.get_worker()
-    __worker__ = True
-except ValueError:
-    __worker__ = False
+    __version__ = version(__name__)
+except PackageNotFoundError:
+    proc = subprocess.Popen("git describe --always",
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, shell=True)
+    out, err = proc.communicate()
+    if proc.returncode != 0:
+        msg = "<ACME> Package is not installed in site-packages nor cloned via git. " +\
+            "Please consider obtaining ACME sources from supported channels. "
+        warnings.showwarning(msg, ImportWarning, __file__, inspect.currentframe().f_lineno)
+        __version__ = "-999"
+    else:
+        __version__ = out.rstrip("\n")
+
+# # Check if we're being imported by a parallel worker process: FIXME - do we need this?
+# try:
+#     dd.get_worker()
+#     __worker__ = True
+# except ValueError:
+#     __worker__ = False
 
 # Import local modules
 from . import frontend, backend, shared, dask_helpers

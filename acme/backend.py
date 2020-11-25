@@ -8,7 +8,7 @@ import time
 import getpass
 import datetime
 import inspect
-import warnings
+import numbers
 import os
 import sys
 import h5py
@@ -31,7 +31,7 @@ __all__ = ["ACMEdaemon"]
 class ACMEdaemon(object):
 
     __slots__ = "func", "argv", "kwargv", "n_calls", "n_jobs", "acme_func", \
-        "task_ids", "collect_results", "client", "stop_client", "has_slurm"
+        "task_ids", "collect_results", "client", "stop_client", "has_slurm", "log"
 
     # Prepend every stdout/stderr message with the name of this class
     msgName = "<ACMEdaemon>"
@@ -55,7 +55,9 @@ class ACMEdaemon(object):
         mem_per_job="auto",
         setup_timeout=180,
         setup_interactive=True,
-        stop_client="auto"):
+        stop_client="auto",
+        verbose=None,
+        logfile=None):
 
         # The only error checking happening in `__init__`
         if pmap is not None:
@@ -68,6 +70,13 @@ class ACMEdaemon(object):
                         getattr(pmap, "argv", argv),
                         getattr(pmap, "kwargv", kwargv),
                         getattr(pmap, "n_inputs", n_calls))
+
+        # If `log` is `None`, `prepare_log` has not been called yet
+        if getattr(pmap, "log", None) is None:
+            self.log = acs.prepare_log(func, caller=self.msgName, logfile=logfile,
+                                       verbose=verbose)
+        else:
+            self.log = pmap.log
 
         # Set up output handler
         self.prepare_output(write_worker_results)
@@ -162,12 +171,12 @@ class ACMEdaemon(object):
 
             # If `taskID` is not an explicit kw-arg of `func` and `func` does not
             # accept "anonymous" `**kwargs`, don't save anything but return stuff
-            if self.kwargv.get("taskID") is None and "kwargs" not in inspect.signature(self.func).parameters.keys():
-                msg = "{} `write_worker_results` is `False` and `taskID` is not a keyword argument of {}." +\
+            if self.kwargv.get("taskID") is None \
+                and "kwargs" not in inspect.signature(self.func).parameters.keys():
+                msg = "`write_worker_results` is `False` and `taskID` is not a keyword argument of {}." +\
                     "Results will be collected in memory by caller - this might be slow and can lead " +\
                     "to excessive memory consumption. "
-                warnings.showwarning(msg.format(self.msgName, self.func.__name__),
-                                     RuntimeWarning, __file__, inspect.currentframe().f_lineno)
+                self.log.warning(msg.format(self.func.__name__))
                 self.collect_results = True
             else:
                 self.kwargv["taskID"] = self.task_ids
@@ -190,8 +199,8 @@ class ACMEdaemon(object):
             self.client = dd.get_client()
             self.stop_client = False
             self.n_jobs = len(self.client.cluster.workers)
-            msg = "{} Attaching to global parallel computing client {}"
-            print(msg.format(self.msgName, str(self.client)))
+            msg = "Attaching to global parallel computing client {}"
+            self.log.info(msg.format(str(self.client)))
             return
         except ValueError:
             self.stop_client = True
@@ -219,9 +228,9 @@ class ACMEdaemon(object):
                 msg = "{} `partition` has to be 'auto' or a valid SLURM partition name, not {}"
                 raise TypeError(msg.format(self.msgName, str(partition)))
             if partition == "auto":
-                msg = "{} WARNING: Automatic SLURM queueing selection not implemented yet. " +\
+                msg = "Automatic SLURM queueing selection not implemented yet. " +\
                     "Falling back on default '8GBS' partition. "
-                print(msg.format(self.msgName))
+                self.log.warning(msg)
                 partition = "8GBS"
                 # self.select_queue()
 
@@ -280,7 +289,8 @@ class ACMEdaemon(object):
 
         # Check if the underlying parallel computing cluster hosts actually usable workers
         if not len(self.client.cluster.workers):
-            msg = "{} no active workers found in distributed computing cluster {}"
+            msg = "{} no active workers found in distributed computing cluster {}" +\
+                "Consider running acme.cluster_cleanup()"
             raise RuntimeError(msg.format(self.msgName, self.client))
 
         # In some cases distributed SLURM workers suffer from spontaneous
@@ -311,10 +321,10 @@ class ACMEdaemon(object):
         else:
             logFiles = []
             logDir = os.path.dirname(self.client.cluster.dashboard_link) + "/info/main/workers.html"
-        msg = "{} Preparing {} parallel calls of `{}` using {} workers"
-        print(msg.format(self.msgName, self.n_calls, self.func.__name__, self.n_jobs))
-        msg = "{} Log information available at {}"
-        print(msg.format(self.msgName, logDir))
+        msg = "Preparing {} parallel calls of `{}` using {} workers"
+        self.log.info(msg.format(self.n_calls, self.func.__name__, self.n_jobs))
+        msg = "Log information available at {}"
+        self.log.info(msg.format(logDir))
 
         # Persist task graph to cluster and keep track of futures
         futures = self.client.futures_of(results.persist())
@@ -380,13 +390,13 @@ class ACMEdaemon(object):
 
         # If wanted (not recommended) collect computed results in local memory
         if self.collect_results:
-            print("{} Gathering results in local memory".format(self.msgName))
+            self.log.info("Gathering results in local memory")
             values = self.client.gather(futures)
         else:
             values = None
 
         # Assemble final triumphant output message and get out
-        msg = "{} SUCCESS! Finished parallel computation. "
+        msg = "SUCCESS! Finished parallel computation. "
         if "outDir" in self.kwargv.keys():
             dirname = self.kwargv["outDir"][0]
             msgRes = "Results have been saved to {}".format(dirname)
@@ -399,7 +409,7 @@ class ACMEdaemon(object):
                     fname = "{}_{}.{}".format(self.kwargv["userFunc"][0].__name__, icall, ext)
                     values.append(os.path.join(self.kwargv["outDir"][0], fname))
                     #values = [fn for fn in os.listdir(dirname) if fn.endswith(ext)]
-        print(msg.format(self.msgName))
+        self.log.info(msg)
 
         # Either return collected by-worker results or the directory
         return values
@@ -418,4 +428,9 @@ class ACMEdaemon(object):
         if outDir is not None:
             fname = "{}_{}.h5".format(func.__name__, taskID)
             with h5py.File(os.path.join(outDir, fname), "w") as h5f:
-                h5f.create_dataset("result", data=result)
+                if isinstance(result, (list, tuple)):
+                    if not all(isinstance(value, (numbers.Number, str)) for value in result):
+                        for rk, res in enumerate(result):
+                            h5f.create_dataset("result_{}".format(rk), data=res)
+                else:
+                    h5f.create_dataset("result", data=result)
