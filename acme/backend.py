@@ -404,7 +404,7 @@ class ACMEdaemon(object):
             msg += msgRes
             # try to automatically collect filenames
             if values is None:
-                values = self.kwargv["outFile"]
+                values = [os.path.join(dirname, x) for x in self.kwargv["outFile"]]
         self.log.info(msg)
 
         # Either return collected by-worker results or the directory
