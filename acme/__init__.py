@@ -19,12 +19,16 @@ except PackageNotFoundError:
                             text=True, shell=True)
     out, err = proc.communicate()
     if proc.returncode != 0:
-        msg = "<ACME> Package is not installed in site-packages nor cloned via git. " +\
-            "Please consider obtaining ACME sources from supported channels. "
-        warnings.showwarning(msg, ImportWarning, __file__, inspect.currentframe().f_lineno)
-        __version__ = "-999"
-    else:
-        __version__ = out.rstrip("\n")
+        proc = subprocess.Popen("git rev-parse HEAD:acme/__init__.py",
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, shell=True)
+        out, err = proc.communicate()
+        if proc.returncode != 0:
+            msg = "<ACME> Package is not installed in site-packages nor cloned via git. " +\
+                "Please consider obtaining ACME sources from supported channels. "
+            warnings.showwarning(msg, ImportWarning, __file__, inspect.currentframe().f_lineno)
+            out = "-999"
+    __version__ = out.rstrip("\n")
 
 # # Check if we're being imported by a parallel worker process: FIXME - do we need this?
 # try:
