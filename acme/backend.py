@@ -160,6 +160,7 @@ class ACMEdaemon(object):
             # Prepare `outDir` for distribution across workers via `kwargv` and
             # re-define or allocate key "taskID" to track concurrent processing results
             self.kwargv["outDir"] = [outDir] * self.n_calls
+            self.kwargv["outFile"] = ["{}_{}.h5".format(self.func.__name__, taskID) for taskID in self.task_ids]
             self.kwargv["taskID"] = self.task_ids
             self.collect_results = False
 
@@ -398,11 +399,15 @@ class ACMEdaemon(object):
         # Assemble final triumphant output message and get out
         msg = "SUCCESS! Finished parallel computation. "
         if "outDir" in self.kwargv.keys():
-            msgRes = "Results have been saved to {}".format(self.kwargv["outDir"][0])
+            dirname = self.kwargv["outDir"][0]
+            msgRes = "Results have been saved to {}".format(dirname)
             msg += msgRes
+            # try to automatically collect filenames
+            if values is None:
+                values = [os.path.join(dirname, x) for x in self.kwargv["outFile"]]
         self.log.info(msg)
 
-        # Either return collected by-worker results or just `None`
+        # Either return collected by-worker results or the directory
         return values
 
     def cleanup(self):
@@ -415,9 +420,9 @@ class ACMEdaemon(object):
         func = kwargs.pop("userFunc")
         outDir = kwargs.pop("outDir")
         taskID = kwargs.pop("taskID")
+        fname = kwargs.pop("outFile")
         result = func(*args, **kwargs)
         if outDir is not None:
-            fname = "{}_{}.h5".format(func.__name__, taskID)
             with h5py.File(os.path.join(outDir, fname), "w") as h5f:
                 if isinstance(result, (list, tuple)):
                     if not all(isinstance(value, (numbers.Number, str)) for value in result):
