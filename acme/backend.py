@@ -160,6 +160,7 @@ class ACMEdaemon(object):
             # Prepare `outDir` for distribution across workers via `kwargv` and
             # re-define or allocate key "taskID" to track concurrent processing results
             self.kwargv["outDir"] = [outDir] * self.n_calls
+            self.kwargv["outFile"] = ["{}_{}.h5".format(self.func.__name__, taskID) for taskID in self.task_ids]
             self.kwargv["taskID"] = self.task_ids
             self.collect_results = False
 
@@ -403,12 +404,7 @@ class ACMEdaemon(object):
             msg += msgRes
             # try to automatically collect filenames
             if values is None:
-                ext = 'h5'
-                values = []
-                for icall in range(self.n_calls):
-                    fname = "{}_{}.{}".format(self.kwargv["userFunc"][0].__name__, icall, ext)
-                    values.append(os.path.join(self.kwargv["outDir"][0], fname))
-                    #values = [fn for fn in os.listdir(dirname) if fn.endswith(ext)]
+                values = self.kwargv["outFile"]
         self.log.info(msg)
 
         # Either return collected by-worker results or the directory
@@ -424,9 +420,9 @@ class ACMEdaemon(object):
         func = kwargs.pop("userFunc")
         outDir = kwargs.pop("outDir")
         taskID = kwargs.pop("taskID")
+        fname = kwargs.pop("outFile")
         result = func(*args, **kwargs)
         if outDir is not None:
-            fname = "{}_{}.h5".format(func.__name__, taskID)
             with h5py.File(os.path.join(outDir, fname), "w") as h5f:
                 if isinstance(result, (list, tuple)):
                     if not all(isinstance(value, (numbers.Number, str)) for value in result):
