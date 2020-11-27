@@ -303,9 +303,9 @@ class ACMEdaemon(object):
         self.client.register_worker_callbacks(init_acme)
 
         # Convert positional/keyword arg lists to dask bags
-        firstArg = db.from_sequence(self.argv[0])
-        otherArgs = [db.from_sequence(arg) for arg in self.argv[1:] if len(self.argv) > 1]
-        kwargBags = {key:db.from_sequence(value) for key, value in self.kwargv.items()}
+        firstArg = db.from_sequence(self.argv[0], npartitions=self.n_calls)
+        otherArgs = [db.from_sequence(arg, npartitions=self.n_calls) for arg in self.argv[1:] if len(self.argv) > 1]
+        kwargBags = {key:db.from_sequence(value, npartitions=self.n_calls) for key, value in self.kwargv.items()}
 
         # Now, start to actually do something: map pos./kw. args onto (wrapped) user function
         results = firstArg.map(self.acme_func, *otherArgs, **kwargBags)
