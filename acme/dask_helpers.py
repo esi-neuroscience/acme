@@ -350,7 +350,7 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive):
     """
 
     # Re-direct printing/warnings to ACME logger outside SyNCoPy
-    print, showwarning = _logging_setup()
+    print, _ = _logging_setup()
 
     # Wait until all workers have been started successfully or we run out of time
     wrkrs = _count_running_workers(cluster)
@@ -482,12 +482,14 @@ def _logging_setup():
     """
     Local helper for in-place substitutions of `print` and `showwarning` in ACME standalone mode
     """
+    pFunc = print
+    wFunc = showwarning
     if not isSpyModule:
         allLoggers = list(logging.root.manager.loggerDict.keys())
         idxList = [allLoggers.index(loggerName) for loggerName in allLoggers \
             for moduleName in ["ACME", "ParallelMap"] if moduleName in loggerName]
         if len(idxList) > 0:
             logger = logging.getLogger(allLoggers[idxList[0]])
-            print = logger.info
-            showwarning = lambda msg, wrngType, fileName, lineNo: logger.warning(msg)
-        return print, showwarning
+            pFunc = logger.info
+            wFunc = lambda msg, wrngType, fileName, lineNo: logger.warning(msg)
+    return pFunc, wFunc
