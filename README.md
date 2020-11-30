@@ -67,3 +67,33 @@ pmap = ParallelMap(g, x, np.random.rand(n_jobs), z=z, w=w, n_inputs=n_jobs)
 with pmap as p:
     p.compute()
 ```
+
+## Handling results
+
+### Load results from files
+The results are saved to disk in HDF5 format and the filenames are returned as a list of strings. 
+
+```python
+with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
+  filenames = pmap.compute()
+```
+
+Example loading code:
+
+```python
+out = np.zeros((4))
+import h5py
+for ii, fname in enumerate(filenames):
+    with h5py.File(fname, 'r') as f:
+        out[ii] = np.array(f['result_0'])
+```
+
+### Collect results in local memory
+This is possible but not recommended.
+
+```python
+with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
+  results = pmap.compute()
+
+out = np.array([xi[0][0] for xi in results])
+```

@@ -402,12 +402,12 @@ class ACMEdaemon(object):
             dirname = self.kwargv["outDir"][0]
             msgRes = "Results have been saved to {}".format(dirname)
             msg += msgRes
-            # try to automatically collect filenames
+            # Determine filepaths of results files
             if values is None:
                 values = [os.path.join(dirname, x) for x in self.kwargv["outFile"]]
         self.log.info(msg)
 
-        # Either return collected by-worker results or the directory
+        # Either return collected by-worker results or the filepaths of results
         return values
 
     def cleanup(self):
