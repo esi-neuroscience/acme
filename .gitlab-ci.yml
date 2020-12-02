@@ -1,0 +1,63 @@
+stages:
+    - test
+    - upload
+    - deploy
+
+slurmtest:
+    stage: test
+    tags:
+    - slurm
+    only:
+    - master
+    - dev
+    variables:
+        PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
+    script:
+    - source $HOME/miniconda3/etc/profile.d/conda.sh
+    - conda update --yes conda
+    - conda env update -f acme.yml --prune
+    - conda activate acme
+    - srun -p DEV --mem=8000m -c 4 tox -r
+
+pypitest:
+    stage: upload
+    only:
+    - master
+    - tags
+    tags:
+    - deploy
+    script:
+    - source $HOME/miniconda/etc/profile.d/conda.sh
+    - conda update --yes conda
+    - conda env update -f acme.yml --prune
+    - conda activate acme
+    - conda install --yes twine keyring rfc3986
+    - conda update --yes twine keyring rfc3986
+    - python setup.py sdist bdist_wheel
+    - tarname="$(basename -- $(ls dist/*.tar.gz) .tar.gz)"
+    - version=$(sed -e 's/esi-acme-\(.*\)/\1/' <<< "$tarname")
+    - twine upload --repository testpypi dist/*
+    - conda create --yes --name piptest
+    - conda activate piptest
+    - conda install --yes pip
+    - pip --no-cache-dir install --extra-index-url https://testpypi.python.org/pypi esi-acme==$version
+    - python -c "from acme import ParallelMap"
+    - conda deactivate
+    - conda remove --yes --name piptest --all
+
+pypideploy:
+    stage: deploy
+    only:
+    - master
+    - tags
+    tags:
+    - deploy
+    script:
+    - source $HOME/miniconda/etc/profile.d/conda.sh
+    - conda update --yes conda
+    - conda env update -f acme.yml --prune
+    - conda activate acme
+    - conda install --yes twine keyring rfc3986
+    - conda update --yes twine keyring rfc3986
+    - python setup.py sdist bdist_wheel
+    - twine upload dist/*

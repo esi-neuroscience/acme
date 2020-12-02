@@ -1,0 +1,20 @@
+language: python
+python:
+  - "3.8"
+
+cache: pip
+
+branches:
+  only:
+  - master
+  - dev
+
+install:
+  - pip install ruamel.yaml setuptools_scm
+  - python -m conda2pip
+  - pip install -r requirements.txt
+  - pip install -r requirements-test.txt
+  - python setup.py -q install
+
+script:
+  - pytest -v
