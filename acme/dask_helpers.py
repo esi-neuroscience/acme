@@ -144,7 +144,7 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job=None,
     if proc.returncode != 0:
 
         # SLURM is not installed: either allocate `LocalCluster` or just leave
-        if proc.returncode == 1:
+        if proc.returncode > 0:
             if interactive:
                 msg = "{name:s} SLURM does not seem to be installed on this machine " +\
                     "({host:s}). Do you want to start a local multi-processing " +\

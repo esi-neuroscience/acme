@@ -143,7 +143,10 @@ class TestParallelMap():
                 assert np.mean(np.abs(h5f["result"][()] - self.orig[:, chNo])) < self.tol
 
         # Same, but collect results in memory: ensure nothing freaky happens
-        with ParallelMap(lowpass_simple, sigName, range(self.nChannels), write_worker_results=False) as pmap:
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         write_worker_results=False) as pmap:
             resInMem = pmap.compute()
         for chNo in range(self.nChannels):
             assert np.mean(np.abs(resInMem[chNo][0] - self.orig[:, chNo])) < self.tol
