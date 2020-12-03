@@ -70,48 +70,48 @@ class TestParallelMap():
     def test_init(self):
 
         # Basic functionality w/simplest conceivable user-func
-        pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4)
-        pmap = ParallelMap(simple_func, [2, 4, 6, 8], y=4)  # pos arg referenced via kwarg, cfg #2
-        pmap = ParallelMap(simple_func, 0, 4, z=[3, 4, 5, 6])
-        pmap = ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=2)
+        pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4, setup_interactive=False)
+        pmap = ParallelMap(simple_func, [2, 4, 6, 8], y=4, setup_interactive=False)  # pos arg referenced via kwarg, cfg #2
+        pmap = ParallelMap(simple_func, 0, 4, z=[3, 4, 5, 6], setup_interactive=False)
+        pmap = ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=2, setup_interactive=False)
 
         # User func has `np.ndarray` as keyword
-        pmap = ParallelMap(medium_func, [2, 4, 6, 8], y=[2, 2], n_inputs=2)
-        pmap = ParallelMap(medium_func, None, None, w=[np.ones((3, 3)), 2 * np.ones((3,3))])
-        pmap = ParallelMap(medium_func, None, None, z=np.zeros((3,)))
-        pmap = ParallelMap(medium_func, None, None, z=np.zeros((3, 1)))
+        pmap = ParallelMap(medium_func, [2, 4, 6, 8], y=[2, 2], n_inputs=2, setup_interactive=False)
+        pmap = ParallelMap(medium_func, None, None, w=[np.ones((3, 3)), 2 * np.ones((3,3))], setup_interactive=False)
+        pmap = ParallelMap(medium_func, None, None, z=np.zeros((3,)), setup_interactive=False)
+        pmap = ParallelMap(medium_func, None, None, z=np.zeros((3, 1)), setup_interactive=False)
 
         # Lots of ways for this to go wrong...
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], 2, w=np.ones((3,)))
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], y=22, w=np.ones((7, 1)))
-        pmap = ParallelMap(hard_func, np.ones((3,)), 1, w=np.ones((7, 1)))
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2)
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=4)
+        pmap = ParallelMap(hard_func, [2, 4, 6, 8], 2, w=np.ones((3,)), setup_interactive=False)
+        pmap = ParallelMap(hard_func, [2, 4, 6, 8], y=22, w=np.ones((7, 1)), setup_interactive=False)
+        pmap = ParallelMap(hard_func, np.ones((3,)), 1, w=np.ones((7, 1)), setup_interactive=False)
+        pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2, setup_interactive=False)
+        pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=4, setup_interactive=False)
 
         # Ensure erroneous/ambiguous setups trigger the appropriate errors:
         # not enough positional args
         with pytest.raises(ValueError) as valerr:
-            ParallelMap(simple_func, 4)
+            ParallelMap(simple_func, 4, setup_interactive=False)
             assert "simple_func expects 2 positional arguments ('x', 'y'), found 1" in str(valerr.value)
         # invalid kwargs
         with pytest.raises(ValueError) as valerr:
-            ParallelMap(simple_func, 4, 4, z=3, w=4)
+            ParallelMap(simple_func, 4, 4, z=3, w=4, setup_interactive=False)
             assert "simple_func accepts at maximum 1 keyword arguments ('z'), found 2" in str(valerr.value)
         # ill-posed parallelization: two candidate lists for input distribution
         with pytest.raises(ValueError) as valerr:
-            ParallelMap(simple_func, [2, 4, 6, 8], [2, 2])
+            ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], setup_interactive=False)
             assert "automatic input distribution failed: found 2 objects containing 2 to 4 elements" in str(valerr.value)
         # ill-posed parallelization: two candidate lists for input distribution (`x` and `w`)
         with pytest.raises(ValueError) as valerr:
-            ParallelMap(medium_func, [1, 2, 3], None, w=[np.ones((3,3)), 2 * np.ones((3,3))])
+            ParallelMap(medium_func, [1, 2, 3], None, w=[np.ones((3,3)), 2 * np.ones((3,3))], setup_interactive=False)
             assert "automatic input distribution failed: found 2 objects containing 2 to 3 elements." in str(valerr.value)
         # invalid input spec
         with pytest.raises(ValueError) as valerr:
-            ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=3)
+            ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=3, setup_interactive=False)
             assert "No object has required length of 3 matching `n_inputs`" in str(valerr.value)
         # invalid input spec: `w` expects a NumPy array, thus it is not considered for input distribution
         with pytest.raises(ValueError) as valerr:
-            ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=8)
+            ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=8, setup_interactive=False)
             assert "No object has required length of 8 matching `n_inputs`" in str(valerr.value)
 
     # Functionality tests: perform channel-concurrent low-pass filtering
@@ -130,7 +130,7 @@ class TestParallelMap():
             origFile.create_dataset("data", data=self.orig)
 
         # Parallelize across channels, write results to disk
-        with ParallelMap(lowpass_simple, sigName, range(self.nChannels)) as pmap:
+        with ParallelMap(lowpass_simple, sigName, range(self.nChannels), setup_interactive=False) as pmap:
             resOnDisk = pmap.compute()
         assert len(pmap.kwargv["outFile"]) == pmap.n_calls
         resFiles = [os.path.join(pmap.kwargv["outDir"][0], outFile) for outFile in pmap.kwargv["outFile"]]
@@ -146,7 +146,8 @@ class TestParallelMap():
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
-                         write_worker_results=False) as pmap:
+                         write_worker_results=False,
+                         setup_interactive=False) as pmap:
             resInMem = pmap.compute()
         for chNo in range(self.nChannels):
             assert np.mean(np.abs(resInMem[chNo][0] - self.orig[:, chNo])) < self.tol
@@ -156,7 +157,7 @@ class TestParallelMap():
         # ensure logfile is written (in combo w/verbose)
         # ensure SLURM options are respected (njobs, partition, mem_per_job)
 
-        # with ParallelMap(lowpass_simple, sigName, range(nChannels), logfile=True) as pmap:
+        # with ParallelMap(lowpass_simple, sigName, range(nChannels), logfile=True, setup_interactive=False) as pmap:
         #     pmap.compute()
 
         # Close any open HDF5 files to not trigger any `OSError`s and clean up the tmp dir
