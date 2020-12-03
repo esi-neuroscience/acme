@@ -101,8 +101,8 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
             raise ValueError(msg.format(caller=caller,
                                         varname=varname,
                                         scalartype=scalartype,
-                                        lower=lims[0],
-                                        upper=lims[1],
+                                        lower=str(lims[0]),
+                                        upper=str(lims[1]),
                                         var=str(var)))
     else:
         msg = "{caller:s} `{varname:s}` has to be a scalar, not {var:s}"
