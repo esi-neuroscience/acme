@@ -97,6 +97,11 @@ class ParallelMap(object):
         for name in posArgNames:
             kwargs.pop(name)
 
+        # If "taskID" is a keyword arg, include/overwrite it in `kwargs` - the rest
+        # is done by `ACMEdaemon`
+        if "taskID" in funcKwargs:
+            kwargs["taskID"] = None
+
         # Compare provided `args`/`kwargs` to actually defined quantities in `func`
         if len(args) != len(funcPosArgs):
             msg = "{} {} expects {} positional arguments ({}), found {}"
