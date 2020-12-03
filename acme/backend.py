@@ -252,6 +252,11 @@ class ACMEdaemon(object):
                                             mem_per_job=mem_per_job, timeout=setup_timeout,
                                             interactive=setup_interactive, start_client=True)
 
+            # If startup is aborted by user, get outta here
+            if self.client is None:
+                msg = "{} Could not start distributed computing client. "
+                raise ConnectionAbortedError(msg.format(self.msgName))
+
         # Set `n_jobs` to no. of active workers in the initialized cluster
         self.n_jobs = len(self.client.cluster.workers)
 
@@ -290,8 +295,12 @@ class ACMEdaemon(object):
 
         # Check if the underlying parallel computing cluster hosts actually usable workers
         if not len(self.client.cluster.workers):
-            msg = "{} no active workers found in distributed computing cluster {}" +\
-                "Consider running acme.cluster_cleanup()"
+            msg = "{} no active workers found in distributed computing cluster {} " +\
+                "Consider running \n" +\
+                "\timport dask.distributed as dd; dd.get_client().restart()\n" +\
+                "If this fails to make workers come online, please use\n" +\
+                "\timport acme; acme.cluster_cleanup()\n" +\
+                "to shut down any defunct distributed computing clients"
             raise RuntimeError(msg.format(self.msgName, self.client))
 
         # In some cases distributed SLURM workers suffer from spontaneous
@@ -303,9 +312,9 @@ class ACMEdaemon(object):
         self.client.register_worker_callbacks(init_acme)
 
         # Convert positional/keyword arg lists to dask bags
-        firstArg = db.from_sequence(self.argv[0])
-        otherArgs = [db.from_sequence(arg) for arg in self.argv[1:] if len(self.argv) > 1]
-        kwargBags = {key:db.from_sequence(value) for key, value in self.kwargv.items()}
+        firstArg = db.from_sequence(self.argv[0], npartitions=self.n_calls)
+        otherArgs = [db.from_sequence(arg, npartitions=self.n_calls) for arg in self.argv[1:] if len(self.argv) > 1]
+        kwargBags = {key:db.from_sequence(value, npartitions=self.n_calls) for key, value in self.kwargv.items()}
 
         # Now, start to actually do something: map pos./kw. args onto (wrapped) user function
         results = firstArg.map(self.acme_func, *otherArgs, **kwargBags)
@@ -411,7 +420,7 @@ class ACMEdaemon(object):
         return values
 
     def cleanup(self):
-        if self.stop_client:
+        if self.stop_client and self.client is not None:
             cluster_cleanup(self.client)
             self.client = None
 
