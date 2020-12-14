@@ -11,6 +11,7 @@ import subprocess
 import getpass
 import time
 import inspect
+import multiprocessing
 from warnings import showwarning
 import numpy as np
 from tqdm import tqdm
@@ -49,8 +50,8 @@ __all__ = ["esi_cluster_setup", "cluster_cleanup"]
 
 
 # Setup SLURM cluster
-def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job=None,
-                      timeout=180, interactive=True, start_client=True,
+def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job="auto", n_jobs_startup=100,
+                      timeout=60, interactive=True, interactive_wait=120, start_client=True,
                       **kwargs):
     """
     Start a distributed Dask cluster of parallel processing workers using SLURM
@@ -206,6 +207,12 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job=None,
             else:
                 raise ValueError(msg.format(funcName, str(mem_per_job)))
 
+    # Parse job-waiter count
+    try:
+        scalar_parser(n_jobs_startup, varname="n_jobs_startup", ntype="int_like", lims=[0, np.inf])
+    except Exception as exc:
+        raise exc
+
     # Query memory limit of chosen partition and ensure that `mem_per_job` is
     # set for partitions w/o limit
     idx = partition.find("GB")
@@ -247,6 +254,12 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job=None,
     # Parse requested timeout period
     try:
         scalar_parser(timeout, varname="timeout", ntype="int_like", lims=[1, np.inf])
+    except Exception as exc:
+        raise exc
+
+    # Parse requested interactive waiting period
+    try:
+        scalar_parser(interactive_wait, varname="interactive_wait", ntype="int_like", lims=[0, np.inf])
     except Exception as exc:
         raise exc
 
@@ -322,11 +335,23 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job=None,
 
     # Compute total no. of workers and up-scale cluster accordingly
     total_workers = n_jobs * workers_per_job
-    cluster.scale(total_workers)
+    worker_count = min(total_workers, n_jobs_startup)
+    if worker_count < total_workers:
+        # cluster.adapt(minimum=worker_count, maximum=total_workers)
+        cluster.scale(total_workers)
+        msg = "{} Requested job-count {} exceeds waiter threshold {}: " +\
+            "waiting for `n_jobs_startup` jobs to come online, then proceed"
+        print(msg.format(funcName, total_workers, n_jobs_startup))
+    else:
+        cluster.scale(total_workers)
 
-    # Fire up waiting routine to avoid premature cluster setups
-    if _cluster_waiter(cluster, funcName, total_workers, timeout, interactive):
+    # Fire up waiting routine to avoid unfinished cluster setups
+    if _cluster_waiter(cluster, funcName, worker_count, timeout, interactive, interactive_wait):
         return
+
+    # # Fire up waiting routine to avoid premature cluster setups
+    # if _cluster_waiter(cluster, funcName, total_workers, timeout, interactive):
+    #     return
 
     # Kill a zombie cluster in non-interactive mode
     if not interactive and _count_running_workers(cluster) == 0:
@@ -344,7 +369,7 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job=None,
     return cluster
 
 
-def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive):
+def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, interactive_wait):
     """
     Local helper that can be called recursively
     """
@@ -374,10 +399,11 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive):
         print(msg.format(name=funcName, time=timeout))
         query = "{name:s} Do you want to [k]eep waiting for 60s, [a]bort or " +\
                 "[c]ontinue with {wrk:d} workers?"
-        choice = user_input(query.format(name=funcName, wrk=wrkrs), valid=["k", "a", "c"])
+        valid = ["k", "a", "c"]
+        choice = user_input(query.format(name=funcName, wrk=wrkrs), valid=["k", "a", "c"], default="c", timeout=interactive_wait)
 
         if choice == "k":
-            return _cluster_waiter(cluster, funcName, total_workers, 60, True)
+            return _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
         elif choice == "a":
             print("{} Closing cluster...".format(funcName))
             cluster.close()
@@ -386,9 +412,9 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive):
             if wrkrs == 0:
                 query = "{} Cannot continue with 0 workers. Do you want to " +\
                         "[k]eep waiting for 60s or [a]bort?"
-                choice = user_input(query.format(funcName), valid=["k", "a"])
+                choice = user_input(query.format(funcName), valid=["k", "a"], default="a", timeout=60)
                 if choice == "k":
-                    _cluster_waiter(cluster, funcName, total_workers, 60, True)
+                    _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
                 else:
                     print("{} Closing cluster...".format(funcName))
                     cluster.close()

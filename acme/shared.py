@@ -12,7 +12,10 @@ import numbers
 import logging
 import warnings
 import datetime
+import multiprocessing
+import time
 import numpy as np
+from tqdm import tqdm
 
 callCount = 0
 callMax = 50000
@@ -136,7 +139,7 @@ def user_yesno(msg, default=None):
             print("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
 
 
-def user_input(msg, valid, default=None):
+def user_input(msg, valid, default=None, timeout=None):
     """
     ACME specific version of user-input query
     """
@@ -148,17 +151,55 @@ def user_input(msg, valid, default=None):
         default = default.replace("[", "").replace("]","")
         assert default in valid
         suffix = "[Default: '{}'] ".format(default)
+    query = msg + suffix
+
+    if timeout is None:
+        return _get_user_input(query, valid, default)
+    else:
+        procQueue = multiprocessing.Queue()
+        proc = multiprocessing.Process(target=_queuing_input,
+                                       args=(procQueue,
+                                             sys.stdin.fileno(),
+                                             query,
+                                             valid,
+                                             default)
+                                       )
+        proc.start()
+        countdown = tqdm(desc="Time remaining", leave=True, bar_format="{desc}: {n}  ",
+                         initial=timeout, position=1)
+        ticker = 0
+        while procQueue.empty() and ticker < timeout:
+            time.sleep(1)
+            ticker += 1
+            countdown.n = timeout - ticker
+            countdown.refresh()   # force refresh to display elapsed time every second
+        countdown.close()
+        proc.terminate()
+
+        if not procQueue.empty():
+            choice = procQueue.get()
+        else:
+            choice = default
+        return choice
+
+
+def _get_user_input(query, valid, default):
 
     # Wait for valid user input and return choice upon receipt
     while True:
-        choice = input(msg + suffix)
+        choice = input(query)
         if default is not None and choice == "":
             return default
         elif choice in valid:
             return choice
         else:
             print("Please respond with '" + \
-                  "or '".join(opt + "' " for opt in valid) + "\n")
+                "or '".join(opt + "' " for opt in valid) + "\n")
+
+
+def _queuing_input(procQueue, stdin_fd, query, valid, default):
+    sys.stdin = os.fdopen(stdin_fd)
+    procQueue.put(_get_user_input(query, valid, default))
 
 
 def prepare_log(func, caller=None, logfile=False, verbose=True):
