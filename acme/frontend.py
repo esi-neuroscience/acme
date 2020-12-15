@@ -34,7 +34,7 @@ class ParallelMap(object):
         partition="auto",
         n_jobs="auto",
         mem_per_job="auto",
-        setup_timeout=180,
+        setup_timeout=60,
         setup_interactive=True,
         stop_client="auto",
         verbose=None,
@@ -45,8 +45,7 @@ class ParallelMap(object):
         """
 
         # First and foremost, set up logging system (unless logger is already present)
-        self.log = acs.prepare_log(func, caller=self.msgName, logfile=logfile,
-                                           verbose=verbose)
+        self.log = acs.prepare_log(func, caller=self.msgName, logfile=logfile, verbose=verbose)
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`

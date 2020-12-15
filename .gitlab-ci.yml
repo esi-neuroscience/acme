@@ -8,7 +8,7 @@ slurmtest:
     tags:
     - slurm
     only:
-    - master
+    - main
     - dev
     variables:
         PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
@@ -22,7 +22,7 @@ slurmtest:
 pypitest:
     stage: upload
     only:
-    - master
+    - main
     - tags
     tags:
     - deploy
@@ -48,7 +48,7 @@ pypitest:
 pypideploy:
     stage: deploy
     only:
-    - master
+    - main
     - tags
     tags:
     - deploy

@@ -7,12 +7,17 @@
 import os
 import h5py
 import shutil
+import inspect
 import pytest
+import logging
 import numpy as np
+import dask.distributed as dd
+from glob import glob
 from scipy import signal
 
-# Import main actor here
-from acme import ParallelMap
+# Import main actors here
+from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
+from acme.shared import is_slurm_node
 
 # Functions that act as stand-ins for user-funcs
 def simple_func(x, y, z=3):
@@ -24,11 +29,6 @@ def medium_func(x, y, z=3, w=np.ones((3, 3))):
 def hard_func(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
     return sum(x) + y,  z * w
 
-def lowpass_hard(arr_like, b, a, channel_no, padlen=200):
-    channel = arr_like[:, channel_no]
-    res = signal.filtfilt(b, a, channel, padlen=padlen)
-    return res
-
 def lowpass_simple(h5name, channel_no):
     with h5py.File(h5name, "r") as h5f:
         channel = h5f["data"][:, channel_no]
@@ -37,6 +37,17 @@ def lowpass_simple(h5name, channel_no):
     res = signal.filtfilt(b, a, channel, padlen=200)
     return res
 
+def lowpass_hard(arr_like, b, a, res_dir, res_base="lowpass_hard_", dset_name="custom_dset_name", padlen=200, taskID=None):
+    channel = arr_like[:, taskID]
+    res = signal.filtfilt(b, a, channel, padlen=padlen)
+    h5name = os.path.join(res_dir, res_base +"{}.h5".format(taskID))
+    with h5py.File(h5name, "w") as h5f:
+        h5f.create_dataset(dset_name, data=res)
+    return
+
+
+# Perform SLURM-specific tests only on cluster nodes
+useSLURM = is_slurm_node()
 
 # Main testing class
 class TestParallelMap():
@@ -140,7 +151,7 @@ class TestParallelMap():
         # Compare compuated single-channel results to expected low-freq signal
         for chNo, h5name in enumerate(resOnDisk):
             with h5py.File(h5name, "r") as h5f:
-                assert np.mean(np.abs(h5f["result"][()] - self.orig[:, chNo])) < self.tol
+                assert np.mean(np.abs(h5f["result_0"][()] - self.orig[:, chNo])) < self.tol
 
         # Same, but collect results in memory: ensure nothing freaky happens
         with ParallelMap(lowpass_simple,
@@ -152,28 +163,158 @@ class TestParallelMap():
         for chNo in range(self.nChannels):
             assert np.mean(np.abs(resInMem[chNo][0] - self.orig[:, chNo])) < self.tol
 
-        # use taskID in userfunc and store results somewhere else
-        # test cleanup
-        # ensure logfile is written (in combo w/verbose)
-        # ensure SLURM options are respected (njobs, partition, mem_per_job)
+        # Simulate user-defined results-directory
+        tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
+        shutil.rmtree(tempDir2, ignore_errors=True)
+        os.makedirs(tempDir2, exist_ok=True)
 
-        # with ParallelMap(lowpass_simple, sigName, range(nChannels), logfile=True, setup_interactive=False) as pmap:
-        #     pmap.compute()
+        # Same task, different function: simulate user-defined saving scheme and "weird" inputs
+        sigData = h5py.File(sigName, "r")["data"]
+        res_base = "lowpass_hard_"
+        dset_name = "custom_dset_name"
+        with ParallelMap(lowpass_hard,
+                         sigData,
+                         self.b,
+                         self.a,
+                         res_dir=tempDir2,
+                         res_base=res_base,
+                         dset_name=dset_name,
+                         padlen=[200] * self.nChannels,
+                         n_inputs=self.nChannels,
+                         write_worker_results=False,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        resFiles = glob(os.path.join(tempDir2, res_base + "*"))
+        assert len(resFiles) == pmap.n_calls
 
-        # Close any open HDF5 files to not trigger any `OSError`s and clean up the tmp dir
-        # sigData.file.close()
+        # Compare compuated single-channel results to expected low-freq signal
+        for chNo in range(self.nChannels):
+            h5name = res_base + "{}.h5".format(chNo)
+            with h5py.File(os.path.join(tempDir2, h5name), "r") as h5f:
+                assert np.mean(np.abs(h5f[dset_name][()] - self.orig[:, chNo])) < self.tol
+
+        # Ensure log-file generation produces a non-empty log-file at the expected location
+        # Bonus: leave computing client alive and vet default SLURM settings
+        cluster_cleanup(pmap.client)
+        for handler in pmap.log.handlers:
+            if isinstance(handler, logging.FileHandler):
+                pmap.log.handlers.remove(handler)
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         logfile=True,
+                         stop_client=False,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        logFileList = [handler.baseFilename for handler in pmap.log.handlers if isinstance(handler, logging.FileHandler)]
+        assert len(logFileList) == 1
+        logFile = logFileList[0]
+        assert os.path.dirname(os.path.realpath(__file__)) in logFile
+        with open(logFile, "r") as fl:
+            assert len(fl.readlines()) > 1
+
+        # Ensure client has not been killed; perform post-hoc check of default SLURM settings
+        assert dd.get_client()
+        client = dd.get_client()
+        if useSLURM:
+            assert pmap.n_calls == pmap.n_jobs
+            assert len(client.cluster.workers) == pmap.n_jobs
+            partition = client.cluster.workers[0].job_header.split("-p ")[1].split("\n")[0]
+            assert "8GB" in partition
+            memStr = client.cluster.workers[0].worker_process_memory
+            assert int(float(memStr.replace("GB", ""))) == [int(s) for s in partition if s.isdigit()][0]
+
+        # Same, but use custom log-file
+        for handler in pmap.log.handlers:
+            if isinstance(handler, logging.FileHandler):
+                pmap.log.handlers.remove(handler)
+        customLog = os.path.join(tempDir, "acme_log.txt")
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         logfile=customLog,
+                         verbose=True,
+                         stop_client=True,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        assert os.path.isfile(customLog)
+        with open(customLog, "r") as fl:
+            assert len(fl.readlines()) > 1
+
+        # Ensure client has been stopped
+        with pytest.raises(ValueError):
+            dd.get_client()
+
+        # Underbook SLURM (more calls than jobs)
+        partition = "8GBXS"
+        n_jobs = int(self.nChannels / 2)
+        mem_per_job = "2GB"
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         partition=partition,
+                         n_jobs=n_jobs,
+                         mem_per_job=mem_per_job,
+                         stop_client=False,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+
+        # Post-hoc check of client to ensure custom settings were respected
+        client = pmap.client
+        assert pmap.n_calls == self.nChannels
+        if useSLURM:
+            assert pmap.n_jobs == n_jobs
+            assert len(client.cluster.workers) == pmap.n_jobs
+            actualPartition = client.cluster.workers[0].job_header.split("-p ")[1].split("\n")[0]
+            assert actualPartition == partition
+            memStr = client.cluster.workers[0].worker_process_memory
+            assert int(float(memStr.replace("GB", ""))) == int(mem_per_job.replace("GB", ""))
+
+        # Let `cluster_cleanup` murder the custom setup and ensure it did its job
+        cluster_cleanup(pmap.client)
+        with pytest.raises(ValueError):
+            dd.get_client()
+
+        # Overbook SLURM (more jobs than calls)
+        partition = "8GBXS"
+        n_jobs = self.nChannels + 2
+        mem_per_job = "3000MB"
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         partition=partition,
+                         n_jobs=n_jobs,
+                         mem_per_job=mem_per_job,
+                         stop_client=False,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+
+        # Post-hoc check of client to ensure custom settings were respected
+        client = pmap.client
+        assert pmap.n_calls == self.nChannels
+        if useSLURM:
+            assert pmap.n_jobs == n_jobs
+            assert len(client.cluster.workers) == pmap.n_jobs
+            actualPartition = client.cluster.workers[0].job_header.split("-p ")[1].split("\n")[0]
+            assert actualPartition == partition
+            memStr = client.cluster.workers[0].worker_process_memory
+            assert int(float(memStr.replace("GB", ""))) * 1000 == int(mem_per_job.replace("MB", ""))
+
+        # Close any open HDF5 files to not trigger any `OSError`s, close running clusters
+        # and clean up tmp dirs and created log-files
+        sigData.file.close()
+        os.unlink(logFile)
         shutil.rmtree(tempDir, ignore_errors=True)
+        shutil.rmtree(tempDir2, ignore_errors=True)
 
-    # # test esi-cluster-setup called separately before pmap
-    # def test_existing_cluster(self, testcluster):
-    #     pass
-    #     # # repeat selected test w/parallel processing engine
-    #     # # ensure client stays alive
-    #     # client = dd.Client(testcluster)
-    #     # par_tests = ["test_relative_array_padding",
-    #     #              "test_absolute_nextpow2_array_padding",
-    #     #              "test_object_padding",
-    #     #              "test_dataselection"]
-    #     # for test in par_tests:
-    #     #     getattr(self, test)()
-    #     # client.close()
+    # test esi-cluster-setup called separately before pmap
+    def test_existing_cluster(self):
+
+        client = esi_cluster_setup(partition="8GBXS", n_jobs=12)
+
+        # Re-run tests with pre-allocated client
+        all_tests = [attr for attr in self.__dir__()
+                     if (inspect.ismethod(getattr(self, attr)) and attr != "test_existing_cluster")]
+        for test in all_tests:
+            getattr(self, test)()
+        client.close()
