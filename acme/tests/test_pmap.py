@@ -7,6 +7,7 @@
 import os
 import h5py
 import shutil
+import inspect
 import pytest
 import logging
 import numpy as np
@@ -14,8 +15,9 @@ import dask.distributed as dd
 from glob import glob
 from scipy import signal
 
-# Import main actor here
-from acme import ParallelMap, cluster_cleanup
+# Import main actors here
+from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
+from acme.shared import is_slurm_node
 
 # Functions that act as stand-ins for user-funcs
 def simple_func(x, y, z=3):
@@ -43,6 +45,9 @@ def lowpass_hard(arr_like, b, a, res_dir, res_base="lowpass_hard_", dset_name="c
         h5f.create_dataset(dset_name, data=res)
     return
 
+
+# Perform SLURM-specific tests only on cluster nodes
+useSLURM = is_slurm_node()
 
 # Main testing class
 class TestParallelMap():
@@ -158,9 +163,6 @@ class TestParallelMap():
         for chNo in range(self.nChannels):
             assert np.mean(np.abs(resInMem[chNo][0] - self.orig[:, chNo])) < self.tol
 
-        # import dask.distributed as dd
-        # client = dd.Client()
-
         # Simulate user-defined results-directory
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
         shutil.rmtree(tempDir2, ignore_errors=True)
@@ -192,7 +194,11 @@ class TestParallelMap():
                 assert np.mean(np.abs(h5f[dset_name][()] - self.orig[:, chNo])) < self.tol
 
         # Ensure log-file generation produces a non-empty log-file at the expected location
-        # Bonus: leave computing client alive
+        # Bonus: leave computing client alive and vet default SLURM settings
+        cluster_cleanup(pmap.client)
+        for handler in pmap.log.handlers:
+            if isinstance(handler, logging.FileHandler):
+                pmap.log.handlers.remove(handler)
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
@@ -207,15 +213,16 @@ class TestParallelMap():
         with open(logFile, "r") as fl:
             assert len(fl.readlines()) > 1
 
-        # Ensure client has not been killed; perform post-hoc check of SLURM settings
+        # Ensure client has not been killed; perform post-hoc check of default SLURM settings
         assert dd.get_client()
         client = dd.get_client()
-        assert pmap.n_calls == pmap.n_jobs
-        assert len(client.cluster.workers) == pmap.n_jobs
-        partition = client.cluster.workers[0].job_header.split("-p ")[1].split("\n")[0]
-        assert "8GB" in partition
-        memStr = client.cluster.workers[0].worker_process_memory
-        assert int(float(memStr.replace("GB", ""))) == [int(s) for s in partition if s.isdigit()][0]
+        if useSLURM:
+            assert pmap.n_calls == pmap.n_jobs
+            assert len(client.cluster.workers) == pmap.n_jobs
+            partition = client.cluster.workers[0].job_header.split("-p ")[1].split("\n")[0]
+            assert "8GB" in partition
+            memStr = client.cluster.workers[0].worker_process_memory
+            assert int(float(memStr.replace("GB", ""))) == [int(s) for s in partition if s.isdigit()][0]
 
         # Same, but use custom log-file
         for handler in pmap.log.handlers:
@@ -238,6 +245,61 @@ class TestParallelMap():
         with pytest.raises(ValueError):
             dd.get_client()
 
+        # Underbook SLURM (more calls than jobs)
+        partition = "8GBXS"
+        n_jobs = int(self.nChannels / 2)
+        mem_per_job = "2GB"
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         partition=partition,
+                         n_jobs=n_jobs,
+                         mem_per_job=mem_per_job,
+                         stop_client=False,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+
+        # Post-hoc check of client to ensure custom settings were respected
+        client = pmap.client
+        assert pmap.n_calls == self.nChannels
+        if useSLURM:
+            assert pmap.n_jobs == n_jobs
+            assert len(client.cluster.workers) == pmap.n_jobs
+            actualPartition = client.cluster.workers[0].job_header.split("-p ")[1].split("\n")[0]
+            assert actualPartition == partition
+            memStr = client.cluster.workers[0].worker_process_memory
+            assert int(float(memStr.replace("GB", ""))) == int(mem_per_job.replace("GB", ""))
+
+        # Let `cluster_cleanup` murder the custom setup and ensure it did its job
+        cluster_cleanup(pmap.client)
+        with pytest.raises(ValueError):
+            dd.get_client()
+
+        # Overbook SLURM (more jobs than calls)
+        partition = "8GBXS"
+        n_jobs = self.nChannels + 2
+        mem_per_job = "3000MB"
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         partition=partition,
+                         n_jobs=n_jobs,
+                         mem_per_job=mem_per_job,
+                         stop_client=False,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+
+        # Post-hoc check of client to ensure custom settings were respected
+        client = pmap.client
+        assert pmap.n_calls == self.nChannels
+        if useSLURM:
+            assert pmap.n_jobs == n_jobs
+            assert len(client.cluster.workers) == pmap.n_jobs
+            actualPartition = client.cluster.workers[0].job_header.split("-p ")[1].split("\n")[0]
+            assert actualPartition == partition
+            memStr = client.cluster.workers[0].worker_process_memory
+            assert int(float(memStr.replace("GB", ""))) * 1000 == int(mem_per_job.replace("MB", ""))
+
         # Close any open HDF5 files to not trigger any `OSError`s, close running clusters
         # and clean up tmp dirs and created log-files
         sigData.file.close()
@@ -245,16 +307,14 @@ class TestParallelMap():
         shutil.rmtree(tempDir, ignore_errors=True)
         shutil.rmtree(tempDir2, ignore_errors=True)
 
-    # # test esi-cluster-setup called separately before pmap
-    # def test_existing_cluster(self, testcluster):
-    #     pass
-    #     # # repeat selected test w/parallel processing engine
-    #     # # ensure client stays alive
-    #     # client = dd.Client(testcluster)
-    #     # par_tests = ["test_relative_array_padding",
-    #     #              "test_absolute_nextpow2_array_padding",
-    #     #              "test_object_padding",
-    #     #              "test_dataselection"]
-    #     # for test in par_tests:
-    #     #     getattr(self, test)()
-    #     # client.close()
+    # test esi-cluster-setup called separately before pmap
+    def test_existing_cluster(self):
+
+        client = esi_cluster_setup(partition="8GBXS", n_jobs=12)
+
+        # Re-run tests with pre-allocated client
+        all_tests = [attr for attr in self.__dir__()
+                     if (inspect.ismethod(getattr(self, attr)) and attr != "test_existing_cluster")]
+        for test in all_tests:
+            getattr(self, test)()
+        client.close()
