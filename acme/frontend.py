@@ -34,7 +34,7 @@ class ParallelMap(object):
         partition="auto",
         n_jobs="auto",
         mem_per_job="auto",
-        setup_timeout=180,
+        setup_timeout=60,
         setup_interactive=True,
         stop_client="auto",
         verbose=None,

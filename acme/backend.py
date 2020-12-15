@@ -53,7 +53,7 @@ class ACMEdaemon(object):
         write_worker_results=True,
         partition="auto",
         mem_per_job="auto",
-        setup_timeout=180,
+        setup_timeout=60,
         setup_interactive=True,
         stop_client="auto",
         verbose=None,
@@ -438,4 +438,4 @@ class ACMEdaemon(object):
                         for rk, res in enumerate(result):
                             h5f.create_dataset("result_{}".format(rk), data=res)
                 else:
-                    h5f.create_dataset("result", data=result)
+                    h5f.create_dataset("result_0", data=result)

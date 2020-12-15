@@ -140,7 +140,7 @@ class TestParallelMap():
         # Compare compuated single-channel results to expected low-freq signal
         for chNo, h5name in enumerate(resOnDisk):
             with h5py.File(h5name, "r") as h5f:
-                assert np.mean(np.abs(h5f["result"][()] - self.orig[:, chNo])) < self.tol
+                assert np.mean(np.abs(h5f["result_0"][()] - self.orig[:, chNo])) < self.tol
 
         # Same, but collect results in memory: ensure nothing freaky happens
         with ParallelMap(lowpass_simple,
