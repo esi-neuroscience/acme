@@ -8,7 +8,10 @@ import os
 import h5py
 import shutil
 import pytest
+import logging
 import numpy as np
+import dask.distributed as dd
+from glob import glob
 from scipy import signal
 
 # Import main actor here
@@ -24,11 +27,6 @@ def medium_func(x, y, z=3, w=np.ones((3, 3))):
 def hard_func(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
     return sum(x) + y,  z * w
 
-def lowpass_hard(arr_like, b, a, channel_no, padlen=200):
-    channel = arr_like[:, channel_no]
-    res = signal.filtfilt(b, a, channel, padlen=padlen)
-    return res
-
 def lowpass_simple(h5name, channel_no):
     with h5py.File(h5name, "r") as h5f:
         channel = h5f["data"][:, channel_no]
@@ -36,6 +34,14 @@ def lowpass_simple(h5name, channel_no):
         a = h5f["data"].attrs["a"]
     res = signal.filtfilt(b, a, channel, padlen=200)
     return res
+
+def lowpass_hard(arr_like, b, a, res_dir, res_base="lowpass_hard_", dset_name="custom_dset_name", padlen=200, taskID=None):
+    channel = arr_like[:, taskID]
+    res = signal.filtfilt(b, a, channel, padlen=padlen)
+    h5name = os.path.join(res_dir, res_base +"{}.h5".format(taskID))
+    with h5py.File(h5name, "w") as h5f:
+        h5f.create_dataset(dset_name, data=res)
+    return
 
 
 # Main testing class
@@ -152,17 +158,90 @@ class TestParallelMap():
         for chNo in range(self.nChannels):
             assert np.mean(np.abs(resInMem[chNo][0] - self.orig[:, chNo])) < self.tol
 
-        # use taskID in userfunc and store results somewhere else
+        # import dask.distributed as dd
+        # client = dd.Client()
+
+        # Simulate user-defined results-directory
+        tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
+        shutil.rmtree(tempDir2, ignore_errors=True)
+        os.makedirs(tempDir2, exist_ok=True)
+
+        # Same task, different function: simulate user-defined saving scheme and "weird" inputs
+        sigData = h5py.File(sigName, "r")["data"]
+        res_base = "lowpass_hard_"
+        dset_name = "custom_dset_name"
+        with ParallelMap(lowpass_hard,
+                         sigData,
+                         self.b,
+                         self.a,
+                         res_dir=tempDir2,
+                         res_base=res_base,
+                         dset_name=dset_name,
+                         padlen=[200] * self.nChannels,
+                         n_inputs=self.nChannels,
+                         write_worker_results=False,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        resFiles = glob(os.path.join(tempDir2, res_base + "*"))
+        assert len(resFiles) == pmap.n_calls
+
+        # Compare compuated single-channel results to expected low-freq signal
+        for chNo in range(self.nChannels):
+            h5name = res_base + "{}.h5".format(chNo)
+            with h5py.File(os.path.join(tempDir2, h5name), "r") as h5f:
+                assert np.mean(np.abs(h5f[dset_name][()] - self.orig[:, chNo])) < self.tol
+
+        # Ensure log-file generation produces a non-empty log-file at the expected location
+        # Bonus: leave computing client alive
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         logfile=True,
+                         stop_client=False,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        logFile = [handler.baseFilename for handler in pmap.log.handlers if isinstance(handler, logging.FileHandler)]
+        assert len(logFile) == 1
+        assert os.path.dirname(os.path.realpath(__file__)) in logFile[0]
+        with open(logFile[0], "r") as fl:
+            assert len(fl.readlines()) > 1
+
+        # Ensure client has not been killed
+        assert dd.get_client()
+
+        # Same, but use custom log-file
+        for handler in pmap.log.handlers:
+            if isinstance(handler, logging.FileHandler):
+                pmap.log.handlers.remove(handler)
+        customLog = os.path.join(tempDir, "acme_log.txt")
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         logfile=customLog,
+                         verbose=True,
+                         stop_client=True,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        assert os.path.isfile(customLog)
+        with open(customLog, "r") as fl:
+            assert len(fl.readlines()) > 1
+
+        # import pdb; pdb.set_trace()
+
+        # # Ensure client has been stopped
+        # with pytest.raises(ValueError):
+        #     dd.get_client()
+
+        # Overbook SLURM
+        # Underbook SLURM
         # test cleanup
-        # ensure logfile is written (in combo w/verbose)
+        # test keepalive
         # ensure SLURM options are respected (njobs, partition, mem_per_job)
 
-        # with ParallelMap(lowpass_simple, sigName, range(nChannels), logfile=True, setup_interactive=False) as pmap:
-        #     pmap.compute()
-
         # Close any open HDF5 files to not trigger any `OSError`s and clean up the tmp dir
-        # sigData.file.close()
+        sigData.file.close()
         shutil.rmtree(tempDir, ignore_errors=True)
+        shutil.rmtree(tempDir2, ignore_errors=True)
 
     # # test esi-cluster-setup called separately before pmap
     # def test_existing_cluster(self, testcluster):
