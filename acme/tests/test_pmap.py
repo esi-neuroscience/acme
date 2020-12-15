@@ -15,7 +15,7 @@ from glob import glob
 from scipy import signal
 
 # Import main actor here
-from acme import ParallelMap
+from acme import ParallelMap, cluster_cleanup
 
 # Functions that act as stand-ins for user-funcs
 def simple_func(x, y, z=3):
@@ -200,14 +200,22 @@ class TestParallelMap():
                          stop_client=False,
                          setup_interactive=False) as pmap:
             pmap.compute()
-        logFile = [handler.baseFilename for handler in pmap.log.handlers if isinstance(handler, logging.FileHandler)]
-        assert len(logFile) == 1
-        assert os.path.dirname(os.path.realpath(__file__)) in logFile[0]
-        with open(logFile[0], "r") as fl:
+        logFileList = [handler.baseFilename for handler in pmap.log.handlers if isinstance(handler, logging.FileHandler)]
+        assert len(logFileList) == 1
+        logFile = logFileList[0]
+        assert os.path.dirname(os.path.realpath(__file__)) in logFile
+        with open(logFile, "r") as fl:
             assert len(fl.readlines()) > 1
 
-        # Ensure client has not been killed
+        # Ensure client has not been killed; perform post-hoc check of SLURM settings
         assert dd.get_client()
+        client = dd.get_client()
+        assert pmap.n_calls == pmap.n_jobs
+        assert len(client.cluster.workers) == pmap.n_jobs
+        partition = client.cluster.workers[0].job_header.split("-p ")[1].split("\n")[0]
+        assert "8GB" in partition
+        memStr = client.cluster.workers[0].worker_process_memory
+        assert int(float(memStr.replace("GB", ""))) == [int(s) for s in partition if s.isdigit()][0]
 
         # Same, but use custom log-file
         for handler in pmap.log.handlers:
@@ -226,20 +234,14 @@ class TestParallelMap():
         with open(customLog, "r") as fl:
             assert len(fl.readlines()) > 1
 
-        # import pdb; pdb.set_trace()
+        # Ensure client has been stopped
+        with pytest.raises(ValueError):
+            dd.get_client()
 
-        # # Ensure client has been stopped
-        # with pytest.raises(ValueError):
-        #     dd.get_client()
-
-        # Overbook SLURM
-        # Underbook SLURM
-        # test cleanup
-        # test keepalive
-        # ensure SLURM options are respected (njobs, partition, mem_per_job)
-
-        # Close any open HDF5 files to not trigger any `OSError`s and clean up the tmp dir
+        # Close any open HDF5 files to not trigger any `OSError`s, close running clusters
+        # and clean up tmp dirs and created log-files
         sigData.file.close()
+        os.unlink(logFile)
         shutil.rmtree(tempDir, ignore_errors=True)
         shutil.rmtree(tempDir2, ignore_errors=True)
 

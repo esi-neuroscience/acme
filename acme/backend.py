@@ -195,17 +195,6 @@ class ACMEdaemon(object):
         setup_interactive=True,
         stop_client="auto"):
 
-        # Check if a dask client is already running
-        try:
-            self.client = dd.get_client()
-            self.stop_client = False
-            self.n_jobs = len(self.client.cluster.workers)
-            msg = "Attaching to global parallel computing client {}"
-            self.log.info(msg.format(str(self.client)))
-            return
-        except ValueError:
-            self.stop_client = True
-
         # Modify automatic setting of `stop_client` if requested
         msg = "{} `stop_client` has to be 'auto' or Boolean, not {}"
         if isinstance(stop_client, str):
@@ -215,6 +204,19 @@ class ACMEdaemon(object):
             self.stop_client = stop_client
         else:
             raise TypeError(msg.format(self.msgName, stop_client))
+
+        # Check if a dask client is already running
+        try:
+            self.client = dd.get_client()
+            if stop_client == "auto":
+                self.stop_client = False
+            self.n_jobs = len(self.client.cluster.workers)
+            msg = "Attaching to global parallel computing client {}"
+            self.log.info(msg.format(str(self.client)))
+            return
+        except ValueError:
+            if stop_client == "auto":
+                self.stop_client = True
 
         # If things are running locally, simply fire up a dask-distributed client,
         # otherwise go through the motions of preparing a full cluster job swarm
