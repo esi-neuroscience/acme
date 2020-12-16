@@ -184,6 +184,9 @@ def user_input(msg, valid, default=None, timeout=None):
 
 
 def _get_user_input(query, valid, default):
+    """
+    Performs the actual input query
+    """
 
     # Wait for valid user input and return choice upon receipt
     while True:
@@ -198,15 +201,38 @@ def _get_user_input(query, valid, default):
 
 
 def _queuing_input(procQueue, stdin_fd, query, valid, default):
+    """
+    Target routine to tie subprocess to (in case input-query is time-restricted)
+    """
     sys.stdin = os.fdopen(stdin_fd)
     procQueue.put(_get_user_input(query, valid, default))
 
 
-def prepare_log(func, caller=None, logfile=False, verbose=True):
+def prepare_log(func, caller=None, logfile=False, verbose=None):
     """
-    Coming soon...
+    Convenience function to set up ACME logger
 
-    return log
+    Parameters
+    ----------
+    func : callable
+        User-provided function to be called concurrently by ACME
+    caller : None or str
+        Routine/class that initiated logging (presumable :class:~`acme.ParallelMap`
+        or :class:~`acme.ACMEDaemon`)
+    logfile : bool or str
+        If `True` an auto-generated log-file is set up. If `logfile` is a string
+        it is interpreted as file-name for a new log-file (must not exist). If
+        `False` logging information is streamed to stdout only.
+    verbose : bool or None
+        If `None`, the logging-level only contains messages of `'INFO'` priority and
+        higher (`'WARNING'` and `'ERROR'`). If `verbose` is `True`, logging is
+        performed on ``DEBUG`', `'INFO`', `'WARNING'` and `'ERROR'` levels. If
+        `verbose` is `False` only `'WARNING'` and `'ERROR'` messages are propagated.
+
+    Returns
+    -------
+    log : logger object
+        A Python :class:`logging.Logger` instance
     """
 
     # If not provided, get name of calling method/function
