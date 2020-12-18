@@ -17,7 +17,8 @@ Getting Started
 ---------------
 The :doc:`Quickstart Guide <quickstart>` covers installation and basic usage of ACME.
 More information can be found in the docstrings of the respective classes and
-functions, specifically, `ParallelMap` and `ACMEdaemon`.
+functions, specifically, :class:`~acme.ParallelMap`, :class:`~acme.ACMEdaemon`
+and :func:`~acme.esi_cluster_setup`.
 
 Contact
 -------
@@ -35,5 +36,4 @@ Navigation
    :hidden:
 
    quickstart
-   user/users.rst
-   developer/developers.rst
+   api

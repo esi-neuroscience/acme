@@ -53,16 +53,15 @@ autodoc_default_options = {
     'special-members': '__init__',
     'undoc-members': False,
     'exclude-members': '__weakref__',
-    'inherited-members': True,
     'ignore-module-all': False,
 }
 
 def setup(app):
     app.add_css_file("esi-style.css")
 
+numpydoc_show_class_members = False
 autosectionlabel_maxdepth = 2
 autosectionlabel_prefix_document = True
-automodsumm_inherited_members = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

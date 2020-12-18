@@ -11,6 +11,7 @@ set SOURCEDIR=source
 set BUILDDIR=build
 
 if "%1" == "" goto help
+if "%1" == "clean" goto clean
 
 %SPHINXBUILD% >NUL 2>NUL
 if errorlevel 9009 (
@@ -30,6 +31,13 @@ goto end
 
 :help
 %SPHINXBUILD% -M help %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
+
+REM Custom directive to clean up build dir api files
+:clean
+del /Q /S %BUILDDIR%"\*" > nul
+rmdir /Q /S %BUILDDIR% > nul
+del /Q /S %SOURCEDIR%"\api\*" > nul
+goto end
 
 :end
 popd

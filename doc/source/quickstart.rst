@@ -27,8 +27,8 @@ version. This environment can be easily started using the `ESI JupyterHub
 Using ACME
 ----------
 In contrast to many Python packages, ACME is built around a single key element,
-the `ParallelMap` context manager. Thus, for most use-cases importing `ParallelMap`
-is likely sufficient to start ACME parallelization:
+the :class:`~acme.ParallelMap` context manager. Thus, for most use-cases importing
+:class:`~acme.ParallelMap` is likely sufficient to start ACME parallelization:
 
 .. code-block:: python
 
@@ -56,5 +56,12 @@ For example,
 starts 10 concurrent SLURM workers in the `16GBXL` queue if run on the ESI HPC
 cluster. Any subsequent invocation of :class:`~acme.ParallelMap` will automatically
 pick up ``slurmClient`` and distribute any occurring computational payload across
-the workers collected in ``slurmClient``. More information about optional arguments
-of `ParallelMap` are summarized in its docstring.
+the workers collected in ``slurmClient``.
+
+More Information
+^^^^^^^^^^^^^^^^
+
+Details about optional arguments of :class:`~acme.ParallelMap` are summarized in
+its constructor :meth:`~acme.ParallelMap.__init__` method.
+Additional :class:`~acme.ParallelMap` usage examples are provided in the repository's
+README.
