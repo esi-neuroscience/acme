@@ -64,7 +64,7 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job="auto", n_jobs_sta
         in the terminal to see a list of available SLURM partitions on the ESI HPC
         cluster.
     n_jobs : int
-        Number of jobs to spawn
+        Number of SLURM jobs (=workers) to spawn
     mem_per_job : None or str
         Memory booking for each job. Can be specified either in megabytes
         (e.g., ``mem_per_job = 1500MB``) or gigabytes (e.g., ``mem_per_job = "2GB"``).

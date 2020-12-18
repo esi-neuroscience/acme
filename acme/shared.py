@@ -219,10 +219,10 @@ def prepare_log(func, caller=None, logfile=False, verbose=None):
     caller : None or str
         Routine/class that initiated logging (presumable :class:~`acme.ParallelMap`
         or :class:~`acme.ACMEDaemon`)
-    logfile : bool or str
+    logfile : None or bool or str
         If `True` an auto-generated log-file is set up. If `logfile` is a string
         it is interpreted as file-name for a new log-file (must not exist). If
-        `False` logging information is streamed to stdout only.
+        `False` or `None` logging information is streamed to stdout only.
     verbose : bool or None
         If `None`, the logging-level only contains messages of `'INFO'` priority and
         higher (`'WARNING'` and `'ERROR'`). If `verbose` is `True`, logging is
@@ -249,7 +249,7 @@ def prepare_log(func, caller=None, logfile=False, verbose=None):
         raise TypeError(msg.format(caller, str(verbose)))
 
     # Either parse provided `logfile` or set up an auto-generated file
-    msg = "{} `logfile` has to be `True`, `False` or a valid file-name, not {}"
+    msg = "{} `logfile` has to be `None`, `True`, `False` or a valid file-name, not {}"
     if logfile is None or isinstance(logfile, bool):
         if logfile is True:
             logfile = os.path.dirname(os.path.abspath(inspect.getfile(func)))
