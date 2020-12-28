@@ -9,7 +9,7 @@ import numpy as np
 
 # Local imports
 from .backend import ACMEdaemon
-import acme.shared as acs
+from . import shared as acs
 
 __all__ = ["ParallelMap"]
 

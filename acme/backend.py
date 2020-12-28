@@ -20,9 +20,9 @@ import dask.bag as db
 import numpy as np
 
 # Local imports
-from acme import __path__
+from . import __path__
 from .dask_helpers import esi_cluster_setup, cluster_cleanup
-import acme.shared as acs
+from . import shared as acs
 
 __all__ = ["ACMEdaemon"]
 
