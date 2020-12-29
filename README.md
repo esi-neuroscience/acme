@@ -41,7 +41,7 @@ with pmap as p:
 ```
 
 ### Advanced Use
-Allocate custom `client` object and re-cycle it for several computations
+Allocate custom `client` object and recycle it for several computations
 ```python
 import numpy as np
 from acme import ParallelMap, esi_cluster_setup
@@ -108,3 +108,10 @@ with ParallelMap(f, [2, 4, 6, 8], 4, z=None) as pmap:
     results = pmap.compute(debug=True)
 ```
 This way tools like `pdb` or ``%debug`` IPython magics can be used.
+
+## Documentation and Contact
+
+To report bugs or ask questions please use our
+[GitHub issue tracker](https://github.com/esi-neuroscience/acme/issues).
+More usage details and background information is available in our
+[online documentation](https://acme.readthedocs.io/en/latest/).
