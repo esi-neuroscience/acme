@@ -28,17 +28,16 @@ try:
     isSpyModule = True
 except ImportError:
     isSpyModule = False
-
+from .shared import user_input, user_yesno
 if isSpyModule:
     from syncopy import __dask__
     from syncopy.shared.parsers import scalar_parser, io_parser
     from syncopy.shared.errors import (SPYValueError, SPYTypeError, SPYIOError,
                                     SPYWarning)
-    from syncopy.shared.queries import user_input, user_yesno
 else:
     import logging
     from warnings import showwarning
-    from .shared import user_input, user_yesno
+
     from .shared import _scalar_parser as scalar_parser
     __dask__ = True
 if __dask__:
