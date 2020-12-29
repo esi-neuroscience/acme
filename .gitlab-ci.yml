@@ -36,7 +36,7 @@ pypitest:
     - python setup.py sdist bdist_wheel
     - tarname="$(basename -- $(ls dist/*.tar.gz) .tar.gz)"
     - version=$(sed -e 's/esi-acme-\(.*\)/\1/' <<< "$tarname")
-    - twine upload --repository testpypi dist/*
+    - twine upload --repository testpypi --config-file=~/.esipypirc dist/*
     - conda create --yes --name piptest
     - conda activate piptest
     - conda install --yes pip
