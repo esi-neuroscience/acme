@@ -59,25 +59,38 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job="auto", n_jobs_sta
     Parameters
     ----------
     partition : str
-        Name of SLURM partition/queue to use
+        Name of SLURM partition/queue to start workers in. Use the command `sinfo`
+        in the terminal to see a list of available SLURM partitions on the ESI HPC
+        cluster.
     n_jobs : int
-        Number of jobs to spawn
+        Number of SLURM jobs (=workers) to spawn
     mem_per_job : None or str
         Memory booking for each job. Can be specified either in megabytes
         (e.g., ``mem_per_job = 1500MB``) or gigabytes (e.g., ``mem_per_job = "2GB"``).
         If `mem_per_job` is `None`, or `"auto"` it is attempted to infer a sane default value
-        from the chosen queue, e.g., for ``partition = "8GBS"`` `mem_per_job` is
+        from the chosen partition, e.g., for ``partition = "8GBS"`` `mem_per_job` is
         automatically set to the allowed maximum of `'8GB'`. However, even in
         queues with guaranted memory bookings, it is possible to allocate less
         memory than the allowed maximum per job to spawn numerous low-memory
         jobs. See Examples for details.
+    n_jobs_startup : int
+        Number of spawned jobs to wait for. If `n_jobs_startup` is `100` (default),
+        the code does not proceed until either 100 SLURM jobs are running or the
+        `timeout` interval has been exceeded.
     timeout : int
-        Number of seconds to wait for requested jobs to start up.
+        Number of seconds to wait for requested jobs to start up (see `n_jobs_startup`).
     interactive : bool
-        If `True`, user input is required in case not all jobs could
-        be started in the provided waiting period (determined by `timeout`).
-        If `interactive` is `False` and the jobs could not be started
+        If `True`, user input is queried in case not enough jobs (set by `n_jobs_startup`)
+        could be started in the provided waiting period (determined by `timeout`).
+        The code waits `interactive_wait` seconds for a user choice - if none is
+        provided, it continues with the current number of spawned jobs (if greater
+        than zero). If `interactive` is `False` and no job could not be started
         within `timeout` seconds, a `TimeoutError` is raised.
+    interactive_wait : int
+        Countdown interval (seconds) to wait for a user response in case fewer than
+        `n_jobs_startup` workers could be started. If no choice is provided within
+        the given time, the code automatically proceeds with the current number of
+        active workers.
     start_client : bool
         If `True`, a distributed computing client is launched and attached to
         the workers. If `start_client` is `False`, only a distributed
@@ -96,12 +109,7 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job="auto", n_jobs_sta
     The following command launches 10 SLURM jobs with 2 gigabytes memory each
     in the `8GBS` partition
 
-    >>> spy.esi_cluster_setup(n_jobs=10, partition="8GBS", mem_per_job="2GB")
-
-    If you want to access properties of the created distributed computing client,
-    assign an explicit return quantity, i.e.,
-
-    >>> client = spy.esi_cluster_setup(n_jobs=10, partition="8GBS", mem_per_job="2GB")
+    >>> client = esi_cluster_setup(n_jobs=10, partition="8GBS", mem_per_job="2GB")
 
     The underlying distributed computing cluster can be accessed using
 
@@ -109,9 +117,9 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job="auto", n_jobs_sta
 
     Notes
     -----
-    Syncopy's parallel computing engine relies on the concurrent processing library
+    The employed parallel computing engine relies on the concurrent processing library
     `Dask <https://docs.dask.org/en/latest/>`_. Thus, the distributed computing
-    clients used by Syncopy are in fact instances of :class:`dask.distributed.Client`.
+    clients generated here are in fact instances of :class:`dask.distributed.Client`.
     This function specifically acts  as a wrapper for :class:`dask_jobqueue.SLURMCluster`.
     Users familiar with Dask in general and its distributed scheduler and cluster
     objects in particular, may leverage Dask's entire API to fine-tune parallel
@@ -348,10 +356,6 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job="auto", n_jobs_sta
     if _cluster_waiter(cluster, funcName, worker_count, timeout, interactive, interactive_wait):
         return
 
-    # # Fire up waiting routine to avoid premature cluster setups
-    # if _cluster_waiter(cluster, funcName, total_workers, timeout, interactive):
-    #     return
-
     # Kill a zombie cluster in non-interactive mode
     if not interactive and _count_running_workers(cluster) == 0:
         cluster.close()
@@ -398,7 +402,6 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
         print(msg.format(name=funcName, time=timeout))
         query = "{name:s} Do you want to [k]eep waiting for 60s, [a]bort or " +\
                 "[c]ontinue with {wrk:d} workers?"
-        valid = ["k", "a", "c"]
         choice = user_input(query.format(name=funcName, wrk=wrkrs), valid=["k", "a", "c"], default="c", timeout=interactive_wait)
 
         if choice == "k":
@@ -423,7 +426,7 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
 
 def cluster_cleanup(client=None):
     """
-    Stop and close dangling parallel processing jobs
+    Stop and close dangling parallel processing workers
 
     Parameters
     ----------
@@ -438,7 +441,7 @@ def cluster_cleanup(client=None):
 
     See also
     --------
-    esi_cluster_setup : Launch a SLURM jobs on the ESI compute cluster
+    esi_cluster_setup : Launch SLURM workers on the ESI compute cluster
     """
 
     # Re-direct printing/warnings to ACME logger outside SyNCoPy

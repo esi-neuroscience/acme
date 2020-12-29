@@ -80,24 +80,40 @@ class TestParallelMap():
     # Test setup of `ParallelMap` w/different functions args/kwargs
     def test_init(self):
 
+        # Collected auto-generated output directories in list for later cleanup
+        outDirs = []
+
         # Basic functionality w/simplest conceivable user-func
         pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4, setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
         pmap = ParallelMap(simple_func, [2, 4, 6, 8], y=4, setup_interactive=False)  # pos arg referenced via kwarg, cfg #2
+        outDirs.append(pmap.kwargv["outDir"][0])
         pmap = ParallelMap(simple_func, 0, 4, z=[3, 4, 5, 6], setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
         pmap = ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=2, setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
 
         # User func has `np.ndarray` as keyword
         pmap = ParallelMap(medium_func, [2, 4, 6, 8], y=[2, 2], n_inputs=2, setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
         pmap = ParallelMap(medium_func, None, None, w=[np.ones((3, 3)), 2 * np.ones((3,3))], setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
         pmap = ParallelMap(medium_func, None, None, z=np.zeros((3,)), setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
         pmap = ParallelMap(medium_func, None, None, z=np.zeros((3, 1)), setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
 
         # Lots of ways for this to go wrong...
         pmap = ParallelMap(hard_func, [2, 4, 6, 8], 2, w=np.ones((3,)), setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
         pmap = ParallelMap(hard_func, [2, 4, 6, 8], y=22, w=np.ones((7, 1)), setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
         pmap = ParallelMap(hard_func, np.ones((3,)), 1, w=np.ones((7, 1)), setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
         pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2, setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
         pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=4, setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
 
         # Ensure erroneous/ambiguous setups trigger the appropriate errors:
         # not enough positional args
@@ -125,6 +141,10 @@ class TestParallelMap():
             ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=8, setup_interactive=False)
             assert "No object has required length of 8 matching `n_inputs`" in str(valerr.value)
 
+        # Clean up testing folder
+        for folder in outDirs:
+            shutil.rmtree(folder, ignore_errors=True)
+
     # Functionality tests: perform channel-concurrent low-pass filtering
     def test_filter_example(self):
 
@@ -140,9 +160,13 @@ class TestParallelMap():
         with h5py.File(origName, "w") as origFile:
             origFile.create_dataset("data", data=self.orig)
 
+        # Collected auto-generated output directories in list for later cleanup
+        outDirs = []
+
         # Parallelize across channels, write results to disk
         with ParallelMap(lowpass_simple, sigName, range(self.nChannels), setup_interactive=False) as pmap:
             resOnDisk = pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
         assert len(pmap.kwargv["outFile"]) == pmap.n_calls
         resFiles = [os.path.join(pmap.kwargv["outDir"][0], outFile) for outFile in pmap.kwargv["outFile"]]
         assert resOnDisk == resFiles
@@ -206,6 +230,7 @@ class TestParallelMap():
                          stop_client=False,
                          setup_interactive=False) as pmap:
             pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
         logFileList = [handler.baseFilename for handler in pmap.log.handlers if isinstance(handler, logging.FileHandler)]
         assert len(logFileList) == 1
         logFile = logFileList[0]
@@ -237,6 +262,7 @@ class TestParallelMap():
                          stop_client=True,
                          setup_interactive=False) as pmap:
             pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
         assert os.path.isfile(customLog)
         with open(customLog, "r") as fl:
             assert len(fl.readlines()) > 1
@@ -258,6 +284,7 @@ class TestParallelMap():
                          stop_client=False,
                          setup_interactive=False) as pmap:
             pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
 
         # Post-hoc check of client to ensure custom settings were respected
         client = pmap.client
@@ -288,6 +315,7 @@ class TestParallelMap():
                          stop_client=False,
                          setup_interactive=False) as pmap:
             pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
 
         # Post-hoc check of client to ensure custom settings were respected
         client = pmap.client
@@ -299,22 +327,25 @@ class TestParallelMap():
             assert actualPartition == partition
             memStr = client.cluster.workers[0].worker_process_memory
             assert int(float(memStr.replace("GB", ""))) * 1000 == int(mem_per_job.replace("MB", ""))
+        cluster_cleanup(pmap.client)
 
         # Close any open HDF5 files to not trigger any `OSError`s, close running clusters
-        # and clean up tmp dirs and created log-files
+        # and clean up tmp dirs and created directories/log-files
         sigData.file.close()
         os.unlink(logFile)
         shutil.rmtree(tempDir, ignore_errors=True)
         shutil.rmtree(tempDir2, ignore_errors=True)
+        for folder in outDirs:
+            shutil.rmtree(folder, ignore_errors=True)
 
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):
 
-        client = esi_cluster_setup(partition="8GBXS", n_jobs=12)
-
         # Re-run tests with pre-allocated client
+        client = esi_cluster_setup(partition="8GBXS", n_jobs=12, interactive=False)
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr != "test_existing_cluster")]
         for test in all_tests:
             getattr(self, test)()
         client.close()
+        client.cluster.close()

@@ -58,6 +58,9 @@ class ACMEdaemon(object):
         stop_client="auto",
         verbose=None,
         logfile=None):
+        """
+        Coming soon...
+        """
 
         # The only error checking happening in `__init__`
         if pmap is not None:

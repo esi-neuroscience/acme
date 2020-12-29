@@ -26,7 +26,7 @@ with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
 ```
 
 ### Intermediate Examples
-Set no. of function calls via `n_inputs`
+Set number of function calls via `n_inputs`
 ```python
 import numpy as np
 from acme import ParallelMap
@@ -41,7 +41,7 @@ with pmap as p:
 ```
 
 ### Advanced Use
-Allocate custom `client` object and re-cycle it for several computations
+Allocate custom `client` object and recycle it for several computations
 ```python
 import numpy as np
 from acme import ParallelMap, esi_cluster_setup
@@ -71,7 +71,7 @@ with pmap as p:
 ## Handling results
 
 ### Load results from files
-The results are saved to disk in HDF5 format and the filenames are returned as a list of strings. 
+The results are saved to disk in HDF5 format and the filenames are returned as a list of strings.
 
 ```python
 with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
@@ -97,3 +97,21 @@ with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
 
 out = np.array([xi[0][0] for xi in results])
 ```
+
+## Debugging
+
+Use the `debug` keyword to perform all function calls in the local thread of
+the active Python interpreter
+
+```python
+with ParallelMap(f, [2, 4, 6, 8], 4, z=None) as pmap:
+    results = pmap.compute(debug=True)
+```
+This way tools like `pdb` or ``%debug`` IPython magics can be used.
+
+## Documentation and Contact
+
+To report bugs or ask questions please use our
+[GitHub issue tracker](https://github.com/esi-neuroscience/acme/issues).
+More usage details and background information is available in our
+[online documentation](https://acme.readthedocs.io/en/latest/).
