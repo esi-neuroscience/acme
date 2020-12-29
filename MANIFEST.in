@@ -1,1 +1,6 @@
 exclude .gitignore
+exclude .gitlab-ci.yml
+exclude .readthedocs.yml
+exclude .travis.yml
+recursive-exclude .github *
+recursive-exclude doc *
