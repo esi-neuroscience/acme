@@ -1,5 +1,20 @@
 # ACME: Asynchronous Computing Made Easy
-Asynchronous Computing Made Easy
+
+main: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=main)](https://travis-ci.com/esi-neuroscience/acme)
+dev: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=dev)](https://travis-ci.com/esi-neuroscience/acme)
+
+## Summary
+The objective of ACME (pronounced *"ak-mee"*) is to provide easy-to-use
+wrappers for calling Python functions in parallel ("embarassingly parallel workloads").
+ACME is developed at the
+[Ernst Strüngmann Institute (ESI) gGmbH for Neuroscience in Cooperation with Max Planck Society](https://www.esi-frankfurt.de/>)
+and released free of charge under the
+[BSD 3-Clause "New" or "Revised" License](https://en.wikipedia.org/wiki/BSD_licenses#3-clause_license_(%22BSD_License_2.0%22,_%22Revised_BSD_License%22,_%22New_BSD_License%22,_or_%22Modified_BSD_License%22)).
+ACME relies on the concurrent processing library [Dask](https://docs.dask.org/en/latest/>)
+and was primarily designed to facilitate the use of [SLURM](https://slurm.schedmd.com/documentation.html)
+on the ESI HPC cluster. However, local multi-processing hardware (i.e., multi-core CPUs)
+is fully supported as well. ACME is based on the parallelization engine used in [SyNCoPy](http://www.syncopy.org/>) and
+is itself part of the SyNCoPy package.
 
 ## Installation
 ACME can be installed with pip
@@ -114,4 +129,4 @@ This way tools like `pdb` or ``%debug`` IPython magics can be used.
 To report bugs or ask questions please use our
 [GitHub issue tracker](https://github.com/esi-neuroscience/acme/issues).
 More usage details and background information is available in our
-[online documentation](https://acme.readthedocs.io/en/latest/).
+[online documentation](https://esi-acme.readthedocs.io/en/latest/).
