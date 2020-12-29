@@ -46,12 +46,18 @@ class ParallelMap(object):
         Parameters
         ----------
         func : callable
-            User-defined function to be executed concurrently. See Examples for
-            details
+            User-defined function to be executed concurrently. Input arguments
+            and return values should be "simple" (i.e., regular Python objects or
+            NumPy arrays). See Notes for more information and Examples for
+            details.
         args : arguments
-            Positional arguments of `func`. See Examples for usage.
+            Positional arguments of `func`. Should be regular Python objects
+            (lists, tuples, scalars, strings etc.) or NumPy arrays. See Notes
+            for more information and Examples for details.
         kwargs : keyword arguments
-            Keyword arguments of `func` (if any). See Examples for usage.
+            Keyword arguments of `func` (if any). Should be regular Python objects
+            (lists, tuples, scalars, strings etc.) or NumPy arrays. See Notes
+            for more information and Examples for details.
         n_inputs : int or "auto"
             Number of times `func` is supposed to be called in parallel. Usually,
             `n_inputs` does not have to be provided explicitly. If `n_inputs` is
@@ -68,11 +74,11 @@ class ParallelMap(object):
             Name of SLURM partition to use. If `"auto"` (default), the memory footprint
             of `func` is estimated using dry-run stubs based on randomly sampling
             provided `args` and `kwargs`. Estimated memory usage dictates queue
-            auto-selection given the assumption of short run-times. For instance,
+            auto-selection under the assumption of short run-times. For instance,
             with a predicted memory footprint of 6 GB the `"8GBXS"` queue is selected
             (minimal but sufficient memory and shortest runtime). To override
             auto-selection, provide name of SLURM queue explicitly. See
-            :func:~`acme.esi_cluster_setup` for details.
+            :func:`~acme.esi_cluster_setup` for details.
         n_jobs : int or "auto"
             Number of SLURM jobs (=workers) to spawn. If `"auto"` (default), then
             ``n_jobs = n_inputs``, i.e., every SLURM worker performs a single
@@ -82,10 +88,10 @@ class ParallelMap(object):
         mem_per_job : str
             Memory booking for each SLURM worker. If `"auto"` (default), the standard
             value is inferred from the used partition (if possible). See
-            :func:~`acme.esi_cluster_setup` for details.
+            :func:`~acme.esi_cluster_setup` for details.
         setup_timeout : int
             Timeout period (in seconds) for SLURM workers to come online. See
-            :func:~`acme.esi_cluster_setup` for details.
+            :func:`~acme.esi_cluster_setup` for details.
         setup_interactive : bool
             If `True` (default), user input is queried in case not enough SLURM
             workers could be started within `setup_timeout` seconds. If no input
@@ -105,15 +111,15 @@ class ParallelMap(object):
             shown. If `False`, only warnings and errors are propagated.
         logfile : None or bool or str
             If `None` (default) or `False`, all run-time information as well as errors and
-            warnings is printed to the command line only. If `True`, an auto-generated
+            warnings are printed to the command line only. If `True`, an auto-generated
             log-file is set up that records run-time progress. Alternatively, the
             name of a custom log-file can be provided (must not exist). The verbosity
-            of any recorded information can be controlled via setting `verbose`.
+            of recorded information can be controlled via setting `verbose`.
 
         Returns
         -------
         results : list
-            If `write_worker_results` is `True`, `results` is a list of file-names
+            If `write_worker_results` is `True`, `results` is a list of HDF5 file-names
             containing computed results. If `write_worker_results` is `False`,
             results is a list of lists comprising the actual return values of
             `func`.
@@ -192,8 +198,8 @@ class ParallelMap(object):
             with ParallelMap(f, [2, 4, 6, 8], y) as pmap:
                 results = pmap.compute()
 
-        This fails, because it is not clear which input is to be split up for
-        parallel execution:
+        This fails, because it is not clear which input is to be split up and distributed
+        across workers for parallel execution:
 
         >>> ValueError: <ParallelMap> automatic input distribution failed: found 2 objects containing 3 to 4 elements. Please specify `n_inputs` manually.
 
@@ -214,10 +220,10 @@ class ParallelMap(object):
          [array([36., 36., 36.])]]
 
         Now suppose `f` needs to be evaluated for fixed values of `x` and `y`
-        but varying `z` randomly between 1 and 10 for 500 times. Since `f` is a
+        with `z` varying randomly 500 times between 1 and 10. Since `f` is a
         very simple function, it is not necessary to spawn 500 SLURM jobs for this.
         Instead, allocate only 50 workers in the smallest available queue "8GBXS",
-        i.e., each worker has to perform 10 evaluations of `f` and keep the workers
+        i.e., each worker has to perform 10 evaluations of `f`. Additionally, keep the workers
         alive for re-use afterwards
 
         .. code-block:: python
@@ -298,11 +304,12 @@ class ParallelMap(object):
             Exception: TypeError("unsupported operand type(s) for *: 'int' and 'NoneType'")
             slurmstepd: error: *** JOB 1873974 ON esi-svhpc18 CANCELLED AT 2020-12-17T16:01:43 ***
 
-        To narrow down problems with parallel execution, the `compute` method offers
-        the `debug` keyword. If enabled, all function calls are performed in
-        the local thread of the active Python interpreter. Thus, the execution
-        is not actually performed in parallel which allows regular error progration
-        and even permits the use of tools like `pdb` or ``%debug`` IPython magics.
+        To narrow down problems with parallel execution, the `compute` method
+        of `ParallelMap` offers the `debug` keyword. If enabled, all function calls
+        are performed in the local thread of the active Python interpreter. Thus, the execution
+        is **not** actually performed in parallel. This allows regular error progration
+        and even permits the use of tools like `pdb <https://docs.python.org/3/library/pdb.html>`_
+        or ``%debug`` `iPython magics <https://ipython.readthedocs.io/en/stable/interactive/magics.html#magic-debug>`_.
 
         .. code-block:: python
 
@@ -323,7 +330,8 @@ class ParallelMap(object):
         to `ParallelMap` works as intended in a sequential setting prior to running
         it in parallel.
 
-        More examples and usage notes can be found in the package README.
+        More examples and usage notes can be found in the package
+        `README <https://github.com/esi-neuroscience/acme#acme-asynchronous-computing-made-easy>`_.
 
         Notes
         -----
@@ -341,11 +349,12 @@ class ParallelMap(object):
         * **input arguments of `func`** should be regular Python objects (lists, tuples,
           scalars, strings etc.) or NumPy arrays. Custom user-defined classes
           may or may not work. In general, anything that can be serialized via
-          `cloudpickle` should work out of the box.
+          `cloudpickle <https://pypi.org/project/cloudpickle/>`_ should work out of the box.
         * if automatic result saving is used (`write_worker_results` is `True`),
           the **return value(s) of `func`** have to be suitable for storage in HDF5
           containers. Thus, anything returned by `func` should be either purely
-          numeric (scalars or NumPy arrays) or strings. Custom class instances,
+          numeric (scalars or NumPy arrays) or purely lexical (strings). Hybrid
+          text/numeric data-types (e.g., Pandas dataframes), custom class instances,
           functions, generators or complex objects (like matplotlib figures)
           **will not work**.
 
@@ -353,8 +362,8 @@ class ParallelMap(object):
 
         All HDF5 files auto-generated by `ParallelMap` are stored in a directory
         *ACME_YYYYMMDD-hhmmss-ffffff* (encoding the current time as
-        YearMonthDay-HourMinuteSecond-Microsecond) that is created in the user's
-        home directory on hpx (if ACME is running on the ESI cluster) or the
+        *YearMonthDay-HourMinuteSecond-Microsecond*) that is created in the user's
+        home directory on ``hpx`` (if ACME is running on the ESI cluster) or the
         current working directory (if running locally). The HDF5 files themselves
         are named *funcname_workerid.h5*, where `funcname` is the name of the user-provided
         function and `workerid` encodes the number of the worker that generated
@@ -373,7 +382,7 @@ class ParallelMap(object):
 
         with 50 workers using ``write_worker_results = True`` yields 50 HDF5
         files *this_func_0.h5*, *this_func_1.h5*, ..., *this_func_49.h5* each
-        each containing three datasets `"result_0"` (holding `r0`), `"result_1"`
+        containing three datasets `"result_0"` (holding `r0`), `"result_1"`
         (holding `r1`) and `"result_2"` (holding `r2`). User-provided functions
         with only a single return value correspondingly yield HDF5 files that
         only contain one dataset (`"result_0"`) in their respective root group.

@@ -18,11 +18,9 @@ you create your own Conda environment.
 Setting Up Your Python Environment
 ----------------------------------
 
-On the ESI cluster, ``/opt/conda/envs/acme`` provides a
-pre-configured and tested Conda environment with the most recent ACME
-version. This environment can be easily started using the `ESI JupyterHub
-<https://jupyterhub.esi.local>`_
-
+On the ESI cluster, all current pre-configured reference environments
+(`ESI-202xa/b`) provide the respective most recent ACME version. These environments
+can be easily started using the `ESI JupyterHub <https://jupyterhub.esi.local>`_
 
 Using ACME
 ----------
@@ -51,7 +49,7 @@ For example,
 
 .. code-block:: python
 
-    slurmClient = spy.esi_cluster_setup(partition="16GBXL", n_jobs=10)
+    slurmClient = esi_cluster_setup(partition="16GBXL", n_jobs=10)
 
 starts 10 concurrent SLURM workers in the `16GBXL` queue if run on the ESI HPC
 cluster. Any subsequent invocation of :class:`~acme.ParallelMap` will automatically
@@ -64,4 +62,4 @@ More Information
 Details about optional arguments of :class:`~acme.ParallelMap` are summarized in
 its constructor :meth:`~acme.ParallelMap.__init__` method.
 Additional :class:`~acme.ParallelMap` usage examples are provided in the repository's
-README.
+`README <https://github.com/esi-neuroscience/acme#acme-asynchronous-computing-made-easy>`_.
