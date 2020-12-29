@@ -60,4 +60,4 @@ pypideploy:
     - conda install --yes twine keyring rfc3986
     - conda update --yes twine keyring rfc3986
     - python setup.py sdist bdist_wheel
-    - twine upload dist/*
+    - twine upload --config-file=~/.esipypirc dist/*
