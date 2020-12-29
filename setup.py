@@ -13,7 +13,7 @@ required, dev = conda2pip(return_lists=True)
 # FIXME: uncomment once citation is needed
 # # Get package version for citationFile (for dev-builds this might differ from
 # # test-PyPI versions, which are ordered by recency)
-# version = get_version(root='.', relative_to=__file__)
+# version = get_version(root='.', relative_to=__file__, local_scheme="no-local-version")
 
 # # Update citation file
 # citationFile = "CITATION.cff"
@@ -27,8 +27,6 @@ required, dev = conda2pip(return_lists=True)
 
 # Run setup (note: identical arguments supplied in setup.cfg will take precedence)
 setup(
-    # install_requires=required,
-    use_scm_version=True,
-    setup_requires=['setuptools_scm'],
-    # extras_require={"dev": dev}
+    use_scm_version={"local_scheme": "no-local-version"},
+    setup_requires=['setuptools_scm']
 )
