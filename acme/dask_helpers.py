@@ -346,8 +346,8 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job="auto", n_jobs_sta
     if worker_count < total_workers:
         # cluster.adapt(minimum=worker_count, maximum=total_workers)
         cluster.scale(total_workers)
-        msg = "{} Requested job-count {} exceeds waiter threshold {}: " +\
-            "waiting for `n_jobs_startup` jobs to come online, then proceed"
+        msg = "{} Requested job-count {} exceeds `n_jobs_startup`: " +\
+            "waiting for {} jobs to come online, then proceed"
         print(msg.format(funcName, total_workers, n_jobs_startup))
     else:
         cluster.scale(total_workers)
