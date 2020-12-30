@@ -47,7 +47,9 @@ pypitest:
 
 pypideploy:
     stage: deploy
+    when: manual
     only:
+    - main
     - tags
     tags:
     - deploy
