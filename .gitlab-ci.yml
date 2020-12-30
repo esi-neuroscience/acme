@@ -48,7 +48,6 @@ pypitest:
 pypideploy:
     stage: deploy
     only:
-    - main
     - tags
     tags:
     - deploy
