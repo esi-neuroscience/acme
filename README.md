@@ -4,6 +4,7 @@ main: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=ma
 dev: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=dev)](https://travis-ci.com/esi-neuroscience/acme)
 
 ## Summary
+
 The objective of ACME (pronounced *"ak-mee"*) is to provide easy-to-use
 wrappers for calling Python functions in parallel ("embarassingly parallel workloads").
 ACME is developed at the
@@ -17,7 +18,9 @@ is fully supported as well. ACME is based on the parallelization engine used in 
 is itself part of the SyNCoPy package.
 
 ## Installation
+
 ACME can be installed with pip
+
 ```
 pip install esi-acme
 ```
@@ -29,7 +32,9 @@ git clone https://github.com/esi-neuroscience/acme.git
 ## Usage
 
 ### Basic Examples
+
 Simplest use, everything is done automatically.
+
 ```python
 from acme import ParallelMap
 
@@ -41,7 +46,9 @@ with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
 ```
 
 ### Intermediate Examples
+
 Set number of function calls via `n_inputs`
+
 ```python
 import numpy as np
 from acme import ParallelMap
@@ -56,7 +63,9 @@ with pmap as p:
 ```
 
 ### Advanced Use
+
 Allocate custom `client` object and recycle it for several computations
+
 ```python
 import numpy as np
 from acme import ParallelMap, esi_cluster_setup
@@ -86,6 +95,7 @@ with pmap as p:
 ## Handling results
 
 ### Load results from files
+
 The results are saved to disk in HDF5 format and the filenames are returned as a list of strings.
 
 ```python
@@ -104,6 +114,7 @@ for ii, fname in enumerate(filenames):
 ```
 
 ### Collect results in local memory
+
 This is possible but not recommended.
 
 ```python
@@ -122,6 +133,7 @@ the active Python interpreter
 with ParallelMap(f, [2, 4, 6, 8], 4, z=None) as pmap:
     results = pmap.compute(debug=True)
 ```
+
 This way tools like `pdb` or ``%debug`` IPython magics can be used.
 
 ## Documentation and Contact
