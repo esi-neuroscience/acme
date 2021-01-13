@@ -14,7 +14,7 @@ and released free of charge under the
 ACME relies on the concurrent processing library [Dask](https://docs.dask.org/en/latest/>)
 and was primarily designed to facilitate the use of [SLURM](https://slurm.schedmd.com/documentation.html)
 on the ESI HPC cluster. However, local multi-processing hardware (i.e., multi-core CPUs)
-is fully supported as well. ACME is based on the parallelization engine used in [SyNCoPy](http://www.syncopy.org/>) and
+is fully supported as well. ACME is based on the parallelization engine used in [SyNCoPy](http://www.syncopy.org/) and
 is itself part of the SyNCoPy package.
 
 ## Installation
