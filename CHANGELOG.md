@@ -16,6 +16,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### FIXED
 - Fixed markdown syntax and URLs
 - Fixed CI pipelines and repaired `h5py` version mismatch in dependencies
+- Pin ACME to Python 3.8.x due to various packages not working properly
+  (yet) in Python 3.9
 
 ## [v0.1a] - 2020-12-30
 ### NEW
