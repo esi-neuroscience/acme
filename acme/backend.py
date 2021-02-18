@@ -14,6 +14,7 @@ import sys
 import h5py
 import glob
 import tqdm
+import functools
 import dask.distributed as dd
 import dask_jobqueue as dj
 import dask.bag as db
@@ -308,13 +309,11 @@ class ACMEdaemon(object):
                 "to shut down any defunct distributed computing clients"
             raise RuntimeError(msg.format(self.msgName, self.client))
 
-        # In some cases distributed SLURM workers suffer from spontaneous
-        # dementia and forget the `sys.path` of their parent process. Fun!
-        def init_acme(dask_worker):
-            acme_path = os.path.abspath(os.path.split(__path__[0])[0])
-            if acme_path not in sys.path:
-                sys.path.insert(0, acme_path)
-        self.client.register_worker_callbacks(init_acme)
+        # Dask does not correctly forward the `sys.path` from the parent process
+        # to its workers. Fix this.
+        def init_acme(dask_worker, syspath):
+            sys.path = list(syspath)
+        self.client.register_worker_callbacks(setup=functools.partial(init_acme, syspath=sys.path))
 
         # Convert positional/keyword arg lists to dask bags
         firstArg = db.from_sequence(self.argv[0], npartitions=self.n_calls)
