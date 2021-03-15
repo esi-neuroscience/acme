@@ -6,6 +6,7 @@
 # Builtin/3rd party package imports
 import inspect
 import numpy as np
+import dask.array as da
 
 # Local imports
 from .backend import ACMEdaemon
@@ -537,7 +538,9 @@ class ParallelMap(object):
             elif isinstance(arg, np.ndarray):
                 if len(arg.squeeze().shape) == 1 and arg.squeeze().size == self.n_inputs:
                     continue
-            self.argv[ak] = [arg] * self.n_inputs
+                else:
+                    arg = da.from_array(arg, chunks=arg.shape)
+            self.argv[ak] = (arg for _ in range(self.n_inputs))
 
         # Same for keyword arguments with the caveat that default values have to
         # be taken into account (cf. above)
@@ -550,7 +553,9 @@ class ParallelMap(object):
                 not isinstance(funcSignature.parameters[name].default, np.ndarray):
                 if len(value.squeeze().shape) == 1 and value.squeeze().size == self.n_inputs:
                     continue
-            self.kwargv[name] = [value] * self.n_inputs
+                else:
+                    value = da.from_array(value, chunks=value.shape)
+            self.kwargv[name] = (value for _ in range(self.n_inputs))
 
         # Finally, attach user-provided function to class instance
         self.func = func

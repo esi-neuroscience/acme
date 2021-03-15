@@ -106,21 +106,23 @@ class ACMEdaemon(object):
         except Exception as exc:
             raise exc
 
-        # Ensure all elements of `argv` are list-like with length `n_calls`
+        # Ensure all elements of `argv` are list-like with length `n_calls` or generators
         msg = "{} `argv` has to be a list with list-like elements of length {}"
         if not isinstance(argv, (list, tuple)):
             raise TypeError(msg.format(self.msgName, n_calls))
         try:
-            validArgv = all(len(arg) == n_calls for arg in argv)
+            validArgv = all(len(arg) == n_calls if hasattr(arg, "__len__") \
+                else inspect.isgenerator(arg) for arg in argv)
         except TypeError:
             raise TypeError(msg.format(self.msgName, n_calls))
         if not validArgv:
             raise ValueError(msg.format(self.msgName, n_calls))
 
-        # Ensure all keys of `kwargv` have length `n_calls`
+        # Ensure all keys of `kwargv` have length `n_calls` or are generators
         msg = "{} `kwargv` has to be a dictionary with list-like elements of length {}"
         try:
-            validKwargv = all(len(value) == n_calls for value in kwargv.values())
+            validKwargv = all(len(value) == n_calls if hasattr(value, "__len__") \
+                else inspect.isgenerator(value) for value in kwargv.values())
         except TypeError:
             raise TypeError(msg.format(self.msgName, n_calls))
         if not validKwargv:
@@ -176,8 +178,8 @@ class ACMEdaemon(object):
 
             # If `taskID` is not an explicit kw-arg of `func` and `func` does not
             # accept "anonymous" `**kwargs`, don't save anything but return stuff
-            if self.kwargv.get("taskID") is None \
-                and "kwargs" not in inspect.signature(self.func).parameters.keys():
+            if self.kwargv.get("taskID") is None:
+                # and "kwargs" not in inspect.signature(self.func).parameters.keys():
                 msg = "`write_worker_results` is `False` and `taskID` is not a keyword argument of {}." +\
                     "Results will be collected in memory by caller - this might be slow and can lead " +\
                     "to excessive memory consumption. "
