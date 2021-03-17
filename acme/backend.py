@@ -317,13 +317,21 @@ class ACMEdaemon(object):
             sys.path = list(syspath)
         self.client.register_worker_callbacks(setup=functools.partial(init_acme, syspath=sys.path))
 
+        print('b4 bag init')
+
         # Convert positional/keyword arg lists to dask bags
         firstArg = db.from_sequence(self.argv[0], npartitions=self.n_calls)
         otherArgs = [db.from_sequence(arg, npartitions=self.n_calls) for arg in self.argv[1:] if len(self.argv) > 1]
         kwargBags = {key:db.from_sequence(value, npartitions=self.n_calls) for key, value in self.kwargv.items()}
 
+        print('after bag init')
+
+        print('b4 results')
+
         # Now, start to actually do something: map pos./kw. args onto (wrapped) user function
         results = firstArg.map(self.acme_func, *otherArgs, **kwargBags)
+
+        print('after results')
 
         # In case a debugging run is performed, use the single-threaded scheduler and return
         if debug:

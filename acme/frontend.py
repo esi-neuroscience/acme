@@ -527,6 +527,8 @@ class ParallelMap(object):
                 raise ValueError(msg.format(self.msgName, n_inputs))
         self.n_inputs = int(n_inputs)
 
+        gen = lambda obj: (obj for _ in range(self.n_inputs))
+
         # Anything that does not contain `n_input` elements is duplicated for
         # distribution across workers, e.g., ``args = [3, [0, 1, 1]]`` then
         # ``self.argv = [[3, 3, 3], [0, 1, 1]]``
@@ -540,7 +542,7 @@ class ParallelMap(object):
                     continue
                 else:
                     arg = da.from_array(arg, chunks=arg.shape)
-            self.argv[ak] = (arg for _ in range(self.n_inputs))
+            self.argv[ak] = gen(arg)
 
         # Same for keyword arguments with the caveat that default values have to
         # be taken into account (cf. above)
@@ -555,7 +557,7 @@ class ParallelMap(object):
                     continue
                 else:
                     value = da.from_array(value, chunks=value.shape)
-            self.kwargv[name] = (value for _ in range(self.n_inputs))
+            self.kwargv[name] = gen(value)
 
         # Finally, attach user-provided function to class instance
         self.func = func
