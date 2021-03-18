@@ -106,27 +106,27 @@ class ACMEdaemon(object):
         except Exception as exc:
             raise exc
 
-        # Ensure all elements of `argv` are list-like with length `n_calls` or generators
-        msg = "{} `argv` has to be a list with list-like elements of length {}"
-        if not isinstance(argv, (list, tuple)):
-            raise TypeError(msg.format(self.msgName, n_calls))
-        try:
-            validArgv = all(len(arg) == n_calls if hasattr(arg, "__len__") \
-                else inspect.isgenerator(arg) for arg in argv)
-        except TypeError:
-            raise TypeError(msg.format(self.msgName, n_calls))
-        if not validArgv:
-            raise ValueError(msg.format(self.msgName, n_calls))
+        # # Ensure all elements of `argv` are list-like with length `n_calls` or generators
+        # msg = "{} `argv` has to be a list with list-like elements of length {}"
+        # if not isinstance(argv, (list, tuple)):
+        #     raise TypeError(msg.format(self.msgName, n_calls))
+        # try:
+        #     validArgv = all(len(arg) == n_calls if hasattr(arg, "__len__") \
+        #         else inspect.isgenerator(arg) for arg in argv)
+        # except TypeError:
+        #     raise TypeError(msg.format(self.msgName, n_calls))
+        # if not validArgv:
+        #     raise ValueError(msg.format(self.msgName, n_calls))
 
-        # Ensure all keys of `kwargv` have length `n_calls` or are generators
-        msg = "{} `kwargv` has to be a dictionary with list-like elements of length {}"
-        try:
-            validKwargv = all(len(value) == n_calls if hasattr(value, "__len__") \
-                else inspect.isgenerator(value) for value in kwargv.values())
-        except TypeError:
-            raise TypeError(msg.format(self.msgName, n_calls))
-        if not validKwargv:
-            raise ValueError(msg.format(self.msgName, n_calls))
+        # # Ensure all keys of `kwargv` have length `n_calls` or are generators
+        # msg = "{} `kwargv` has to be a dictionary with list-like elements of length {}"
+        # try:
+        #     validKwargv = all(len(value) == n_calls if hasattr(value, "__len__") \
+        #         else inspect.isgenerator(value) for value in kwargv.values())
+        # except TypeError:
+        #     raise TypeError(msg.format(self.msgName, n_calls))
+        # if not validKwargv:
+        #     raise ValueError(msg.format(self.msgName, n_calls))
 
         # Basal sanity checks have passed, keep the provided input signature
         self.func = func
@@ -317,21 +317,32 @@ class ACMEdaemon(object):
             sys.path = list(syspath)
         self.client.register_worker_callbacks(setup=functools.partial(init_acme, syspath=sys.path))
 
-        print('b4 bag init')
 
-        # Convert positional/keyword arg lists to dask bags
-        firstArg = db.from_sequence(self.argv[0], npartitions=self.n_calls)
-        otherArgs = [db.from_sequence(arg, npartitions=self.n_calls) for arg in self.argv[1:] if len(self.argv) > 1]
-        kwargBags = {key:db.from_sequence(value, npartitions=self.n_calls) for key, value in self.kwargv.items()}
+        for ak, arg in enumerate(self.argv):
+            if len(arg) == 1:
+                ftArg = self.client.scatter(arg, broadcast=True)[0]
+                self.argv[ak] = [ftArg] * self.n_calls
 
-        print('after bag init')
+        for name, value in self.kwargv.items():
+            if len(value) == 1:
+                ftVal = self.client.scatter(value, broadcast=True)[0]
+                self.kwargv[name] = [ftVal] * self.n_calls
 
-        print('b4 results')
+        kwargList = []
+        kwargKeys = self.kwargv.keys()
+        kwargVals = list(self.kwargv.values())
+        for nc in range(self.n_calls):
+            kwDict = {}
+            for kc, key in enumerate(kwargKeys):
+                kwDict[key] = kwargVals[kc][nc]
+            kwargList.append(kwDict)
 
-        # Now, start to actually do something: map pos./kw. args onto (wrapped) user function
-        results = firstArg.map(self.acme_func, *otherArgs, **kwargBags)
+        futures = [self.client.submit(self.acme_func, *args, **kwargs) for args, kwargs in zip(zip(*self.argv), kwargList)]
 
-        print('after results')
+        # # Now, start to actually do something: map pos./kw. args onto (wrapped) user function
+        # results = firstArg.map(self.acme_func, *otherArgs, **kwargBags)
+
+        # print('after results')
 
         # In case a debugging run is performed, use the single-threaded scheduler and return
         if debug:
@@ -350,8 +361,8 @@ class ACMEdaemon(object):
         msg = "Log information available at {}"
         self.log.info(msg.format(logDir))
 
-        # Persist task graph to cluster and keep track of futures
-        futures = self.client.futures_of(results.persist())
+        # # Persist task graph to cluster and keep track of futures
+        # futures = self.client.futures_of(results.persist())
 
         # Set up progress bar: the while loop ensures all futures are executed
         totalTasks = len(futures)
