@@ -12,7 +12,7 @@ from importlib.metadata import version, PackageNotFoundError
 
 # Get package version: either via meta-information from egg or via latest git commit
 try:
-    __version__ = version(__name__)
+    __version__ = version("esi-acme")
 except PackageNotFoundError:
     proc = subprocess.Popen("git describe --always",
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -29,13 +29,6 @@ except PackageNotFoundError:
             warnings.showwarning(msg, ImportWarning, __file__, inspect.currentframe().f_lineno)
             out = "-999"
     __version__ = out.rstrip("\n")
-
-# # Check if we're being imported by a parallel worker process: FIXME - do we need this?
-# try:
-#     dd.get_worker()
-#     __worker__ = True
-# except ValueError:
-#     __worker__ = False
 
 # Import local modules
 from . import frontend, backend, shared, dask_helpers

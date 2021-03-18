@@ -6,6 +6,7 @@
 # Builtin/3rd party package imports
 import inspect
 import numpy as np
+import dask.array as da
 
 # Local imports
 from .backend import ACMEdaemon
@@ -121,8 +122,7 @@ class ParallelMap(object):
         results : list
             If `write_worker_results` is `True`, `results` is a list of HDF5 file-names
             containing computed results. If `write_worker_results` is `False`,
-            results is a list of lists comprising the actual return values of
-            `func`.
+            results is a list comprising the actual return values of `func`.
 
         Examples
         --------
@@ -180,14 +180,10 @@ class ParallelMap(object):
             with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
                 results = pmap.compute()
 
-        Now `results` is a list of lists:
+        Now `results` is a list of integers:
 
         >>> results
-        [[18], [24], [30], [36]]
-
-        To extract values into a NumPy array one may use
-
-        >>> out = np.array([xi[0][0] for xi in results])
+        [18, 24, 30, 36]
 
         Next, suppose `f` has to be evaluated for the same values of `x` (again
         2, 4, 6 and 8), but `y` is not a number but a NumPy array:
@@ -214,10 +210,10 @@ class ParallelMap(object):
         yielding
 
         >>> results
-        [[array([18., 18., 18.])],
-         [array([24., 24., 24.])],
-         [array([30., 30., 30.])],
-         [array([36., 36., 36.])]]
+        [array([18., 18., 18.]),
+         array([24., 24., 24.]),
+         array([30., 30., 30.]),
+         array([36., 36., 36.])]
 
         Now suppose `f` needs to be evaluated for fixed values of `x` and `y`
         with `z` varying randomly 500 times between 1 and 10. Since `f` is a
@@ -526,9 +522,7 @@ class ParallelMap(object):
                 raise ValueError(msg.format(self.msgName, n_inputs))
         self.n_inputs = int(n_inputs)
 
-        # Anything that does not contain `n_input` elements is duplicated for
-        # distribution across workers, e.g., ``args = [3, [0, 1, 1]]`` then
-        # ``self.argv = [[3, 3, 3], [0, 1, 1]]``
+        # Anything that does not contain `n_input` elements is converted to a one-element list
         self.argv = list(args)
         for ak, arg in enumerate(args):
             if isinstance(arg, (list, tuple)):
@@ -537,7 +531,7 @@ class ParallelMap(object):
             elif isinstance(arg, np.ndarray):
                 if len(arg.squeeze().shape) == 1 and arg.squeeze().size == self.n_inputs:
                     continue
-            self.argv[ak] = [arg] * self.n_inputs
+            self.argv[ak] = [arg]
 
         # Same for keyword arguments with the caveat that default values have to
         # be taken into account (cf. above)
@@ -550,7 +544,7 @@ class ParallelMap(object):
                 not isinstance(funcSignature.parameters[name].default, np.ndarray):
                 if len(value.squeeze().shape) == 1 and value.squeeze().size == self.n_inputs:
                     continue
-            self.kwargv[name] = [value] * self.n_inputs
+            self.kwargv[name] = [value]
 
         # Finally, attach user-provided function to class instance
         self.func = func
