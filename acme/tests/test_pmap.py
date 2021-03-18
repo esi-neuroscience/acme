@@ -10,6 +10,7 @@ import shutil
 import inspect
 import pytest
 import logging
+import time
 import numpy as np
 import dask.distributed as dd
 from glob import glob
@@ -172,7 +173,7 @@ class TestParallelMap():
         assert resOnDisk == resFiles
         assert all(os.path.isfile(fle) for fle in resOnDisk)
 
-        # Compare compuated single-channel results to expected low-freq signal
+        # Compare computed single-channel results to expected low-freq signal
         for chNo, h5name in enumerate(resOnDisk):
             with h5py.File(h5name, "r") as h5f:
                 assert np.mean(np.abs(h5f["result_0"][()] - self.orig[:, chNo])) < self.tol
@@ -185,7 +186,7 @@ class TestParallelMap():
                          setup_interactive=False) as pmap:
             resInMem = pmap.compute()
         for chNo in range(self.nChannels):
-            assert np.mean(np.abs(resInMem[chNo][0] - self.orig[:, chNo])) < self.tol
+            assert np.mean(np.abs(resInMem[chNo] - self.orig[:, chNo])) < self.tol
 
         # Simulate user-defined results-directory
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
@@ -211,7 +212,7 @@ class TestParallelMap():
         resFiles = glob(os.path.join(tempDir2, res_base + "*"))
         assert len(resFiles) == pmap.n_calls
 
-        # Compare compuated single-channel results to expected low-freq signal
+        # Compare computed single-channel results to expected low-freq signal
         for chNo in range(self.nChannels):
             h5name = res_base + "{}.h5".format(chNo)
             with h5py.File(os.path.join(tempDir2, h5name), "r") as h5f:
@@ -337,6 +338,10 @@ class TestParallelMap():
         shutil.rmtree(tempDir2, ignore_errors=True)
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
+
+        # Wait a second (literally) so that no new parallel jobs started by
+        # `test_existing_cluster` erroneously use existing HDF files
+        time.sleep(1.0)
 
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):

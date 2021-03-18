@@ -15,9 +15,9 @@ import h5py
 import glob
 import tqdm
 import functools
+import dask
 import dask.distributed as dd
 import dask_jobqueue as dj
-import dask.bag as db
 import numpy as np
 
 # Local imports
@@ -106,27 +106,25 @@ class ACMEdaemon(object):
         except Exception as exc:
             raise exc
 
-        # # Ensure all elements of `argv` are list-like with length `n_calls` or generators
-        # msg = "{} `argv` has to be a list with list-like elements of length {}"
-        # if not isinstance(argv, (list, tuple)):
-        #     raise TypeError(msg.format(self.msgName, n_calls))
-        # try:
-        #     validArgv = all(len(arg) == n_calls if hasattr(arg, "__len__") \
-        #         else inspect.isgenerator(arg) for arg in argv)
-        # except TypeError:
-        #     raise TypeError(msg.format(self.msgName, n_calls))
-        # if not validArgv:
-        #     raise ValueError(msg.format(self.msgName, n_calls))
+        # Ensure all elements of `argv` are list-like with lengths `n_calls` or 1
+        msg = "{} `argv` has to be a list with list-like elements of length 1 or {}"
+        if not isinstance(argv, (list, tuple)):
+            raise TypeError(msg.format(self.msgName, n_calls))
+        try:
+            validArgv = all(len(arg) == n_calls or len(arg) == 1 for arg in argv)
+        except TypeError:
+            raise TypeError(msg.format(self.msgName, n_calls))
+        if not validArgv:
+            raise ValueError(msg.format(self.msgName, n_calls))
 
-        # # Ensure all keys of `kwargv` have length `n_calls` or are generators
-        # msg = "{} `kwargv` has to be a dictionary with list-like elements of length {}"
-        # try:
-        #     validKwargv = all(len(value) == n_calls if hasattr(value, "__len__") \
-        #         else inspect.isgenerator(value) for value in kwargv.values())
-        # except TypeError:
-        #     raise TypeError(msg.format(self.msgName, n_calls))
-        # if not validKwargv:
-        #     raise ValueError(msg.format(self.msgName, n_calls))
+        # Ensure all values of `kwargv` are list-like with lengths `n_calls` or 1
+        msg = "{} `kwargv` has to be a dictionary with list-like elements of length {}"
+        try:
+            validKwargv = all(len(value) == n_calls or len(value) == 1 for value in kwargv.values())
+        except TypeError:
+            raise TypeError(msg.format(self.msgName, n_calls))
+        if not validKwargv:
+            raise ValueError(msg.format(self.msgName, n_calls))
 
         # Basal sanity checks have passed, keep the provided input signature
         self.func = func
@@ -180,7 +178,7 @@ class ACMEdaemon(object):
             # accept "anonymous" `**kwargs`, don't save anything but return stuff
             if self.kwargv.get("taskID") is None:
                 # and "kwargs" not in inspect.signature(self.func).parameters.keys():
-                msg = "`write_worker_results` is `False` and `taskID` is not a keyword argument of {}." +\
+                msg = "`write_worker_results` is `False` and `taskID` is not a keyword argument of {}. " +\
                     "Results will be collected in memory by caller - this might be slow and can lead " +\
                     "to excessive memory consumption. "
                 self.log.warning(msg.format(self.func.__name__))
@@ -317,17 +315,23 @@ class ACMEdaemon(object):
             sys.path = list(syspath)
         self.client.register_worker_callbacks(setup=functools.partial(init_acme, syspath=sys.path))
 
-
+        # Format positional arguments for worker-distribution: broadcast all
+        # inputs that are used by all workers and create a list of references
+        # to this (single!) future on the cluster for submission
         for ak, arg in enumerate(self.argv):
             if len(arg) == 1:
                 ftArg = self.client.scatter(arg, broadcast=True)[0]
                 self.argv[ak] = [ftArg] * self.n_calls
 
+        # Same as above but for keyword-arguments
         for name, value in self.kwargv.items():
             if len(value) == 1:
                 ftVal = self.client.scatter(value, broadcast=True)[0]
                 self.kwargv[name] = [ftVal] * self.n_calls
 
+        # Re-format keyword arguments to be usable with single-to-many arg submission.
+        # Idea: with `self.n_calls = 3` and ``self.kwargv = {'a': [5, 5, 5], 'b': [6, 6, 6]}``
+        # then ``kwargList = [{'a': 5, 'b': 6}, {'a': 5, 'b': 6}, {'a': 5, 'b': 6}]``
         kwargList = []
         kwargKeys = self.kwargv.keys()
         kwargVals = list(self.kwargv.values())
@@ -337,17 +341,12 @@ class ACMEdaemon(object):
                 kwDict[key] = kwargVals[kc][nc]
             kwargList.append(kwDict)
 
-        futures = [self.client.submit(self.acme_func, *args, **kwargs) for args, kwargs in zip(zip(*self.argv), kwargList)]
-
-        # # Now, start to actually do something: map pos./kw. args onto (wrapped) user function
-        # results = firstArg.map(self.acme_func, *otherArgs, **kwargBags)
-
-        # print('after results')
-
         # In case a debugging run is performed, use the single-threaded scheduler and return
         if debug:
-            values = results.compute(scheduler="single-threaded")
-            return values
+            with dask.config.set(scheduler='single-threaded'):
+                values = self.client.gather([self.client.submit(self.acme_func, *args, **kwargs) \
+                    for args, kwargs in zip(zip(*self.argv), kwargList)])
+                return values
 
         # Depending on the used dask cluster object, point to respective log info
         if isinstance(self.client.cluster, dj.SLURMCluster):
@@ -361,8 +360,9 @@ class ACMEdaemon(object):
         msg = "Log information available at {}"
         self.log.info(msg.format(logDir))
 
-        # # Persist task graph to cluster and keep track of futures
-        # futures = self.client.futures_of(results.persist())
+        # Submit `self.n_calls` function calls to the cluster
+        futures = [self.client.submit(self.acme_func, *args, **kwargs) \
+            for args, kwargs in zip(zip(*self.argv), kwargList)]
 
         # Set up progress bar: the while loop ensures all futures are executed
         totalTasks = len(futures)

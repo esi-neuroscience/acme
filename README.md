@@ -119,9 +119,7 @@ This is possible but not recommended.
 
 ```python
 with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
-  results = pmap.compute()
-
-out = np.array([xi[0][0] for xi in results])
+  results = pmap.compute() # returns a list of outputs
 ```
 
 ## Debugging
