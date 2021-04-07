@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### NEW
+- New keyword `write_pickle` can be used to override HDF5 as default storage
+  format in favor of pickle
+
+### FIXED
+- If auto-saving to HDF5 fails, a new "emergency pickling" mechanic kicks in and
+  attempts to pickle the offending return values instead
 
 ## [v0.1b] - 2020-01-15
 ### NEW

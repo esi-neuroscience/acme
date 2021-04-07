@@ -31,6 +31,7 @@ class ParallelMap(object):
         *args,
         n_inputs="auto",
         write_worker_results=True,
+        write_pickle=False,
         partition="auto",
         n_jobs="auto",
         mem_per_job="auto",
@@ -70,6 +71,10 @@ class ParallelMap(object):
             If `True`, the return value(s) of `func` is/are saved on disk (one
             HDF5 file per parallel worker). If `False`, the output of all parallel calls
             of `func` is collected in memory. See Examples and Notes for details.
+        write_pickle : bool
+            If `True`, the return value(s) of `func` is/are pickled to disk (one
+            `'.pickle'`-file per parallel worker). Only effective if `write_worker_results`
+            is `True`.
         partition : str
             Name of SLURM partition to use. If `"auto"` (default), the memory footprint
             of `func` is estimated using dry-run stubs based on randomly sampling
@@ -275,6 +280,41 @@ class ParallelMap(object):
             z = rng.integers(low=1, high=10, size=20000, endpoint=True)
 
             with ParallelMap(f, x, y, z=z, logfile="my_log.txt") as pmap:
+                results = pmap.compute()
+
+        In some cases it might be necessary to work with objects that are not
+        HDF5 compatible, e.g., sparse matrices created by `scipy.sparse`. Consider
+
+        >>> from scipy.sparse import spdiags
+        >>> ndim = 4
+        >>> x = spdiags(np.ones((ndim,)), 0, ndim, ndim)
+        >>> x
+        <4x4 sparse matrix of type '<class 'numpy.float64'>'
+	            with 4 stored elements (1 diagonals) in DIAgonal format>
+        >>> y = spdiags(3 * np.ones((ndim,)), 0, ndim, ndim)
+        >>> y
+        <4x4 sparse matrix of type '<class 'numpy.float64'>'
+	            with 4 stored elements (1 diagonals) in DIAgonal format>
+        >>> x.toarray()
+        array([[1., 0., 0., 0.],
+               [0., 1., 0., 0.],
+               [0., 0., 1., 0.],
+               [0., 0., 0., 1.]])
+        >>> y.toarray()
+        array([[3., 0., 0., 0.],
+               [0., 3., 0., 0.],
+               [0., 0., 3., 0.],
+               [0., 0., 0., 3.]])
+        >>> f(x, y)
+        <4x4 sparse matrix of type '<class 'numpy.float64'>'
+	            with 4 stored elements (1 diagonals) in DIAgonal format>
+
+        In this case, the default HDF5 storage format can be overridden using the
+        keyword `write_pickle`
+
+        .. code-block:: python
+
+            with ParallelMap(f, x, y, n_inputs=5, write_pickle=True) as pmap:
                 results = pmap.compute()
 
         Note that debugging programs running in parallel can be quite tricky.
