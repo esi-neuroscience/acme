@@ -285,13 +285,19 @@ class ParallelMap(object):
         In some cases it might be necessary to work with objects that are not
         HDF5 compatible, e.g., sparse matrices created by `scipy.sparse`. Consider
 
-        >>> from scipy.sparse import spdiags
-        >>> ndim = 4
-        >>> x = spdiags(np.ones((ndim,)), 0, ndim, ndim)
+        .. code-block:: python
+
+            from scipy.sparse import spdiags
+
+            ndim = 4
+            x = spdiags(np.ones((ndim,)), 0, ndim, ndim)
+            y = spdiags(3 * np.ones((ndim,)), 0, ndim, ndim)
+
+        Then
+
         >>> x
         <4x4 sparse matrix of type '<class 'numpy.float64'>'
 	            with 4 stored elements (1 diagonals) in DIAgonal format>
-        >>> y = spdiags(3 * np.ones((ndim,)), 0, ndim, ndim)
         >>> y
         <4x4 sparse matrix of type '<class 'numpy.float64'>'
 	            with 4 stored elements (1 diagonals) in DIAgonal format>
@@ -316,6 +322,14 @@ class ParallelMap(object):
 
             with ParallelMap(f, x, y, n_inputs=5, write_pickle=True) as pmap:
                 results = pmap.compute()
+
+        which yields
+
+        >>> results
+        ['/mnt/hpx/home/username/ACME_20201217-135011-448825/f_0.pickle',
+         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_1.pickle',
+         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_2.pickle',
+         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_3.pickle']
 
         Note that debugging programs running in parallel can be quite tricky.
         For instance, assume the function `f` is (erroneously) called with `z`
@@ -443,6 +457,7 @@ class ParallelMap(object):
         self.daemon = ACMEdaemon(self,
                                  n_jobs=n_jobs,
                                  write_worker_results=write_worker_results,
+                                 write_pickle=write_pickle,
                                  partition=partition,
                                  mem_per_job=mem_per_job,
                                  setup_timeout=setup_timeout,

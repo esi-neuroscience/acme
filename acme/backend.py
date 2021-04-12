@@ -429,9 +429,18 @@ class ACMEdaemon(object):
             dirname = self.kwargv["outDir"][0]
             msgRes = "Results have been saved to {}".format(dirname)
             msg += msgRes
-            # Determine filepaths of results files
+            # Determine filepaths of results files (query disk to catch emergency pickles)
             if values is None:
-                values = [os.path.join(dirname, x) for x in self.kwargv["outFile"]]
+                values = []
+                for fname in self.kwargv["outFile"]:
+                    h5Name = os.path.join(dirname, fname)
+                    pklName = h5Name.rstrip(".h5") + ".pickle"
+                    if os.path.isfile(h5Name):
+                        values.append(h5Name)
+                    elif os.path.isfile(pklName):
+                        values.append(pklName)
+                    else:
+                        values.append("Missing {}".format(fname.rstrip(".h5")))
         self.log.info(msg)
 
         # Either return collected by-worker results or the filepaths of results
@@ -459,7 +468,8 @@ class ACMEdaemon(object):
         # Save results: either (try to) use HDF5 or pickle stuff
         if fname.endswith(".h5"):
             try:
-                with h5py.File(os.path.join(outDir, fname), "w") as h5f:
+                h5name = os.path.join(outDir, fname)
+                with h5py.File(h5name, "w") as h5f:
                     if isinstance(result, (list, tuple)):
                         if not all(isinstance(value, (numbers.Number, str)) for value in result):
                             for rk, res in enumerate(result):
@@ -469,22 +479,24 @@ class ACMEdaemon(object):
                     else:
                         h5f.create_dataset("result_0", data=result)
             except TypeError as exc:
-                if "has no native HDF5 equivalent" in str(exc):
+                if "has no native HDF5 equivalent" in str(exc) or "One of data, shape or dtype must be specified" in str(exc):
                     try:
-                        with open(fname.rstrip(".h5") + ".pickle", "wb") as pkf:
+                        os.unlink(h5name)
+                        pname = fname.rstrip(".h5") + ".pickle"
+                        with open(os.path.join(outDir, pname), "wb") as pkf:
                             pickle.dump(result, pkf)
-                        msg = "Could not write %s: results have been pickled instead. Return values are most likely " +\
+                        msg = "Could not write %s results have been pickled instead: %s. Return values are most likely " +\
                             "not suitable for storage in HDF5 containers. Original error message: %s"
-                        log.warning(msg, fname, str(exc))
+                        log.warning(msg, fname, pname, str(exc))
                     except pickle.PicklingError as pexc:
                         err = "Unable to write %s, successive attempts to pickle results failed too: %s"
                         log.error(err, fname, str(pexc))
                 else:
                     err = "Could not access %s. Original error message: %s"
-                    log.error(err, str(exc))
+                    log.error(err, h5name, str(exc))
         else:
             try:
-                with open(fname, "wb") as pkf:
+                with open(os.path.join(outDir, fname), "wb") as pkf:
                     pickle.dump(result, pkf)
             except pickle.PicklingError as pexc:
                 err = "Could not pickle results to file %s. Original error message: %s"

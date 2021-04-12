@@ -6,6 +6,7 @@
 # Builtin/3rd party package imports
 import os
 import h5py
+import pickle
 import shutil
 import inspect
 import pytest
@@ -45,6 +46,16 @@ def lowpass_hard(arr_like, b, a, res_dir, res_base="lowpass_hard_", dset_name="c
         h5f.create_dataset(dset_name, data=res)
     return
 
+def pickle_func(arr, b, a, channel_no, sabotage_hdf5=False, beyond_repair=False):
+    res = signal.filtfilt(b, a, arr[:, channel_no], padlen=200)
+    if beyond_repair:
+        if channel_no in [1, 31]:
+            return None
+            # return lambda x: x**2
+    if sabotage_hdf5:
+        if channel_no % 2 == 0:
+            return {"b" : b}
+    return res
 
 # Perform SLURM-specific tests only on cluster nodes
 useSLURM = is_slurm_node()
@@ -172,7 +183,7 @@ class TestParallelMap():
         assert resOnDisk == resFiles
         assert all(os.path.isfile(fle) for fle in resOnDisk)
 
-        # Compare compuated single-channel results to expected low-freq signal
+        # Compare computed single-channel results to expected low-freq signal
         for chNo, h5name in enumerate(resOnDisk):
             with h5py.File(h5name, "r") as h5f:
                 assert np.mean(np.abs(h5f["result_0"][()] - self.orig[:, chNo])) < self.tol
@@ -186,6 +197,11 @@ class TestParallelMap():
             resInMem = pmap.compute()
         for chNo in range(self.nChannels):
             assert np.mean(np.abs(resInMem[chNo][0] - self.orig[:, chNo])) < self.tol
+
+        # Be double-paranoid: ensure on-disk and in-memory results match up
+        for chNo, h5name in enumerate(resOnDisk):
+            with h5py.File(h5name, "r") as h5f:
+                assert np.array_equal(h5f["result_0"][()], resInMem[chNo][0])
 
         # Simulate user-defined results-directory
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
@@ -337,6 +353,90 @@ class TestParallelMap():
         shutil.rmtree(tempDir2, ignore_errors=True)
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
+
+    # Test if pickling/emergency pickling and I/O in general works as intended
+    def test_pickling(self):
+
+        # Collected auto-generated output directories in list for later cleanup
+        outDirs = []
+
+        # Execute `pickle_func` w/regular HDF5 saving
+        with ParallelMap(pickle_func,
+                         self.sig,
+                         self.b,
+                         self.a,
+                         range(self.nChannels),
+                         sabotage_hdf5=False,
+                         n_inputs=self.nChannels,
+                         setup_interactive=False) as pmap:
+            hdfResults = pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
+
+        # Execute `pickle_func` w/pickling
+        with ParallelMap(pickle_func,
+                         self.sig,
+                         self.b,
+                         self.a,
+                         range(self.nChannels),
+                         n_inputs=self.nChannels,
+                         write_pickle=True,
+                         setup_interactive=False) as pmap:
+            pklResults = pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
+
+        # Ensure HDF5 and pickle match up
+        for chNo, h5name in enumerate(hdfResults):
+            with open(pklResults[chNo], "rb") as pkf:
+                pklRes = pickle.load(pkf)
+            with h5py.File(h5name, "r") as h5f:
+                assert np.array_equal(pklRes, h5f["result_0"][()])
+
+        # Test emergency pickling
+        with ParallelMap(pickle_func,
+                         self.sig,
+                         self.b,
+                         self.a,
+                         range(self.nChannels),
+                         sabotage_hdf5=True,
+                         n_inputs=self.nChannels,
+                         setup_interactive=False) as pmap:
+            mixedResults = pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
+
+        # import pdb; pdb.set_trace()
+
+        # Ensure non-compliant dicts were pickled, rest is in HDF5
+        for chNo, fname in enumerate(mixedResults):
+            if chNo % 2 == 0:
+                assert fname.endswith(".pickle")
+                with open(fname, "rb") as pkf:
+                    assert np.array_equal(self.b, pickle.load(pkf)["b"])
+            else:
+                assert fname.endswith(".h5")
+                with h5py.File(fname, "r") as h5f:
+                    with h5py.File(hdfResults[chNo], "r") as h5ref:
+                        assert np.array_equal(h5f["result_0"][()], h5ref["result_0"][()])
+
+        # Test emergency pickling + write breakdown
+        with ParallelMap(pickle_func,
+                         self.sig,
+                         self.b,
+                         self.a,
+                         range(self.nChannels),
+                         sabotage_hdf5=True,
+                         beyond_repair=True,
+                         n_inputs=self.nChannels,
+                         setup_interactive=False) as pmap:
+            failedResults = pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
+
+        import pdb; pdb.set_trace()
+
+        # Clean up testing folder
+        for folder in outDirs:
+            shutil.rmtree(folder, ignore_errors=True)
+
+
 
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):
