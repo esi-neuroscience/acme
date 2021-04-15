@@ -494,6 +494,7 @@ class ACMEdaemon(object):
                 else:
                     err = "Could not access %s. Original error message: %s"
                     log.error(err, h5name, str(exc))
+                    raise(exc)
         else:
             try:
                 with open(os.path.join(outDir, fname), "wb") as pkf:
@@ -501,3 +502,4 @@ class ACMEdaemon(object):
             except pickle.PicklingError as pexc:
                 err = "Could not pickle results to file %s. Original error message: %s"
                 log.error(err, fname, str(pexc))
+                raise(pexc)

@@ -46,12 +46,8 @@ def lowpass_hard(arr_like, b, a, res_dir, res_base="lowpass_hard_", dset_name="c
         h5f.create_dataset(dset_name, data=res)
     return
 
-def pickle_func(arr, b, a, channel_no, sabotage_hdf5=False, beyond_repair=False):
+def pickle_func(arr, b, a, channel_no, sabotage_hdf5=False):
     res = signal.filtfilt(b, a, arr[:, channel_no], padlen=200)
-    if beyond_repair:
-        if channel_no in [1, 31]:
-            return None
-            # return lambda x: x**2
     if sabotage_hdf5:
         if channel_no % 2 == 0:
             return {"b" : b}
@@ -403,8 +399,6 @@ class TestParallelMap():
             mixedResults = pmap.compute()
         outDirs.append(pmap.kwargv["outDir"][0])
 
-        # import pdb; pdb.set_trace()
-
         # Ensure non-compliant dicts were pickled, rest is in HDF5
         for chNo, fname in enumerate(mixedResults):
             if chNo % 2 == 0:
@@ -417,25 +411,38 @@ class TestParallelMap():
                     with h5py.File(hdfResults[chNo], "r") as h5ref:
                         assert np.array_equal(h5f["result_0"][()], h5ref["result_0"][()])
 
-        # Test emergency pickling + write breakdown
-        with ParallelMap(pickle_func,
-                         self.sig,
-                         self.b,
-                         self.a,
-                         range(self.nChannels),
-                         sabotage_hdf5=True,
-                         beyond_repair=True,
-                         n_inputs=self.nChannels,
-                         setup_interactive=False) as pmap:
-            failedResults = pmap.compute()
+        # Test write breakdown (both for HDF5 saving and pickling)
+        pmap = ParallelMap(pickle_func,
+                           self.sig,
+                           self.b,
+                           self.a,
+                           range(self.nChannels),
+                           sabotage_hdf5=True,
+                           n_inputs=self.nChannels,
+                           setup_interactive=False)
         outDirs.append(pmap.kwargv["outDir"][0])
-
-        import pdb; pdb.set_trace()
+        pmap.kwargv["outDir"][0] = "/path/to/nowhere"
+        with pytest.raises(RuntimeError) as runerr:
+            pmap.compute()
+            assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
+        pmap = ParallelMap(pickle_func,
+                           self.sig,
+                           self.b,
+                           self.a,
+                           range(self.nChannels),
+                           sabotage_hdf5=True,
+                           n_inputs=self.nChannels,
+                           write_pickle=True,
+                           setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
+        pmap.kwargv["outDir"][0] = "/path/to/nowhere"
+        with pytest.raises(RuntimeError) as runerr:
+            pmap.compute()
+            assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
 
         # Clean up testing folder
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
-
 
 
     # test esi-cluster-setup called separately before pmap
