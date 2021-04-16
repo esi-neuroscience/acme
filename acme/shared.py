@@ -15,7 +15,11 @@ import datetime
 import multiprocessing
 import time
 import numpy as np
+import dask.distributed as dd
 from tqdm import tqdm
+
+# from .dask_helpers import cluster_cleanup
+from . import dask_helpers as dh
 
 callCount = 0
 callMax = 50000
@@ -297,3 +301,41 @@ def prepare_log(func, caller=None, logfile=False, verbose=None):
         log.addHandler(fileHandler)
 
     return log
+
+
+def ctrlc_catcher(*excargs, **exckwargs):
+    """
+    Docstring coming soon(ish)...
+    """
+
+    # We're either in Jupyter/iPython or "regular" Python
+    if len(excargs) == 3:
+        etype, evalue, etb = excargs
+    else:
+        etype, evalue, etb = sys.exc_info()
+        try:                            # careful: if iPython is used to launch a script, ``get_ipython`` is not defined
+            get_ipython()
+            sys.last_traceback = etb    # smartify ``sys``
+        except NameError:
+            pass
+
+    # Pass ``KeyboardInterrupt`` on to regular excepthook so that CTRL + C
+    # can still be used to abort program execution (only relevant in "regular"
+    # Python prompts)
+    if issubclass(etype, KeyboardInterrupt):
+        try:
+            client = dd.get_client()
+        except ValueError:
+            client = None
+        if client is not None:
+
+            # Re-direct printing/warnings to ACME logger outside SyNCoPy
+            print, _ = dh._logging_setup()
+            print("<ACME> Keyboard Interrupt received. Killing client and workers. ")
+            for st in client.futures.values():
+                st.cancel()
+            client.futures.clear()
+            dh.cluster_cleanup(client)
+
+    sys.__excepthook__(etype, evalue, etb)
+    return

@@ -5,12 +5,17 @@
 
 # Builtin/3rd party package imports
 import os
+import sys
 import h5py
 import pickle
 import shutil
 import inspect
 import pytest
+import subprocess
+import time
+import itertools
 import logging
+import signal as sys_signal
 import numpy as np
 import dask.distributed as dd
 from glob import glob
@@ -52,6 +57,7 @@ def pickle_func(arr, b, a, channel_no, sabotage_hdf5=False):
         if channel_no % 2 == 0:
             return {"b" : b}
     return res
+
 
 # Perform SLURM-specific tests only on cluster nodes
 useSLURM = is_slurm_node()
@@ -443,6 +449,59 @@ class TestParallelMap():
         # Clean up testing folder
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
+
+    def test_cancel(self):
+
+        # Prepare ad-hoc script for execution in new process
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
+        os.makedirs(tempDir, exist_ok=True)
+        scriptName = os.path.join(tempDir, "dummy.py")
+        scriptContents = \
+            "from acme import ParallelMap\n" +\
+            "import time\n" +\
+            "def long_running(dummy):\n" +\
+            "   time.sleep(10)\n" +\
+            "   return\n" +\
+            "if __name__ == '__main__':\n" +\
+            "   with ParallelMap(long_running, [None]*10, setup_interactive=False, write_worker_results=False) as pmap: \n" +\
+            "       pmap.compute()\n" +\
+            "   print('ALL DONE')\n"
+        with open(scriptName, "w") as f:
+            f.write(scriptContents)
+
+        # Launch new process in background (`stdbuf` prevents buffering of stdout)
+        proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
+                                shell=True, start_new_session=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+
+        # Wait for ACME to start up (as soon as logging info is shown, `pmap.compute()` is running)
+        # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
+        logStr = "<ParallelMap> INFO: Log information available at"
+        buffer = bytearray()
+        timeout = 30
+        t0 = time.time()
+        for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
+            buffer.extend(line)
+            if logStr in line.decode("utf8"):
+                break
+        assert logStr in buffer.decode("utf8")
+
+        # Wait a bit, then simulate CTRL+C in sub-process; make sure the above
+        # impromptu script did not run to completion *but* the created client was
+        # shut down with CTRL + C
+        time.sleep(2)
+        os.killpg(proc.pid, sys_signal.SIGINT)
+        time.sleep(1)
+        out = proc.stdout.read().decode()
+        assert "ALL DONE" not in out
+        assert "INFO: <cluster_cleanup> Successfully shut down" in out
+
+        import pdb; pdb.set_trace()
+
+        # TODO: test if CTRL+C kills client spawned by esi_cluster_setup
+
+        shutil.rmtree(tempDir, ignore_errors=True)
+
 
 
     # test esi-cluster-setup called separately before pmap

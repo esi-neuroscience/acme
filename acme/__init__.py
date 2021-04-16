@@ -7,6 +7,7 @@
 import subprocess
 import warnings
 import inspect
+import sys
 import dask.distributed as dd
 from importlib.metadata import version, PackageNotFoundError
 
@@ -30,12 +31,23 @@ except PackageNotFoundError:
             out = "-999"
     __version__ = out.rstrip("\n")
 
-# Import local modules
+# # Import local modules
 from . import frontend, backend, shared, dask_helpers
 from .frontend import *
 from .backend import *
 from .shared import *
 from .dask_helpers import *
+
+# Override default traceback (differentiate b/w Jupyter/iPython and regular Python)
+from .shared import ctrlc_catcher
+try:
+    ipy = get_ipython()
+    import IPython
+    IPython.core.interactiveshell.InteractiveShell.showtraceback = ctrlc_catcher
+    IPython.core.interactiveshell.InteractiveShell.showsyntaxerror = ctrlc_catcher
+    sys.excepthook = ctrlc_catcher
+except:
+    sys.excepthook = ctrlc_catcher
 
 # Manage user-exposed namespace imports
 __all__ = []

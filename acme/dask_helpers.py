@@ -512,12 +512,11 @@ def _logging_setup():
     """
     pFunc = print
     wFunc = showwarning
-    if not isSpyModule:
-        allLoggers = list(logging.root.manager.loggerDict.keys())
-        idxList = [allLoggers.index(loggerName) for loggerName in allLoggers \
-            for moduleName in ["ACME", "ParallelMap"] if moduleName in loggerName]
-        if len(idxList) > 0:
-            logger = logging.getLogger(allLoggers[idxList[0]])
-            pFunc = logger.info
-            wFunc = lambda msg, wrngType, fileName, lineNo: logger.warning(msg)
+    allLoggers = list(logging.root.manager.loggerDict.keys())
+    idxList = [allLoggers.index(loggerName) for loggerName in allLoggers \
+        for moduleName in ["ACME", "ParallelMap"] if moduleName in loggerName]
+    if len(idxList) > 0:
+        logger = logging.getLogger(allLoggers[idxList[0]])
+        pFunc = logger.info
+        wFunc = lambda msg, wrngType, fileName, lineNo: logger.warning(msg)
     return pFunc, wFunc
