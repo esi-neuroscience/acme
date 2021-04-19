@@ -313,29 +313,32 @@ def ctrlc_catcher(*excargs, **exckwargs):
         etype, evalue, etb = excargs
     else:
         etype, evalue, etb = sys.exc_info()
-        try:                            # careful: if iPython is used to launch a script, ``get_ipython`` is not defined
-            get_ipython()
-            sys.last_traceback = etb    # smartify ``sys``
-        except NameError:
-            pass
 
-    # Pass ``KeyboardInterrupt`` on to regular excepthook so that CTRL + C
-    # can still be used to abort program execution (only relevant in "regular"
-    # Python prompts)
+    # # Prepare to log any uncaught exceptions
+    # print, _ = dh._logging_setup()
+
+    # The only exception we care about is a `KeyboardInterrupt`: if CTRL + C
+    # is pressed, ensure graceful shutdown of any parallel processing clients
     if issubclass(etype, KeyboardInterrupt):
         try:
             client = dd.get_client()
         except ValueError:
             client = None
         if client is not None:
-
-            # Re-direct printing/warnings to ACME logger outside SyNCoPy
-            print, _ = dh._logging_setup()
             print("<ACME> Keyboard Interrupt received. Killing client and workers. ")
             for st in client.futures.values():
                 st.cancel()
             client.futures.clear()
             dh.cluster_cleanup(client)
 
+    # Log/print exception
+    print("<ACME> Exception received: {}: {}".format(str(etype), str(evalue)))
+
+    # import ipdb; ipdb.set_trace()
+
+    import IPython
+    IPython.core.interactiveshell.InteractiveShell.showtraceback(*excargs)
+
+    # Relay exception handling back to system tools
     sys.__excepthook__(etype, evalue, etb)
     return

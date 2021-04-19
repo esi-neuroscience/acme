@@ -450,6 +450,7 @@ class TestParallelMap():
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
 
+    # test if KeyboardInterrupts are handled correctly
     def test_cancel(self):
 
         # Prepare ad-hoc script for execution in new process
@@ -496,21 +497,17 @@ class TestParallelMap():
         assert "ALL DONE" not in out
         assert "INFO: <cluster_cleanup> Successfully shut down" in out
 
-        import pdb; pdb.set_trace()
-
-        # TODO: test if CTRL+C kills client spawned by esi_cluster_setup
-
+        # Clean up tmp folder
         shutil.rmtree(tempDir, ignore_errors=True)
-
-
 
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):
 
-        # Re-run tests with pre-allocated client
+        # Re-run tests with pre-allocated client (except for `test_cancel`)
         client = esi_cluster_setup(partition="8GBXS", n_jobs=12, interactive=False)
+        skipTests = ["test_existing_cluster", "test_cancel"]
         all_tests = [attr for attr in self.__dir__()
-                     if (inspect.ismethod(getattr(self, attr)) and attr != "test_existing_cluster")]
+                     if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:
             getattr(self, test)()
         client.close()

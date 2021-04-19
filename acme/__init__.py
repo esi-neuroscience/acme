@@ -38,16 +38,13 @@ from .backend import *
 from .shared import *
 from .dask_helpers import *
 
-# Override default traceback (differentiate b/w Jupyter/iPython and regular Python)
+# Override default exception handler
 from .shared import ctrlc_catcher
-try:
-    ipy = get_ipython()
-    import IPython
-    IPython.core.interactiveshell.InteractiveShell.showtraceback = ctrlc_catcher
-    IPython.core.interactiveshell.InteractiveShell.showsyntaxerror = ctrlc_catcher
-    sys.excepthook = ctrlc_catcher
-except:
-    sys.excepthook = ctrlc_catcher
+sys.excepthook = ctrlc_catcher
+get_ipython().set_custom_exc((Exception,), ctrlc_catcher)
+# import IPython
+# IPython.core.interactiveshell.InteractiveShell.showtraceback = ctrlc_catcher
+# IPython.core.interactiveshell.InteractiveShell.showsyntaxerror = ctrlc_catcher
 
 # Manage user-exposed namespace imports
 __all__ = []
