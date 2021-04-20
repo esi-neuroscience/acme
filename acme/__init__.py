@@ -38,13 +38,13 @@ from .backend import *
 from .shared import *
 from .dask_helpers import *
 
-# Override default exception handler
+# Override default exception handler (take care of Jupyter's Exception handling)
 from .shared import ctrlc_catcher
+try:
+    get_ipython().set_custom_exc((Exception,), ctrlc_catcher)
+except:
+    pass
 sys.excepthook = ctrlc_catcher
-get_ipython().set_custom_exc((Exception,), ctrlc_catcher)
-# import IPython
-# IPython.core.interactiveshell.InteractiveShell.showtraceback = ctrlc_catcher
-# IPython.core.interactiveshell.InteractiveShell.showsyntaxerror = ctrlc_catcher
 
 # Manage user-exposed namespace imports
 __all__ = []

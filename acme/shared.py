@@ -311,13 +311,15 @@ def ctrlc_catcher(*excargs, **exckwargs):
     # We're either in Jupyter/iPython or "regular" Python
     if len(excargs) == 3:
         etype, evalue, etb = excargs
+        isipy = False
     else:
-        etype, evalue, etb = sys.exc_info()
+        shell, etype, evalue, etb = excargs
+        isipy = True
 
-    # # Prepare to log any uncaught exceptions
-    # print, _ = dh._logging_setup()
+    # Prepare to log any uncaught exceptions
+    print, _ = dh._logging_setup()
 
-    # The only exception we care about is a `KeyboardInterrupt`: if CTRL + C
+    # The only exception we really care about is a `KeyboardInterrupt`: if CTRL + C
     # is pressed, ensure graceful shutdown of any parallel processing clients
     if issubclass(etype, KeyboardInterrupt):
         try:
@@ -325,20 +327,18 @@ def ctrlc_catcher(*excargs, **exckwargs):
         except ValueError:
             client = None
         if client is not None:
-            print("<ACME> Keyboard Interrupt received. Killing client and workers. ")
             for st in client.futures.values():
                 st.cancel()
             client.futures.clear()
             dh.cluster_cleanup(client)
+            print("<ACME> CTRL + C acknowledged, client and workers successfully killed")
 
     # Log/print exception
     print("<ACME> Exception received: {}: {}".format(str(etype), str(evalue)))
 
-    # import ipdb; ipdb.set_trace()
-
-    import IPython
-    IPython.core.interactiveshell.InteractiveShell.showtraceback(*excargs)
-
-    # Relay exception handling back to system tools
-    sys.__excepthook__(etype, evalue, etb)
+    # Relay exception handling back to appropriate system tools
+    if isipy:
+        shell.showtraceback(exc_tuple=(etype, evalue, etb), **exckwargs)
+    else:
+        sys.__excepthook__(etype, evalue, etb)
     return
