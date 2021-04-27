@@ -41,10 +41,12 @@ from .dask_helpers import *
 # Override default exception handler (take care of Jupyter's Exception handling)
 from .shared import ctrlc_catcher
 try:
-    get_ipython().set_custom_exc((Exception,), ctrlc_catcher)
+    ipy = get_ipython()
+    import IPython
+    ipy.ipyTBshower = IPython.core.interactiveshell.InteractiveShell.showtraceback
+    IPython.core.interactiveshell.InteractiveShell.showtraceback = ctrlc_catcher
 except:
-    pass
-sys.excepthook = ctrlc_catcher
+    sys.excepthook = ctrlc_catcher
 
 # Manage user-exposed namespace imports
 __all__ = []

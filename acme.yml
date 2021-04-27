@@ -19,6 +19,7 @@ dependencies:
   - numpydoc
   - sphinx_bootstrap_theme
   - pytest
+  - ipython
   - ipdb
   - tox
   - ruamel.yaml

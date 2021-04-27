@@ -12,6 +12,7 @@ import shutil
 import inspect
 import pytest
 import subprocess
+import getpass
 import time
 import itertools
 import logging
@@ -163,6 +164,8 @@ class TestParallelMap():
 
         # Create tmp directory and create data-containers
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
+        if useSLURM:
+            tempDir = "/mnt/hpx/home/{}/acme_tmp".format(getpass.getuser())
         os.makedirs(tempDir, exist_ok=True)
         sigName = os.path.join(tempDir, "sigdata.h5")
         origName = os.path.join(tempDir, "origdata.h5")
@@ -207,6 +210,8 @@ class TestParallelMap():
 
         # Simulate user-defined results-directory
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
+        if useSLURM:
+            tempDir2 = "/mnt/hpx/home/{}/acme_tmp_lowpass_hard".format(getpass.getuser())
         shutil.rmtree(tempDir2, ignore_errors=True)
         os.makedirs(tempDir2, exist_ok=True)
 
@@ -453,9 +458,12 @@ class TestParallelMap():
     # test if KeyboardInterrupts are handled correctly
     def test_cancel(self):
 
-        # Prepare ad-hoc script for execution in new process
+        # Setup temp-directory layout for subprocess-scripts and prepare interpreters
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
         os.makedirs(tempDir, exist_ok=True)
+        pshells = [os.path.join(os.path.split(sys.executable)[0], pyExec) for pyExec in ["python", "ipython"]]
+
+        # Prepare ad-hoc script for execution in new process
         scriptName = os.path.join(tempDir, "dummy.py")
         scriptContents = \
             "from acme import ParallelMap\n" +\
@@ -464,38 +472,105 @@ class TestParallelMap():
             "   time.sleep(10)\n" +\
             "   return\n" +\
             "if __name__ == '__main__':\n" +\
-            "   with ParallelMap(long_running, [None]*10, setup_interactive=False, write_worker_results=False) as pmap: \n" +\
+            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
         with open(scriptName, "w") as f:
             f.write(scriptContents)
 
-        # Launch new process in background (`stdbuf` prevents buffering of stdout)
+        # Execute the above script both in Python and iPython to ensure global functionality
+        for pshell in pshells:
+
+            # Launch new process in background (`stdbuf` prevents buffering of stdout)
+            proc = subprocess.Popen("stdbuf -o0 " + pshell + " " + scriptName,
+                                    shell=True, start_new_session=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+
+            # Wait for ACME to start up (as soon as logging info is shown, `pmap.compute()` is running)
+            # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
+            logStr = "<ParallelMap> INFO: Log information available at"
+            buffer = bytearray()
+            timeout = 30
+            t0 = time.time()
+            for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
+                buffer.extend(line)
+                if logStr in line.decode("utf8"):
+                    break
+            assert logStr in buffer.decode("utf8")
+
+            # Wait a bit, then simulate CTRL+C in sub-process; make sure the above
+            # impromptu script did not run to completion *but* the created client was
+            # shut down with CTRL + C
+            time.sleep(2)
+            os.killpg(proc.pid, sys_signal.SIGINT)
+            time.sleep(1)
+            out = proc.stdout.read().decode()
+            assert "ALL DONE" not in out
+            assert "INFO: <cluster_cleanup> Successfully shut down" in out
+
+        # Almost identical script, this time use an externally started client
+        scriptName = os.path.join(tempDir, "dummy2.py")
+        scriptContents = \
+            "from acme import ParallelMap, esi_cluster_setup\n" +\
+            "import time\n" +\
+            "def long_running(dummy):\n" +\
+            "   time.sleep(10)\n" +\
+            "   return\n" +\
+            "if __name__ == '__main__':\n" +\
+            "   client = esi_cluster_setup(partition='8GBDEV',n_jobs=1, interactive=False)\n" +\
+            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False) as pmap: \n" +\
+            "       pmap.compute()\n" +\
+            "   print('ALL DONE')\n"
+        with open(scriptName, "w") as f:
+            f.write(scriptContents)
+
+        # Test script functionality in both Python and iPython
+        for pshell in pshells:
+            proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
+                                    shell=True, start_new_session=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+            logStr = "<ParallelMap> INFO: Log information available at"
+            buffer = bytearray()
+            timeout = 30
+            t0 = time.time()
+            for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
+                buffer.extend(line)
+                if logStr in line.decode("utf8"):
+                    break
+            assert logStr in buffer.decode("utf8")
+            time.sleep(2)
+            os.killpg(proc.pid, sys_signal.SIGINT)
+            time.sleep(2)
+            out = proc.stdout.read().decode()
+            assert "ALL DONE" not in out
+            assert "<ParallelMap> INFO: <ACME> CTRL + C acknowledged, client and workers successfully killed" in out
+
+        # Ensure random exception does not immediately kill an active client
+        scriptName = os.path.join(tempDir, "dummy3.py")
+        scriptContents = \
+            "from acme import esi_cluster_setup\n" +\
+            "import time\n" +\
+            "if __name__ == '__main__':\n" +\
+            "   esi_cluster_setup(partition='8GBDEV',n_jobs=1, interactive=False)\n" +\
+            "   time.sleep(60)\n"
+        with open(scriptName, "w") as f:
+            f.write(scriptContents)
         proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
                                 shell=True, start_new_session=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
 
-        # Wait for ACME to start up (as soon as logging info is shown, `pmap.compute()` is running)
-        # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
-        logStr = "<ParallelMap> INFO: Log information available at"
-        buffer = bytearray()
-        timeout = 30
-        t0 = time.time()
-        for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
-            buffer.extend(line)
-            if logStr in line.decode("utf8"):
-                break
-        assert logStr in buffer.decode("utf8")
+        # Give the client time to start up, then send a floating-point exception
+        # (equivalent to a `ZeroDivsionError` to the child process)
+        time.sleep(5)
+        assert proc.poll() is None
+        proc.send_signal(sys_signal.SIGFPE)
 
-        # Wait a bit, then simulate CTRL+C in sub-process; make sure the above
-        # impromptu script did not run to completion *but* the created client was
-        # shut down with CTRL + C
-        time.sleep(2)
-        os.killpg(proc.pid, sys_signal.SIGINT)
-        time.sleep(1)
-        out = proc.stdout.read().decode()
-        assert "ALL DONE" not in out
-        assert "INFO: <cluster_cleanup> Successfully shut down" in out
+        # Ensure the `ZeroDivsionError` did not kill the process. Then terminate it
+        # and confirm that the floating-exception was propagated correctly
+        assert proc.poll() is None
+        proc.terminate()
+        proc.wait()
+        assert proc.returncode in [-sys_signal.SIGFPE.value, -sys_signal.SIGTERM.value]
 
         # Clean up tmp folder
         shutil.rmtree(tempDir, ignore_errors=True)

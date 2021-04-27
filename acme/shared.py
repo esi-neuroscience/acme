@@ -308,13 +308,20 @@ def ctrlc_catcher(*excargs, **exckwargs):
     Docstring coming soon(ish)...
     """
 
-    # We're either in Jupyter/iPython or "regular" Python
+    # Depending on the number of input arguments, we're either in Jupyter/iPython
+    # or "regular" Python - this matters for actually handling the raised exception
     if len(excargs) == 3:
-        etype, evalue, etb = excargs
         isipy = False
+        etype, evalue, etb = excargs
     else:
-        shell, etype, evalue, etb = excargs
-        isipy = True
+        shell, = excargs
+        etype, evalue, etb = sys.exc_info()
+        try:                            # careful: if iPython is used to launch a script, ``get_ipython`` is not defined
+            ipy = get_ipython()
+            isipy = True
+            sys.last_traceback = etb    # smartify ``sys``
+        except NameError:
+            isipy = False
 
     # Prepare to log any uncaught exceptions
     print, _ = dh._logging_setup()
@@ -338,7 +345,7 @@ def ctrlc_catcher(*excargs, **exckwargs):
 
     # Relay exception handling back to appropriate system tools
     if isipy:
-        shell.showtraceback(exc_tuple=(etype, evalue, etb), **exckwargs)
+        shell.ipyTBshower(shell, exc_tuple=(etype, evalue, etb), **exckwargs)
     else:
         sys.__excepthook__(etype, evalue, etb)
     return
