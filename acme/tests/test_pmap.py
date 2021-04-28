@@ -207,7 +207,7 @@ class TestParallelMap():
         # Be double-paranoid: ensure on-disk and in-memory results match up
         for chNo, h5name in enumerate(resOnDisk):
             with h5py.File(h5name, "r") as h5f:
-                assert np.array_equal(h5f["result_0"][()], resInMem[chNo][0])
+                assert np.array_equal(h5f["result_0"][()], resInMem[chNo])
 
         # Simulate user-defined results-directory
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
@@ -361,11 +361,11 @@ class TestParallelMap():
         shutil.rmtree(tempDir2, ignore_errors=True)
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
-            
+
         # Wait a second (literally) so that no new parallel jobs started by
         # `test_existing_cluster` erroneously use existing HDF files
         time.sleep(1.0)
-        
+
     # Test if pickling/emergency pickling and I/O in general works as intended
     def test_pickling(self):
 
