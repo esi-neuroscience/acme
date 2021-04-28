@@ -380,7 +380,7 @@ class ACMEdaemon(object):
 
         # Set up progress bar: the while loop ensures all futures are executed
         totalTasks = len(futures)
-        pbar = tqdm.tqdm(total=totalTasks, bar_format=self.tqdmFormat)
+        pbar = tqdm.tqdm(total=totalTasks, bar_format=self.tqdmFormat, position=0, leave=True)
         cnt = 0
         while any(f.status == "pending" for f in futures):
             time.sleep(self.sleepTime)

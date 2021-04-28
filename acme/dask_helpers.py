@@ -4,6 +4,7 @@
 #
 
 # Builtin/3rd party package imports
+from logging import logThreads
 import os
 import sys
 import socket
@@ -385,7 +386,7 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
     to = str(timedelta(seconds=timeout))[2:]
     fmt = "{desc}: {n}/{total} \t[elapsed time {elapsed} | timeout at " + to + "]"
     ani = tqdm(desc="{} SLURM workers ready".format(funcName), total=total_workers,
-               leave=True, bar_format=fmt, initial=wrkrs)
+               leave=True, bar_format=fmt, initial=wrkrs, position=0)
     counter = 0
     while _count_running_workers(cluster) < total_workers and counter < timeout:
         time.sleep(1)
