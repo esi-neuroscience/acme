@@ -8,6 +8,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### NEW
 - New keyword `write_pickle` can be used to override HDF5 as default storage
   format in favor of pickle
+- Included code-coverage information and corresponding requirements for pull
+  requests in ACME repo
 
 ### CHANGED
 - Changed job submission system: instead of using dask bags, input arguments
