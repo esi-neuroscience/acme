@@ -17,6 +17,7 @@ import time
 import itertools
 import logging
 import signal as sys_signal
+import time
 import numpy as np
 import dask.distributed as dd
 from glob import glob
@@ -201,7 +202,7 @@ class TestParallelMap():
                          setup_interactive=False) as pmap:
             resInMem = pmap.compute()
         for chNo in range(self.nChannels):
-            assert np.mean(np.abs(resInMem[chNo][0] - self.orig[:, chNo])) < self.tol
+            assert np.mean(np.abs(resInMem[chNo] - self.orig[:, chNo])) < self.tol
 
         # Be double-paranoid: ensure on-disk and in-memory results match up
         for chNo, h5name in enumerate(resOnDisk):
@@ -234,7 +235,7 @@ class TestParallelMap():
         resFiles = glob(os.path.join(tempDir2, res_base + "*"))
         assert len(resFiles) == pmap.n_calls
 
-        # Compare compuated single-channel results to expected low-freq signal
+        # Compare computed single-channel results to expected low-freq signal
         for chNo in range(self.nChannels):
             h5name = res_base + "{}.h5".format(chNo)
             with h5py.File(os.path.join(tempDir2, h5name), "r") as h5f:
@@ -360,7 +361,11 @@ class TestParallelMap():
         shutil.rmtree(tempDir2, ignore_errors=True)
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
-
+            
+        # Wait a second (literally) so that no new parallel jobs started by
+        # `test_existing_cluster` erroneously use existing HDF files
+        time.sleep(1.0)
+        
     # Test if pickling/emergency pickling and I/O in general works as intended
     def test_pickling(self):
 
