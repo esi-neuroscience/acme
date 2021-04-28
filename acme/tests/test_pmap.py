@@ -5,11 +5,18 @@
 
 # Builtin/3rd party package imports
 import os
+import sys
 import h5py
+import pickle
 import shutil
 import inspect
 import pytest
+import subprocess
+import getpass
+import time
+import itertools
 import logging
+import signal as sys_signal
 import time
 import numpy as np
 import dask.distributed as dd
@@ -45,6 +52,13 @@ def lowpass_hard(arr_like, b, a, res_dir, res_base="lowpass_hard_", dset_name="c
     with h5py.File(h5name, "w") as h5f:
         h5f.create_dataset(dset_name, data=res)
     return
+
+def pickle_func(arr, b, a, channel_no, sabotage_hdf5=False):
+    res = signal.filtfilt(b, a, arr[:, channel_no], padlen=200)
+    if sabotage_hdf5:
+        if channel_no % 2 == 0:
+            return {"b" : b}
+    return res
 
 
 # Perform SLURM-specific tests only on cluster nodes
@@ -151,6 +165,8 @@ class TestParallelMap():
 
         # Create tmp directory and create data-containers
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
+        if useSLURM:
+            tempDir = "/mnt/hpx/home/{}/acme_tmp".format(getpass.getuser())
         os.makedirs(tempDir, exist_ok=True)
         sigName = os.path.join(tempDir, "sigdata.h5")
         origName = os.path.join(tempDir, "origdata.h5")
@@ -188,8 +204,15 @@ class TestParallelMap():
         for chNo in range(self.nChannels):
             assert np.mean(np.abs(resInMem[chNo] - self.orig[:, chNo])) < self.tol
 
+        # Be double-paranoid: ensure on-disk and in-memory results match up
+        for chNo, h5name in enumerate(resOnDisk):
+            with h5py.File(h5name, "r") as h5f:
+                assert np.array_equal(h5f["result_0"][()], resInMem[chNo])
+
         # Simulate user-defined results-directory
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
+        if useSLURM:
+            tempDir2 = "/mnt/hpx/home/{}/acme_tmp_lowpass_hard".format(getpass.getuser())
         shutil.rmtree(tempDir2, ignore_errors=True)
         os.makedirs(tempDir2, exist_ok=True)
 
@@ -343,13 +366,228 @@ class TestParallelMap():
         # `test_existing_cluster` erroneously use existing HDF files
         time.sleep(1.0)
 
+    # Test if pickling/emergency pickling and I/O in general works as intended
+    def test_pickling(self):
+
+        # Collected auto-generated output directories in list for later cleanup
+        outDirs = []
+
+        # Execute `pickle_func` w/regular HDF5 saving
+        with ParallelMap(pickle_func,
+                         self.sig,
+                         self.b,
+                         self.a,
+                         range(self.nChannels),
+                         sabotage_hdf5=False,
+                         n_inputs=self.nChannels,
+                         setup_interactive=False) as pmap:
+            hdfResults = pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
+
+        # Execute `pickle_func` w/pickling
+        with ParallelMap(pickle_func,
+                         self.sig,
+                         self.b,
+                         self.a,
+                         range(self.nChannels),
+                         n_inputs=self.nChannels,
+                         write_pickle=True,
+                         setup_interactive=False) as pmap:
+            pklResults = pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
+
+        # Ensure HDF5 and pickle match up
+        for chNo, h5name in enumerate(hdfResults):
+            with open(pklResults[chNo], "rb") as pkf:
+                pklRes = pickle.load(pkf)
+            with h5py.File(h5name, "r") as h5f:
+                assert np.array_equal(pklRes, h5f["result_0"][()])
+
+        # Test emergency pickling
+        with ParallelMap(pickle_func,
+                         self.sig,
+                         self.b,
+                         self.a,
+                         range(self.nChannels),
+                         sabotage_hdf5=True,
+                         n_inputs=self.nChannels,
+                         setup_interactive=False) as pmap:
+            mixedResults = pmap.compute()
+        outDirs.append(pmap.kwargv["outDir"][0])
+
+        # Ensure non-compliant dicts were pickled, rest is in HDF5
+        for chNo, fname in enumerate(mixedResults):
+            if chNo % 2 == 0:
+                assert fname.endswith(".pickle")
+                with open(fname, "rb") as pkf:
+                    assert np.array_equal(self.b, pickle.load(pkf)["b"])
+            else:
+                assert fname.endswith(".h5")
+                with h5py.File(fname, "r") as h5f:
+                    with h5py.File(hdfResults[chNo], "r") as h5ref:
+                        assert np.array_equal(h5f["result_0"][()], h5ref["result_0"][()])
+
+        # Test write breakdown (both for HDF5 saving and pickling)
+        pmap = ParallelMap(pickle_func,
+                           self.sig,
+                           self.b,
+                           self.a,
+                           range(self.nChannels),
+                           sabotage_hdf5=True,
+                           n_inputs=self.nChannels,
+                           setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
+        pmap.kwargv["outDir"][0] = "/path/to/nowhere"
+        with pytest.raises(RuntimeError) as runerr:
+            pmap.compute()
+            assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
+        pmap = ParallelMap(pickle_func,
+                           self.sig,
+                           self.b,
+                           self.a,
+                           range(self.nChannels),
+                           sabotage_hdf5=True,
+                           n_inputs=self.nChannels,
+                           write_pickle=True,
+                           setup_interactive=False)
+        outDirs.append(pmap.kwargv["outDir"][0])
+        pmap.kwargv["outDir"][0] = "/path/to/nowhere"
+        with pytest.raises(RuntimeError) as runerr:
+            pmap.compute()
+            assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
+
+        # Clean up testing folder
+        for folder in outDirs:
+            shutil.rmtree(folder, ignore_errors=True)
+
+    # test if KeyboardInterrupts are handled correctly
+    def test_cancel(self):
+
+        # Setup temp-directory layout for subprocess-scripts and prepare interpreters
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
+        os.makedirs(tempDir, exist_ok=True)
+        pshells = [os.path.join(os.path.split(sys.executable)[0], pyExec) for pyExec in ["python", "ipython"]]
+
+        # Prepare ad-hoc script for execution in new process
+        scriptName = os.path.join(tempDir, "dummy.py")
+        scriptContents = \
+            "from acme import ParallelMap\n" +\
+            "import time\n" +\
+            "def long_running(dummy):\n" +\
+            "   time.sleep(10)\n" +\
+            "   return\n" +\
+            "if __name__ == '__main__':\n" +\
+            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False) as pmap: \n" +\
+            "       pmap.compute()\n" +\
+            "   print('ALL DONE')\n"
+        with open(scriptName, "w") as f:
+            f.write(scriptContents)
+
+        # Execute the above script both in Python and iPython to ensure global functionality
+        for pshell in pshells:
+
+            # Launch new process in background (`stdbuf` prevents buffering of stdout)
+            proc = subprocess.Popen("stdbuf -o0 " + pshell + " " + scriptName,
+                                    shell=True, start_new_session=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+
+            # Wait for ACME to start up (as soon as logging info is shown, `pmap.compute()` is running)
+            # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
+            logStr = "<ParallelMap> INFO: Log information available at"
+            buffer = bytearray()
+            timeout = 30
+            t0 = time.time()
+            for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
+                buffer.extend(line)
+                if logStr in line.decode("utf8"):
+                    break
+            assert logStr in buffer.decode("utf8")
+
+            # Wait a bit, then simulate CTRL+C in sub-process; make sure the above
+            # impromptu script did not run to completion *but* the created client was
+            # shut down with CTRL + C
+            time.sleep(2)
+            os.killpg(proc.pid, sys_signal.SIGINT)
+            time.sleep(1)
+            out = proc.stdout.read().decode()
+            assert "ALL DONE" not in out
+            assert "INFO: <cluster_cleanup> Successfully shut down" in out
+
+        # Almost identical script, this time use an externally started client
+        scriptName = os.path.join(tempDir, "dummy2.py")
+        scriptContents = \
+            "from acme import ParallelMap, esi_cluster_setup\n" +\
+            "import time\n" +\
+            "def long_running(dummy):\n" +\
+            "   time.sleep(10)\n" +\
+            "   return\n" +\
+            "if __name__ == '__main__':\n" +\
+            "   client = esi_cluster_setup(partition='8GBDEV',n_jobs=1, interactive=False)\n" +\
+            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False) as pmap: \n" +\
+            "       pmap.compute()\n" +\
+            "   print('ALL DONE')\n"
+        with open(scriptName, "w") as f:
+            f.write(scriptContents)
+
+        # Test script functionality in both Python and iPython
+        for pshell in pshells:
+            proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
+                                    shell=True, start_new_session=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+            logStr = "<ParallelMap> INFO: Log information available at"
+            buffer = bytearray()
+            timeout = 30
+            t0 = time.time()
+            for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
+                buffer.extend(line)
+                if logStr in line.decode("utf8"):
+                    break
+            assert logStr in buffer.decode("utf8")
+            time.sleep(2)
+            os.killpg(proc.pid, sys_signal.SIGINT)
+            time.sleep(2)
+            out = proc.stdout.read().decode()
+            assert "ALL DONE" not in out
+            assert "<ParallelMap> INFO: <ACME> CTRL + C acknowledged, client and workers successfully killed" in out
+
+        # Ensure random exception does not immediately kill an active client
+        scriptName = os.path.join(tempDir, "dummy3.py")
+        scriptContents = \
+            "from acme import esi_cluster_setup\n" +\
+            "import time\n" +\
+            "if __name__ == '__main__':\n" +\
+            "   esi_cluster_setup(partition='8GBDEV',n_jobs=1, interactive=False)\n" +\
+            "   time.sleep(60)\n"
+        with open(scriptName, "w") as f:
+            f.write(scriptContents)
+        proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
+                                shell=True, start_new_session=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+
+        # Give the client time to start up, then send a floating-point exception
+        # (equivalent to a `ZeroDivsionError` to the child process)
+        time.sleep(5)
+        assert proc.poll() is None
+        proc.send_signal(sys_signal.SIGFPE)
+
+        # Ensure the `ZeroDivsionError` did not kill the process. Then terminate it
+        # and confirm that the floating-exception was propagated correctly
+        assert proc.poll() is None
+        proc.terminate()
+        proc.wait()
+        assert proc.returncode in [-sys_signal.SIGFPE.value, -sys_signal.SIGTERM.value]
+
+        # Clean up tmp folder
+        shutil.rmtree(tempDir, ignore_errors=True)
+
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):
 
-        # Re-run tests with pre-allocated client
+        # Re-run tests with pre-allocated client (except for `test_cancel`)
         client = esi_cluster_setup(partition="8GBXS", n_jobs=12, interactive=False)
+        skipTests = ["test_existing_cluster", "test_cancel"]
         all_tests = [attr for attr in self.__dir__()
-                     if (inspect.ismethod(getattr(self, attr)) and attr != "test_existing_cluster")]
+                     if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:
             getattr(self, test)()
         client.close()

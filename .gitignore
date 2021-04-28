@@ -60,5 +60,8 @@ dask-worker-space
 requirements.txt
 requirements-test.txt
 
+# Code coverage reports
+.coverage*
+
 # Editor-related stuff
 .vscode

@@ -14,6 +14,8 @@ import sys
 import h5py
 import glob
 import tqdm
+import pickle
+import logging
 import functools
 import dask
 import dask.distributed as dd
@@ -52,6 +54,7 @@ class ACMEdaemon(object):
         n_calls=None,
         n_jobs="auto",
         write_worker_results=True,
+        write_pickle=False,
         partition="auto",
         mem_per_job="auto",
         setup_timeout=60,
@@ -83,7 +86,7 @@ class ACMEdaemon(object):
             self.log = pmap.log
 
         # Set up output handler
-        self.prepare_output(write_worker_results)
+        self.prepare_output(write_worker_results, write_pickle)
 
         # Either use existing dask client or start a fresh instance
         self.prepare_client(n_jobs=n_jobs,
@@ -138,12 +141,17 @@ class ACMEdaemon(object):
         # Finally, determine if the code is executed on a SLURM-enabled node
         self.has_slurm = acs.is_slurm_node()
 
-    def prepare_output(self, write_worker_results):
+    def prepare_output(self, write_worker_results, write_pickle):
 
-        # Basal sanity check for Boolean flag
+        # Basal sanity check for Boolean flags
         if not isinstance(write_worker_results, bool):
             msg = "{} `write_worker_results` has to be `True` or `False`, not {}"
             raise TypeError(msg.format(self.msgName, str(write_worker_results)))
+        if not isinstance(write_pickle, bool):
+            msg = "{} `write_pickle` has to be `True` or `False`, not {}"
+            raise TypeError(msg.format(self.msgName, str(write_pickle)))
+        if not write_worker_results and write_pickle:
+            self.log.warning("Pickling of results only possible if `write_worker_results` is `True`. ")
 
         # If automatic saving of results is requested, make necessary preparations
         if write_worker_results:
@@ -164,9 +172,15 @@ class ACMEdaemon(object):
             # Prepare `outDir` for distribution across workers via `kwargv` and
             # re-define or allocate key "taskID" to track concurrent processing results
             self.kwargv["outDir"] = [outDir] * self.n_calls
-            self.kwargv["outFile"] = ["{}_{}.h5".format(self.func.__name__, taskID) for taskID in self.task_ids]
             self.kwargv["taskID"] = self.task_ids
             self.collect_results = False
+            fExt = "h5"
+            if write_pickle:
+                fExt = "pickle"
+            self.kwargv["outFile"] = ["{}_{}.{}".format(self.func.__name__, taskID, fExt) for taskID in self.task_ids]
+
+            # Include logger name in keywords so that workers can use it
+            self.kwargv["logName"] = [self.log.name] * self.n_calls
 
             # Wrap the user-provided func and distribute it across workers
             self.kwargv["userFunc"] = [self.func] * self.n_calls
@@ -366,7 +380,7 @@ class ACMEdaemon(object):
 
         # Set up progress bar: the while loop ensures all futures are executed
         totalTasks = len(futures)
-        pbar = tqdm.tqdm(total=totalTasks, bar_format=self.tqdmFormat)
+        pbar = tqdm.tqdm(total=totalTasks, bar_format=self.tqdmFormat, position=0, leave=True)
         cnt = 0
         while any(f.status == "pending" for f in futures):
             time.sleep(self.sleepTime)
@@ -436,9 +450,18 @@ class ACMEdaemon(object):
             dirname = self.kwargv["outDir"][0]
             msgRes = "Results have been saved to {}".format(dirname)
             msg += msgRes
-            # Determine filepaths of results files
+            # Determine filepaths of results files (query disk to catch emergency pickles)
             if values is None:
-                values = [os.path.join(dirname, x) for x in self.kwargv["outFile"]]
+                values = []
+                for fname in self.kwargv["outFile"]:
+                    h5Name = os.path.join(dirname, fname)
+                    pklName = h5Name.rstrip(".h5") + ".pickle"
+                    if os.path.isfile(h5Name):
+                        values.append(h5Name)
+                    elif os.path.isfile(pklName):
+                        values.append(pklName)
+                    else:
+                        values.append("Missing {}".format(fname.rstrip(".h5")))
         self.log.info(msg)
 
         # Either return collected by-worker results or the filepaths of results
@@ -451,16 +474,53 @@ class ACMEdaemon(object):
 
     @staticmethod
     def func_wrapper(*args, **kwargs):
+
+        # Extract everything from `kwargs` appended by `ACMEdaemon`
         func = kwargs.pop("userFunc")
         outDir = kwargs.pop("outDir")
         taskID = kwargs.pop("taskID")
         fname = kwargs.pop("outFile")
+        logName = kwargs.pop("logName")
+        log = logging.getLogger(logName)
+
+        # Call user-provided function
         result = func(*args, **kwargs)
-        if outDir is not None:
-            with h5py.File(os.path.join(outDir, fname), "w") as h5f:
-                if isinstance(result, (list, tuple)):
-                    if not all(isinstance(value, (numbers.Number, str)) for value in result):
-                        for rk, res in enumerate(result):
-                            h5f.create_dataset("result_{}".format(rk), data=res)
+
+        # Save results: either (try to) use HDF5 or pickle stuff
+        if fname.endswith(".h5"):
+            try:
+                h5name = os.path.join(outDir, fname)
+                with h5py.File(h5name, "w") as h5f:
+                    if isinstance(result, (list, tuple)):
+                        if not all(isinstance(value, (numbers.Number, str)) for value in result):
+                            for rk, res in enumerate(result):
+                                h5f.create_dataset("result_{}".format(rk), data=res)
+                        else:
+                            h5f.create_dataset("result_0", data=result)
+                    else:
+                        h5f.create_dataset("result_0", data=result)
+            except TypeError as exc:
+                if "has no native HDF5 equivalent" in str(exc) or "One of data, shape or dtype must be specified" in str(exc):
+                    try:
+                        os.unlink(h5name)
+                        pname = fname.rstrip(".h5") + ".pickle"
+                        with open(os.path.join(outDir, pname), "wb") as pkf:
+                            pickle.dump(result, pkf)
+                        msg = "Could not write %s results have been pickled instead: %s. Return values are most likely " +\
+                            "not suitable for storage in HDF5 containers. Original error message: %s"
+                        log.warning(msg, fname, pname, str(exc))
+                    except pickle.PicklingError as pexc:
+                        err = "Unable to write %s, successive attempts to pickle results failed too: %s"
+                        log.error(err, fname, str(pexc))
                 else:
-                    h5f.create_dataset("result_0", data=result)
+                    err = "Could not access %s. Original error message: %s"
+                    log.error(err, h5name, str(exc))
+                    raise(exc)
+        else:
+            try:
+                with open(os.path.join(outDir, fname), "wb") as pkf:
+                    pickle.dump(result, pkf)
+            except pickle.PicklingError as pexc:
+                err = "Could not pickle results to file %s. Original error message: %s"
+                log.error(err, fname, str(pexc))
+                raise(pexc)
