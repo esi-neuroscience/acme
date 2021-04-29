@@ -578,6 +578,8 @@ class ParallelMap(object):
         self.n_inputs = int(n_inputs)
 
         # Anything that does not contain `n_input` elements is converted to a one-element list
+        wrnMsg = "Found a single callable object in positional arguments. " +\
+            "It will be executed just once and shared by all workers"
         self.argv = list(args)
         for ak, arg in enumerate(args):
             if isinstance(arg, (list, tuple)):
@@ -586,10 +588,14 @@ class ParallelMap(object):
             elif isinstance(arg, np.ndarray):
                 if len(arg.squeeze().shape) == 1 and arg.squeeze().size == self.n_inputs:
                     continue
+            elif callable(arg):
+                self.log.warning(wrnMsg)
             self.argv[ak] = [arg]
 
         # Same for keyword arguments with the caveat that default values have to
         # be taken into account (cf. above)
+        wrnMsg = "Found a single callable object in keyword arguments: {}. " +\
+            "It will be executed just once and shared by all workers"
         self.kwargv = dict(kwargs)
         for name, value in kwargs.items():
             if isinstance(value, (list, tuple)):
@@ -599,6 +605,8 @@ class ParallelMap(object):
                 not isinstance(funcSignature.parameters[name].default, np.ndarray):
                 if len(value.squeeze().shape) == 1 and value.squeeze().size == self.n_inputs:
                     continue
+            elif callable(value):
+                self.log.warning(wrnMsg.format(name))
             self.kwargv[name] = [value]
 
         # Finally, attach user-provided function to class instance

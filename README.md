@@ -1,8 +1,9 @@
 # ACME: Asynchronous Computing Made Easy
 
 main: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=main)](https://travis-ci.com/esi-neuroscience/acme)
+[![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/main/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
 dev: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=dev)](https://travis-ci.com/esi-neuroscience/acme)
-coverage: [![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/main/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
+[![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/dev/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
 
 ## Summary
 

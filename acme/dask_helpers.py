@@ -221,23 +221,12 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job="auto", n_jobs_sta
     except Exception as exc:
         raise exc
 
-    # Query memory limit of chosen partition and ensure that `mem_per_job` is
-    # set for partitions w/o limit
-    idx = partition.find("GB")
-    if idx > 0:
-        mem_lim = int(partition[:idx]) * 1000
-    else:
-        if partition == "PREPO":
-            mem_lim = 16000
-        else:
-            if mem_per_job is None:
-                lgl = "explicit memory amount as required by partition '{}'"
-                if isSpyModule:
-                    raise SPYValueError(legal=lgl.format(partition),
-                                        varname="mem_per_job", actual=mem_per_job)
-                else:
-                    msg = "{} `mem_per_job`: expected " + lgl + " not {}"
-                    raise ValueError(msg.format(funcName, partition, mem_per_job))
+    # Get memory limit (*in MB*) of chosen partition (guaranteed to exist, cf. above)
+    pc = subprocess.run("scontrol -o show partition {}".format(partition),
+                        capture_output=True, check=True, shell=True, text=True)
+    try:
+        mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1])
+    except ValueError:
         mem_lim = np.inf
 
     # Consolidate requested memory with chosen partition (or assign default memory)
