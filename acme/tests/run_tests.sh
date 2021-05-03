@@ -34,8 +34,12 @@ if [ "$1" == "" ]; then
     usage
 fi
 
-# Set up "global" pytest options for running test-suite
-export PYTEST_ADDOPTS="--color=yes --tb=short --verbose --cov=../../acme --cov-config=../../.coveragerc"
+# Set up "global" pytest options for running test-suite (coverage is not concurrency-safe)
+if [ $_useSLURM ]; then
+    export PYTEST_ADDOPTS="--color=yes --tb=short --verbose"
+else
+    export PYTEST_ADDOPTS="--color=yes --tb=short --verbose --cov=../../acme --cov-config=../../.coveragerc"
+fi
 
 # The while construction allows parsing of multiple positional/optional args (future-proofing...)
 while [ "$1" != "" ]; do

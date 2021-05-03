@@ -584,7 +584,7 @@ class TestParallelMap():
     def test_existing_cluster(self):
 
         # Re-run tests with pre-allocated client (except for `test_cancel`)
-        client = esi_cluster_setup(partition="8GBXS", n_jobs=12, interactive=False)
+        client = esi_cluster_setup(partition="8GBXS", n_jobs=6, interactive=False)
         skipTests = ["test_existing_cluster", "test_cancel"]
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]

@@ -225,9 +225,12 @@ def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job="auto", n_jobs_sta
     pc = subprocess.run("scontrol -o show partition {}".format(partition),
                         capture_output=True, check=True, shell=True, text=True)
     try:
-        mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1])
-    except ValueError:
-        mem_lim = np.inf
+        mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0])
+    except IndexError:
+        try:
+            mem_lim = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
+        except IndexError:
+            mem_lim = np.inf
 
     # Consolidate requested memory with chosen partition (or assign default memory)
     if mem_per_job is None:
