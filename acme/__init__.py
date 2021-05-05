@@ -9,12 +9,12 @@ import warnings
 import inspect
 import sys
 import dask.distributed as dd
-from importlib.metadata import version, PackageNotFoundError
+from pkg_resources import get_distribution, DistributionNotFound
 
 # Get package version: either via meta-information from egg or via latest git commit
 try:
-    __version__ = version("esi-acme")
-except PackageNotFoundError:
+    __version__ = get_distribution("esi-acme").version
+except DistributionNotFound:
     proc = subprocess.Popen("git describe --always",
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, shell=True)

@@ -1,6 +1,12 @@
+exclude acme.yml
+exclude codecov.yml
+exclude conda2pip.py
 exclude .gitignore
 exclude .gitlab-ci.yml
+exclude MANIFEST.in
 exclude .readthedocs.yml
 exclude .travis.yml
+exclude setup.cfg
+exclude setup.py
 recursive-exclude .github *
 recursive-exclude doc *

@@ -4,7 +4,7 @@ channels:
   - conda-forge
 dependencies:
   # acme runtime requirements
-  - python > =3.7, < 3.9
+  - python >= 3.7, < 3.9
   - pip
   - numpy >= 1.0, < 2.0
   - dask >= 2.25, < 2.26
