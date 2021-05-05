@@ -6,6 +6,7 @@
 # Builtin/3rd party package imports
 import inspect
 import numpy as np
+import dask.array as da
 
 # Local imports
 from .backend import ACMEdaemon
@@ -31,6 +32,7 @@ class ParallelMap(object):
         *args,
         n_inputs="auto",
         write_worker_results=True,
+        write_pickle=False,
         partition="auto",
         n_jobs="auto",
         mem_per_job="auto",
@@ -70,6 +72,10 @@ class ParallelMap(object):
             If `True`, the return value(s) of `func` is/are saved on disk (one
             HDF5 file per parallel worker). If `False`, the output of all parallel calls
             of `func` is collected in memory. See Examples and Notes for details.
+        write_pickle : bool
+            If `True`, the return value(s) of `func` is/are pickled to disk (one
+            `'.pickle'`-file per parallel worker). Only effective if `write_worker_results`
+            is `True`.
         partition : str
             Name of SLURM partition to use. If `"auto"` (default), the memory footprint
             of `func` is estimated using dry-run stubs based on randomly sampling
@@ -121,8 +127,7 @@ class ParallelMap(object):
         results : list
             If `write_worker_results` is `True`, `results` is a list of HDF5 file-names
             containing computed results. If `write_worker_results` is `False`,
-            results is a list of lists comprising the actual return values of
-            `func`.
+            results is a list comprising the actual return values of `func`.
 
         Examples
         --------
@@ -180,14 +185,10 @@ class ParallelMap(object):
             with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
                 results = pmap.compute()
 
-        Now `results` is a list of lists:
+        Now `results` is a list of integers:
 
         >>> results
-        [[18], [24], [30], [36]]
-
-        To extract values into a NumPy array one may use
-
-        >>> out = np.array([xi[0][0] for xi in results])
+        [18, 24, 30, 36]
 
         Next, suppose `f` has to be evaluated for the same values of `x` (again
         2, 4, 6 and 8), but `y` is not a number but a NumPy array:
@@ -214,10 +215,10 @@ class ParallelMap(object):
         yielding
 
         >>> results
-        [[array([18., 18., 18.])],
-         [array([24., 24., 24.])],
-         [array([30., 30., 30.])],
-         [array([36., 36., 36.])]]
+        [array([18., 18., 18.]),
+         array([24., 24., 24.]),
+         array([30., 30., 30.]),
+         array([36., 36., 36.])]
 
         Now suppose `f` needs to be evaluated for fixed values of `x` and `y`
         with `z` varying randomly 500 times between 1 and 10. Since `f` is a
@@ -276,6 +277,55 @@ class ParallelMap(object):
 
             with ParallelMap(f, x, y, z=z, logfile="my_log.txt") as pmap:
                 results = pmap.compute()
+
+        In some cases it might be necessary to work with objects that are not
+        HDF5 compatible, e.g., sparse matrices created by `scipy.sparse`. Consider
+
+        .. code-block:: python
+
+            from scipy.sparse import spdiags
+
+            ndim = 4
+            x = spdiags(np.ones((ndim,)), 0, ndim, ndim)
+            y = spdiags(3 * np.ones((ndim,)), 0, ndim, ndim)
+
+        Then
+
+        >>> x
+        <4x4 sparse matrix of type '<class 'numpy.float64'>'
+	            with 4 stored elements (1 diagonals) in DIAgonal format>
+        >>> y
+        <4x4 sparse matrix of type '<class 'numpy.float64'>'
+	            with 4 stored elements (1 diagonals) in DIAgonal format>
+        >>> x.toarray()
+        array([[1., 0., 0., 0.],
+               [0., 1., 0., 0.],
+               [0., 0., 1., 0.],
+               [0., 0., 0., 1.]])
+        >>> y.toarray()
+        array([[3., 0., 0., 0.],
+               [0., 3., 0., 0.],
+               [0., 0., 3., 0.],
+               [0., 0., 0., 3.]])
+        >>> f(x, y)
+        <4x4 sparse matrix of type '<class 'numpy.float64'>'
+	            with 4 stored elements (1 diagonals) in DIAgonal format>
+
+        In this case, the default HDF5 storage format can be overridden using the
+        keyword `write_pickle`
+
+        .. code-block:: python
+
+            with ParallelMap(f, x, y, n_inputs=5, write_pickle=True) as pmap:
+                results = pmap.compute()
+
+        which yields
+
+        >>> results
+        ['/mnt/hpx/home/username/ACME_20201217-135011-448825/f_0.pickle',
+         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_1.pickle',
+         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_2.pickle',
+         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_3.pickle']
 
         Note that debugging programs running in parallel can be quite tricky.
         For instance, assume the function `f` is (erroneously) called with `z`
@@ -403,6 +453,7 @@ class ParallelMap(object):
         self.daemon = ACMEdaemon(self,
                                  n_jobs=n_jobs,
                                  write_worker_results=write_worker_results,
+                                 write_pickle=write_pickle,
                                  partition=partition,
                                  mem_per_job=mem_per_job,
                                  setup_timeout=setup_timeout,
@@ -526,9 +577,9 @@ class ParallelMap(object):
                 raise ValueError(msg.format(self.msgName, n_inputs))
         self.n_inputs = int(n_inputs)
 
-        # Anything that does not contain `n_input` elements is duplicated for
-        # distribution across workers, e.g., ``args = [3, [0, 1, 1]]`` then
-        # ``self.argv = [[3, 3, 3], [0, 1, 1]]``
+        # Anything that does not contain `n_input` elements is converted to a one-element list
+        wrnMsg = "Found a single callable object in positional arguments. " +\
+            "It will be executed just once and shared by all workers"
         self.argv = list(args)
         for ak, arg in enumerate(args):
             if isinstance(arg, (list, tuple)):
@@ -537,10 +588,14 @@ class ParallelMap(object):
             elif isinstance(arg, np.ndarray):
                 if len(arg.squeeze().shape) == 1 and arg.squeeze().size == self.n_inputs:
                     continue
-            self.argv[ak] = [arg] * self.n_inputs
+            elif callable(arg):
+                self.log.warning(wrnMsg)
+            self.argv[ak] = [arg]
 
         # Same for keyword arguments with the caveat that default values have to
         # be taken into account (cf. above)
+        wrnMsg = "Found a single callable object in keyword arguments: {}. " +\
+            "It will be executed just once and shared by all workers"
         self.kwargv = dict(kwargs)
         for name, value in kwargs.items():
             if isinstance(value, (list, tuple)):
@@ -550,7 +605,9 @@ class ParallelMap(object):
                 not isinstance(funcSignature.parameters[name].default, np.ndarray):
                 if len(value.squeeze().shape) == 1 and value.squeeze().size == self.n_inputs:
                     continue
-            self.kwargv[name] = [value] * self.n_inputs
+            elif callable(value):
+                self.log.warning(wrnMsg.format(name))
+            self.kwargv[name] = [value]
 
         # Finally, attach user-provided function to class instance
         self.func = func

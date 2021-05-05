@@ -1,7 +1,9 @@
 # ACME: Asynchronous Computing Made Easy
 
 main: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=main)](https://travis-ci.com/esi-neuroscience/acme)
+[![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/main/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
 dev: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=dev)](https://travis-ci.com/esi-neuroscience/acme)
+[![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/dev/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
 
 ## Summary
 
@@ -119,9 +121,7 @@ This is possible but not recommended.
 
 ```python
 with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
-  results = pmap.compute()
-
-out = np.array([xi[0][0] for xi in results])
+  results = pmap.compute() # returns a list of outputs
 ```
 
 ## Debugging
