@@ -18,7 +18,8 @@ slurmtest:
     - conda update --yes conda
     - conda env update -f acme.yml --prune
     - conda activate acme
-    - srun -p DEV --mem=8000m -c 4 tox -r
+    - export PYTHONPATH=$CI_PROJECT_PATH
+    - srun -p DEV --mem=4000m -c 4 pytest
 
 pypitest:
     stage: upload
