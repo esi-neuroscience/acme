@@ -3,6 +3,38 @@ stages:
     - upload
     - deploy
 
+toxtest:
+    stage: test
+    tags:
+    - slurm
+    only:
+    - main
+    - dev
+    variables:
+        GIT_FETCH_EXTRA_FLAGS: --tags
+    script:
+    - source $HOME/miniconda3/etc/profile.d/conda.sh
+    - conda update --yes conda
+    - conda env update -f acme.yml --prune
+    - conda activate acme
+    - tox -r
+
+powertest:
+    stage: test
+    tags:
+    - power
+    only:
+    - main
+    - dev
+    variables:
+        GIT_FETCH_EXTRA_FLAGS: --tags
+    script:
+    - source $HOME/miniconda3/etc/profile.d/conda.sh
+    - conda update --yes conda
+    - conda env update -f acme.yml --prune
+    - conda activate acme
+    - tox -r
+
 slurmtest:
     stage: test
     tags:
