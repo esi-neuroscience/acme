@@ -1,10 +1,11 @@
 stages:
-    - test
+    - tox
+    - slurm
     - upload
     - deploy
 
-toxtest:
-    stage: test
+inteltest:
+    stage: tox
     tags:
     - slurm
     only:
@@ -19,7 +20,7 @@ toxtest:
     - tox -r -p 0
 
 powertest:
-    stage: test
+    stage: tox
     tags:
     - power
     only:
@@ -34,7 +35,7 @@ powertest:
     - tox -r -p 0
 
 slurmtest:
-    stage: test
+    stage: slurm
     tags:
     - slurm
     only:
@@ -47,13 +48,12 @@ slurmtest:
     - source /opt/conda/etc/profile.d/conda.sh
     - conda env update -f acme.yml --prune
     - conda activate acme
-    - export PYTHONPATH=$CI_PROJECT_PATH
+    - export PYTHONPATH=$CI_PROJECT_DIR
     - srun -p DEV --mem=4000m -c 4 pytest
 
 pypitest:
     stage: upload
     only:
-    - main
     - tags
     tags:
     - deploy
