@@ -11,13 +11,12 @@ toxtest:
     - main
     - dev
     variables:
+        PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
-    - source $HOME/miniconda3/etc/profile.d/conda.sh
-    - conda update --yes conda
-    - conda env update -f acme.yml --prune
+    - source /opt/conda/etc/profile.d/conda.sh
     - conda activate acme
-    - tox -r
+    - tox -r -p 0
 
 powertest:
     stage: test
@@ -27,13 +26,12 @@ powertest:
     - main
     - dev
     variables:
+        PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
-    - source $HOME/miniconda3/etc/profile.d/conda.sh
-    - conda update --yes conda
-    - conda env update -f acme.yml --prune
+    - source /opt/conda/etc/profile.d/conda.sh
     - conda activate acme
-    - tox -r
+    - tox -r -p 0
 
 slurmtest:
     stage: test
@@ -46,8 +44,7 @@ slurmtest:
         PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
-    - source $HOME/miniconda3/etc/profile.d/conda.sh
-    - conda update --yes conda
+    - source /opt/conda/etc/profile.d/conda.sh
     - conda env update -f acme.yml --prune
     - conda activate acme
     - export PYTHONPATH=$CI_PROJECT_PATH
