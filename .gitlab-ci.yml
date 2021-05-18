@@ -54,6 +54,7 @@ slurmtest:
 pypitest:
     stage: upload
     only:
+    - main
     - tags
     tags:
     - deploy
@@ -82,7 +83,6 @@ pypideploy:
     stage: deploy
     when: manual
     only:
-    - main
     - tags
     tags:
     - deploy
