@@ -6,18 +6,17 @@
 # Builtin/3rd party package imports
 import os
 import sys
-import h5py
 import pickle
 import shutil
 import inspect
-import pytest
 import subprocess
 import getpass
 import time
 import itertools
 import logging
+import h5py
+import pytest
 import signal as sys_signal
-import time
 import numpy as np
 import dask.distributed as dd
 from glob import glob

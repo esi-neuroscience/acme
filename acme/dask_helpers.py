@@ -4,7 +4,6 @@
 #
 
 # Builtin/3rd party package imports
-from logging import logThreads
 import os
 import sys
 import socket
@@ -12,7 +11,6 @@ import subprocess
 import getpass
 import time
 import inspect
-from warnings import showwarning
 import numpy as np
 from tqdm import tqdm
 if sys.platform == "win32":
@@ -23,12 +21,12 @@ if sys.platform == "win32":
 
 # Local imports: differentiate b/w being imported as Syncopy sub-package or
 # standalone ACME module
+from .shared import user_input, user_yesno
 try:
     import syncopy
     isSpyModule = True
 except ImportError:
     isSpyModule = False
-from .shared import user_input, user_yesno
 if isSpyModule:
     from syncopy import __dask__
     from syncopy.shared.parsers import scalar_parser, io_parser
@@ -258,7 +256,8 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
 
     # Parse requested interactive waiting period
     try:
-        scalar_parser(interactive_wait, varname="interactive_wait", ntype="int_like", lims=[0, np.inf])
+        scalar_parser(interactive_wait, varname="interactive_wait", ntype="int_like",
+                      lims=[0, np.inf])
     except Exception as exc:
         raise exc
 
@@ -394,7 +393,8 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
         print(msg.format(name=funcName, time=timeout))
         query = "{name:s} Do you want to [k]eep waiting for 60s, [a]bort or " +\
                 "[c]ontinue with {wrk:d} workers?"
-        choice = user_input(query.format(name=funcName, wrk=wrkrs), valid=["k", "a", "c"], default="c", timeout=interactive_wait)
+        choice = user_input(query.format(name=funcName, wrk=wrkrs),
+                            valid=["k", "a", "c"], default="c", timeout=interactive_wait)
 
         if choice == "k":
             return _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
@@ -406,7 +406,8 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
             if wrkrs == 0:
                 query = "{} Cannot continue with 0 workers. Do you want to " +\
                         "[k]eep waiting for 60s or [a]bort?"
-                choice = user_input(query.format(funcName), valid=["k", "a"], default="a", timeout=60)
+                choice = user_input(query.format(funcName), valid=["k", "a"],
+                                    default="a", timeout=60)
                 if choice == "k":
                     _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
                 else:
