@@ -6,6 +6,25 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [v0.2a] - 2021-05-18
+### NEW
+- Made ACME PEP 517 compliant: added pyproject.toml and modified setup.py
+  accordingly
+- Added IBM POWER testing pipeline (via dedicated GitLab Runner)
+
+### CHANGED
+- New default SLURM partition set to "8GBXS" in `esi_cluster_setup`
+
+### REMOVED
+- Retired tox in `slurmtest` CI pipeline in favor of a "simple" pytest testing
+  session due to file-locking problems of tox environments on NFS mounts
+
+### FIXED
+- Stream-lined GitLab Runner setup: use cluster-wide conda instead of local
+  installations (that differ slightly across runners) and leverage `tox-conda`
+  to fetch pre-built dependencies
+- Opt-in pickling was not propagated correctly in daemon-reentry situations
+
 ## [v0.2] - 2021-05-05
 ### NEW
 - New keyword `write_pickle` can be used to override HDF5 as default storage
