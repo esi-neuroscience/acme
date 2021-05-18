@@ -250,9 +250,9 @@ class ACMEdaemon(object):
                 raise TypeError(msg.format(self.msgName, str(partition)))
             if partition == "auto":
                 msg = "Automatic SLURM queueing selection not implemented yet. " +\
-                    "Falling back on default '8GBS' partition. "
+                    "Falling back on default '8GBXS' partition. "
                 self.log.warning(msg)
-                partition = "8GBS"
+                partition = "8GBXS"
                 # self.select_queue()
 
             # Either use `n_jobs = n_calls` (default) or parse provided value

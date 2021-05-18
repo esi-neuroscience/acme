@@ -12,7 +12,6 @@ import subprocess
 import getpass
 import time
 import inspect
-import multiprocessing
 from warnings import showwarning
 import numpy as np
 from tqdm import tqdm
@@ -50,7 +49,7 @@ __all__ = ["esi_cluster_setup", "cluster_cleanup"]
 
 
 # Setup SLURM cluster
-def esi_cluster_setup(partition="8GBS", n_jobs=2, mem_per_job="auto", n_jobs_startup=100,
+def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_startup=100,
                       timeout=60, interactive=True, interactive_wait=120, start_client=True,
                       **kwargs):
     """
