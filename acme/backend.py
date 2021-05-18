@@ -11,12 +11,12 @@ import inspect
 import numbers
 import os
 import sys
-import h5py
 import glob
-import tqdm
 import pickle
 import logging
 import functools
+import tqdm
+import h5py
 import dask
 import dask.distributed as dd
 import dask_jobqueue as dj
@@ -250,9 +250,9 @@ class ACMEdaemon(object):
                 raise TypeError(msg.format(self.msgName, str(partition)))
             if partition == "auto":
                 msg = "Automatic SLURM queueing selection not implemented yet. " +\
-                    "Falling back on default '8GBS' partition. "
+                    "Falling back on default '8GBXS' partition. "
                 self.log.warning(msg)
-                partition = "8GBS"
+                partition = "8GBXS"
                 # self.select_queue()
 
             # Either use `n_jobs = n_calls` (default) or parse provided value
@@ -310,11 +310,17 @@ class ACMEdaemon(object):
         # If `client` attribute is not set, the daemon is being re-used: prepare
         # everything for re-entry
         if self.client is None:
-            self.prepare_output(write_worker_results=self.acme_func == self.func_wrapper)
+            write_worker_results = self.acme_func == self.func_wrapper
+            if write_worker_results:
+                write_pickle = self.kwargv["outFile"][0].endswith(".pickle")
+            else:
+                write_pickle = False
+            self.prepare_output(write_worker_results=write_worker_results,
+                                write_pickle=write_pickle)
             self.prepare_client(n_jobs=self.n_jobs, stop_client=self.stop_client)
 
         # Check if the underlying parallel computing cluster hosts actually usable workers
-        if not len(self.client.cluster.workers):
+        if len(self.client.cluster.workers) == 0:
             msg = "{} no active workers found in distributed computing cluster {} " +\
                 "Consider running \n" +\
                 "\timport dask.distributed as dd; dd.get_client().restart()\n" +\
@@ -419,7 +425,7 @@ class ACMEdaemon(object):
                 erredJobs = list(set(erredJobs))
                 erredJobIDs = [self.client.cluster.workers[job].job_id for job in erredJobs]
                 errFiles = glob.glob(logDir + os.sep + "*.err")
-                if len(erredFutures) or len(errFiles):
+                if len(erredFutures) > 0 or len(errFiles) > 0:
                     msg += "Please consult the following SLURM log files for details:\n"
                     msg += "".join(logFiles.format(id) + "\n" for id in erredJobIDs)
                     msg += "".join(errfile + "\n" for errfile in errFiles)
@@ -515,7 +521,7 @@ class ACMEdaemon(object):
                 else:
                     err = "Could not access %s. Original error message: %s"
                     log.error(err, h5name, str(exc))
-                    raise(exc)
+                    raise exc
         else:
             try:
                 with open(os.path.join(outDir, fname), "wb") as pkf:
@@ -523,4 +529,4 @@ class ACMEdaemon(object):
             except pickle.PicklingError as pexc:
                 err = "Could not pickle results to file %s. Original error message: %s"
                 log.error(err, fname, str(pexc))
-                raise(pexc)
+                raise pexc

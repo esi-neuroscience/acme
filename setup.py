@@ -1,10 +1,15 @@
-# Builtin/3rd party package imports
+# Builtins
 import datetime
-import ruamel.yaml
 from setuptools import setup
+
+# External packages
+import ruamel.yaml
 from setuptools_scm import get_version
 
 # Local imports
+import os
+import sys
+sys.path.insert(0, ".")
 from conda2pip import conda2pip
 
 # Get necessary and optional package dependencies
