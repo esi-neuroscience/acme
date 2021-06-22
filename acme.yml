@@ -13,6 +13,7 @@ dependencies:
   - bokeh
   - h5py >= 2.9, < 3
   - tqdm >= 4.31
+  - colorama
   # Optional packages required for running the test-suite and building the HTML docs
   - scipy >= 1.5, < 1.6
   - numpydoc
@@ -21,7 +22,7 @@ dependencies:
   - ipython
   - ipdb
   - tox
-  - ruamel.yaml
+  - ruamel.yaml >= 0.16, < 0.17
   - setuptools_scm
   - pip:
     # Required pip packages
