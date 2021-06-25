@@ -26,6 +26,9 @@ from scipy import signal
 from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
 from acme.shared import is_slurm_node
 
+# Construct decorators for skipping certain tests
+skip_in_win32 = pytest.mark.skipif(lambda x : sys.platform == "win32", reason="Not running in Windows")
+
 # Functions that act as stand-ins for user-funcs
 def simple_func(x, y, z=3):
     return (x + y) * z
@@ -355,7 +358,10 @@ class TestParallelMap():
         # Close any open HDF5 files to not trigger any `OSError`s, close running clusters
         # and clean up tmp dirs and created directories/log-files
         sigData.file.close()
-        os.unlink(logFile)
+        try:
+            os.unlink(logFile)
+        except PermissionError:
+            pass
         shutil.rmtree(tempDir, ignore_errors=True)
         shutil.rmtree(tempDir2, ignore_errors=True)
         for folder in outDirs:
@@ -460,6 +466,7 @@ class TestParallelMap():
             shutil.rmtree(folder, ignore_errors=True)
 
     # test if KeyboardInterrupts are handled correctly
+    @skip_in_win32
     def test_cancel(self):
 
         # Setup temp-directory layout for subprocess-scripts and prepare interpreters
