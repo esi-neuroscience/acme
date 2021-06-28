@@ -129,6 +129,9 @@ class ParallelMap(object):
             containing computed results. If `write_worker_results` is `False`,
             results is a list comprising the actual return values of `func`.
 
+
+        .. _userguide:
+
         Examples
         --------
         Assume the function defined below is supposed to be run multiple times

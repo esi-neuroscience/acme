@@ -4,23 +4,42 @@ Getting started with ACME
 Installing ACME
 ---------------
 
-ACME can be installed using `Pip <https://pypi.org/project/pip/>`_:
+For Users
+^^^^^^^^^
+
+ACME can be installed using `pip <https://pypi.org/project/pip/>`_:
 
 .. code-block:: bash
 
     pip install esi-acme
 
-and soon using conda as well. ACME is also part of the
-`Syncopy package <https://pypi.org/project/esi-syncopy/>`_.
+or via `conda <https://www.anaconda.com/products/individual>`_
+
+.. code-block:: bash
+
+    conda install -c conda-forge esi-acme
+
+ACME is also part of the `Syncopy package <https://pypi.org/project/esi-syncopy/>`_.
 If you're working on the ESI HPC cluster installing ACME and/or SyNCoPy is only necessary if
 you create your own Conda environment.
-
-Setting Up Your Python Environment
-----------------------------------
-
 On the ESI cluster, all current pre-configured reference environments
 (`ESI-202xa/b`) provide the respective most recent ACME version. These environments
 can be easily started using the `ESI JupyterHub <https://jupyterhub.esi.local>`_
+
+For Developers
+^^^^^^^^^^^^^^
+
+To install the latest development version of ACME in a fresh conda environment
+(called `acme` by default), please follow these steps:
+
+.. code-block:: bash
+
+    git clone https://github.com/esi-neuroscience/acme.git
+    cd acme/
+    conda env create -f acme.yml
+    pip install -e .
+
+(note the dot "." at the end of the ``pip install`` command).
 
 Using ACME
 ----------
