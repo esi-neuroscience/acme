@@ -27,7 +27,7 @@ from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
 from acme.shared import is_slurm_node
 
 # Construct decorators for skipping certain tests
-skip_in_win32 = pytest.mark.skipif(lambda x : sys.platform == "win32", reason="Not running in Windows")
+skip_in_win32 = pytest.mark.skipif(sys.platform == "win32", reason="Not running in Windows")
 
 # Functions that act as stand-ins for user-funcs
 def simple_func(x, y, z=3):
