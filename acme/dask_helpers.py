@@ -49,7 +49,7 @@ __all__ = ["esi_cluster_setup", "cluster_cleanup"]
 # Setup SLURM cluster
 def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_startup=100,
                       timeout=60, interactive=True, interactive_wait=120, start_client=True,
-                      **kwargs):
+                      job_extra=[], **kwargs):
     """
     Start a distributed Dask cluster of parallel processing workers using SLURM
     (or local multi-processing)
@@ -93,6 +93,8 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
         If `True`, a distributed computing client is launched and attached to
         the workers. If `start_client` is `False`, only a distributed
         computing cluster is started to which compute-clients can connect.
+    job_extra : list
+        Extra sbatch parameters to pass to SLURMCluster.
     **kwargs : dict
         Additional keyword arguments can be used to control job-submission details.
 
@@ -276,6 +278,14 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
         else:
             msg = "{} `start_client` has to be Boolean, not {}"
             raise TypeError(msg.format(funcName, str(interactive)))
+            
+    # Determine if job_extra is a list
+    if not isinstance(job_extra, list):
+        if isSpyModule:
+            raise SPYTypeError(job_extra, varname="job_extra", expected="list")
+        else:
+            msg = "{} `job_extra` has to be List, not {}"
+            raise TypeError(msg.format(funcName, str(interactive)))
 
     # Set/get "hidden" kwargs
     workers_per_job = kwargs.get("workers_per_job", 1)
@@ -319,6 +329,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
 
     # Create `SLURMCluster` object using provided parameters
     out_files = os.path.join(slurm_wdir, "slurm-%j.out")
+    job_extra.append(out_files)
     cluster = SLURMCluster(cores=n_cores,
                            memory=mem_per_job,
                            processes=workers_per_job,
@@ -326,7 +337,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
                            queue=partition,
                            python=pyExec,
                            header_skip=["-t", "--mem"],
-                           job_extra=["--output={}".format(out_files)])
+                           job_extra=job_extra)
                            # interface="asdf", # interface is set via `psutil.net_if_addrs()`
                            # job_extra=["--hint=nomultithread",
                            #            "--threads-per-core=1"]
