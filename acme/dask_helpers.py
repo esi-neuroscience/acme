@@ -286,7 +286,22 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
         else:
             msg = "{} `job_extra` has to be List, not {}"
             raise TypeError(msg.format(funcName, str(interactive)))
-
+    
+    # Determine if job_extra options are valid
+    for option in job_extra:
+        msg = "{} `job_extra` has to be a valid sbatch option, not {}"
+        if not isinstance(option, str):
+            if isSpyModule:
+                raise SPYTypeError(option, varname="option", expected="string")
+            else:
+                raise TypeError(msg.format(funcName, str(option)))
+        if not option[0] == "-":
+            lgl = "job_extra options should be flagged with - or --"
+            if isSpyModule:
+                raise SPYValueError(legal=lgl, varname="option", actual=option)
+            else:
+                raise ValueError(lgl)
+                
     # Set/get "hidden" kwargs
     workers_per_job = kwargs.get("workers_per_job", 1)
     try:
@@ -329,7 +344,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
 
     # Create `SLURMCluster` object using provided parameters
     out_files = os.path.join(slurm_wdir, "slurm-%j.out")
-    job_extra.append(out_files)
+    job_extra.append("--output={}".format(out_files))
     cluster = SLURMCluster(cores=n_cores,
                            memory=mem_per_job,
                            processes=workers_per_job,
