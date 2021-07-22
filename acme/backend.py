@@ -423,11 +423,15 @@ class ACMEdaemon(object):
                 except AttributeError:
                     erredJobs = []
                 erredJobs = list(set(erredJobs))
-                erredJobIDs = [self.client.cluster.workers[job].job_id for job in erredJobs]
+                validIDs = [job for job in erredJobs if job in self.client.cluster.workers.keys()]
+                erredJobIDs = [self.client.cluster.workers[job].job_id for job in validIDs]
                 errFiles = glob.glob(logDir + os.sep + "*.err")
                 if len(erredFutures) > 0 or len(errFiles) > 0:
                     msg += "Please consult the following SLURM log files for details:\n"
-                    msg += "".join(logFiles.format(id) + "\n" for id in erredJobIDs)
+                    if len(erredJobIDs) > 0:
+                        msg += "".join(logFiles.format(id) + "\n" for id in erredJobIDs)
+                    else:
+                        msg += "".join(logDir)
                     msg += "".join(errfile + "\n" for errfile in errFiles)
                 else:
                     msg += "Please check SLURM logs in {}".format(logDir)

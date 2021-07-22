@@ -270,9 +270,10 @@ class TestParallelMap():
         if useSLURM:
             assert pmap.n_calls == pmap.n_jobs
             assert len(client.cluster.workers) == pmap.n_jobs
-            partition = client.cluster.workers[0].job_header.split("-p ")[1].split("\n")[0]
+            worker0 = list(client.cluster.workers.keys())[0]
+            partition = client.cluster.workers[worker0].job_header.split("-p ")[1].split("\n")[0]
             assert "8GB" in partition
-            memStr = client.cluster.workers[0].worker_process_memory
+            memStr = client.cluster.workers[worker0].worker_process_memory
             assert int(float(memStr.replace("GB", ""))) == [int(s) for s in partition if s.isdigit()][0]
 
         # Same, but use custom log-file
@@ -318,9 +319,10 @@ class TestParallelMap():
         if useSLURM:
             assert pmap.n_jobs == n_jobs
             assert len(client.cluster.workers) == pmap.n_jobs
-            actualPartition = client.cluster.workers[0].job_header.split("-p ")[1].split("\n")[0]
+            worker0 = list(client.cluster.workers.keys())[0]
+            actualPartition = client.cluster.workers[worker0].job_header.split("-p ")[1].split("\n")[0]
             assert actualPartition == partition
-            memStr = client.cluster.workers[0].worker_process_memory
+            memStr = client.cluster.workers[worker0].worker_process_memory
             assert int(float(memStr.replace("GB", ""))) == int(mem_per_job.replace("GB", ""))
 
         # Let `cluster_cleanup` murder the custom setup and ensure it did its job
@@ -349,9 +351,10 @@ class TestParallelMap():
         if useSLURM:
             assert pmap.n_jobs == n_jobs
             assert len(client.cluster.workers) == pmap.n_jobs
-            actualPartition = client.cluster.workers[0].job_header.split("-p ")[1].split("\n")[0]
+            worker0 = list(client.cluster.workers.keys())[0]
+            actualPartition = client.cluster.workers[worker0].job_header.split("-p ")[1].split("\n")[0]
             assert actualPartition == partition
-            memStr = client.cluster.workers[0].worker_process_memory
+            memStr = client.cluster.workers[worker0].worker_process_memory
             assert int(float(memStr.replace("GB", ""))) * 1000 == int(mem_per_job.replace("MB", ""))
         cluster_cleanup(pmap.client)
 
