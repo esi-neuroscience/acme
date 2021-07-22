@@ -49,8 +49,8 @@ intelwin:
         PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
-    - CALL conda env update -f acme.yml --prune
-    - CALL conda.bat activate acme
+    - conda env update -f acme.yml --prune
+    - call conda.bat activate acme
     - tox
 
 slurmtest:
