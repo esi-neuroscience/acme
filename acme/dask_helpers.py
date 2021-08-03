@@ -503,13 +503,17 @@ def _logging_setup():
     """
     Local helper for in-place substitutions of `print` and `showwarning` in ACME standalone mode
     """
-    pFunc = print
-    wFunc = showwarning
-    allLoggers = list(logging.root.manager.loggerDict.keys())
-    idxList = [allLoggers.index(loggerName) for loggerName in allLoggers \
-        for moduleName in ["ACME", "ParallelMap"] if moduleName in loggerName]
-    if len(idxList) > 0:
-        logger = logging.getLogger(allLoggers[idxList[0]])
-        pFunc = logger.info
-        wFunc = lambda msg, wrngType, fileName, lineNo: logger.warning(msg)
+    if isSpyModule:
+        pFunc = print
+        wFunc = SPYWarning
+    else:
+        pFunc = print
+        wFunc = showwarning
+        allLoggers = list(logging.root.manager.loggerDict.keys())
+        idxList = [allLoggers.index(loggerName) for loggerName in allLoggers \
+            for moduleName in ["ACME", "ParallelMap"] if moduleName in loggerName]
+        if len(idxList) > 0:
+            logger = logging.getLogger(allLoggers[idxList[0]])
+            pFunc = logger.info
+            wFunc = lambda msg, wrngType, fileName, lineNo: logger.warning(msg)
     return pFunc, wFunc
