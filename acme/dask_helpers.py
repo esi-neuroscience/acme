@@ -4,6 +4,7 @@
 #
 
 # Builtin/3rd party package imports
+from multiprocessing import Value
 import os
 import sys
 import socket
@@ -278,7 +279,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
         else:
             msg = "{} `start_client` has to be Boolean, not {}"
             raise TypeError(msg.format(funcName, str(interactive)))
-            
+
     # Determine if job_extra is a list
     if not isinstance(job_extra, list):
         if isSpyModule:
@@ -286,7 +287,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
         else:
             msg = "{} `job_extra` has to be List, not {}"
             raise TypeError(msg.format(funcName, str(interactive)))
-    
+
     # Determine if job_extra options are valid
     for option in job_extra:
         msg = "{} `job_extra` has to be a valid sbatch option, not {}"
@@ -301,7 +302,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
                 raise SPYValueError(legal=lgl, varname="option", actual=option)
             else:
                 raise ValueError(lgl)
-                
+
     # Set/get "hidden" kwargs
     workers_per_job = kwargs.get("workers_per_job", 1)
     try:
@@ -317,34 +318,46 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
     except Exception as exc:
         raise exc
 
-    slurm_wdir = kwargs.get("slurmWorkingDirectory", None)
-    if slurm_wdir is None:
-        usr = getpass.getuser()
-        slurm_wdir = "/mnt/hpx/slurm/{usr:s}/{usr:s}_{date:s}"
-        slurm_wdir = slurm_wdir.format(usr=usr,
-                                       date=datetime.now().strftime('%Y%m%d-%H%M%S'))
-        os.makedirs(slurm_wdir, exist_ok=True)
-    else:
-        if isSpyModule:
-            try:
-                io_parser(slurm_wdir, varname="slurmWorkingDirectory", isfile=False)
-            except Exception as exc:
-                raise exc
-        else:
-            msg = "{} `slurmWorkingDirectory` has to be an existing directory, not {}"
-            if not isinstance(slurm_wdir, str):
-                raise TypeError(msg.format(funcName, str(slurm_wdir)))
-            if not os.path.isdir(os.path.expanduser(slurm_wdir)):
-                raise ValueError(msg.format(funcName, str(slurm_wdir)))
-
     # Hotfix for upgraded cluster-nodes: point to correct Python executable if working from /home
     pyExec = sys.executable
     if sys.executable.startswith("/home"):
         pyExec = "/mnt/gs" + sys.executable
 
-    # Create `SLURMCluster` object using provided parameters
-    out_files = os.path.join(slurm_wdir, "slurm-%j.out")
+    # Either parse provided '--output' option or append default output folder
+    userOutSpec = [option.startswith("--output") or option.startswith("-o") for option in job_extra]
+    if any(userOutSpec):
+        userOut = job_extra[userOutSpec.index(True)]
+        outSpec = userOut.split("=")
+        if len(outSpec) != 2:
+            lgl = "the SLURM output directory must be specified using -o/--output=/path/to/file"
+            if isSpyModule:
+                raise SPYValueError(legal=lgl, varname="job_extra", actual=userOut)
+            else:
+                raise ValueError("{} {}, not {}".format(funcName, lgl, userOut))
+        out_files = outSpec[1]
+        slurm_wdir, slurm_files = os.path.split(out_files)
+        if len(slurm_wdir) > 0:
+            if isSpyModule:
+                try:
+                    io_parser(slurm_wdir, varname="job_extra", isfile=False)
+                except Exception as exc:
+                    raise exc
+            else:
+                msg = "{} `slurmWorkingDirectory` has to be an existing directory, not {}"
+                if not isinstance(slurm_wdir, str):
+                    raise TypeError(msg.format(funcName, str(slurm_wdir)))
+                if not os.path.isdir(os.path.expanduser(slurm_wdir)):
+                    raise ValueError(msg.format(funcName, str(slurm_wdir)))
+    else:
+        usr = getpass.getuser()
+        slurm_wdir = "/mnt/hpx/slurm/{usr:s}/{usr:s}_{date:s}"
+        slurm_wdir = slurm_wdir.format(usr=usr,
+                                       date=datetime.now().strftime('%Y%m%d-%H%M%S'))
+        os.makedirs(slurm_wdir, exist_ok=True)
+        out_files = os.path.join(slurm_wdir, "slurm-%j.out")
     job_extra.append("--output={}".format(out_files))
+
+    # Create `SLURMCluster` object using provided parameters
     cluster = SLURMCluster(cores=n_cores,
                            memory=mem_per_job,
                            processes=workers_per_job,
