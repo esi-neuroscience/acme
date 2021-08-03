@@ -203,17 +203,31 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
             mem_per_job = None
     if mem_per_job is not None:
         msg = "{} `mem_per_job` has to be a valid memory specifier (e.g., '8GB', '12000MB'), not {}"
+        lgl = "string representation of requested memory (e.g., '8GB', '12000MB')"
         if not isinstance(mem_per_job, str):
             if isSpyModule:
                 raise SPYTypeError(mem_per_job, varname="mem_per_job", expected="string")
             else:
                 raise TypeError(msg.format(funcName, str(mem_per_job)))
         if not any(szstr in mem_per_job for szstr in ["MB", "GB"]):
-            lgl = "string representation of requested memory (e.g., '8GB', '12000MB')"
             if isSpyModule:
                 raise SPYValueError(legal=lgl, varname="mem_per_job", actual=mem_per_job)
             else:
                 raise ValueError(msg.format(funcName, str(mem_per_job)))
+        memNumeric = mem_per_job.replace("MB","").replace("GB","")
+        try:
+            memVal = float(memNumeric)
+        except:
+            if isSpyModule:
+                raise SPYValueError(legal=lgl, varname="mem_per_job", actual=mem_per_job)
+            else:
+                raise ValueError(msg.format(funcName, str(mem_per_job)))
+        if memVal <= 0:
+            if isSpyModule:
+                raise SPYValueError(legal=lgl, varname="mem_per_job", actual=mem_per_job)
+            else:
+                raise ValueError(msg.format(funcName, str(mem_per_job)))
+
 
     # Parse job-waiter count
     try:
@@ -286,7 +300,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
             raise SPYTypeError(job_extra, varname="job_extra", expected="list")
         else:
             msg = "{} `job_extra` has to be List, not {}"
-            raise TypeError(msg.format(funcName, str(interactive)))
+            raise TypeError(msg.format(funcName, str(job_extra)))
 
     # Determine if job_extra options are valid
     for option in job_extra:
@@ -334,8 +348,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
                 raise SPYValueError(legal=lgl, varname="job_extra", actual=userOut)
             else:
                 raise ValueError("{} {}, not {}".format(funcName, lgl, userOut))
-        out_files = outSpec[1]
-        slurm_wdir, slurm_files = os.path.split(out_files)
+        slurm_wdir = os.path.split(outSpec[1])[0]
         if len(slurm_wdir) > 0:
             if isSpyModule:
                 try:
@@ -344,8 +357,6 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
                     raise exc
             else:
                 msg = "{} `slurmWorkingDirectory` has to be an existing directory, not {}"
-                if not isinstance(slurm_wdir, str):
-                    raise TypeError(msg.format(funcName, str(slurm_wdir)))
                 if not os.path.isdir(os.path.expanduser(slurm_wdir)):
                     raise ValueError(msg.format(funcName, str(slurm_wdir)))
     else:
@@ -355,7 +366,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
                                        date=datetime.now().strftime('%Y%m%d-%H%M%S'))
         os.makedirs(slurm_wdir, exist_ok=True)
         out_files = os.path.join(slurm_wdir, "slurm-%j.out")
-    job_extra.append("--output={}".format(out_files))
+        job_extra.append("--output={}".format(out_files))
 
     # Create `SLURMCluster` object using provided parameters
     cluster = SLURMCluster(cores=n_cores,
