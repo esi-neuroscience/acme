@@ -4,6 +4,7 @@
 #
 
 # Builtin/3rd party package imports
+from multiprocessing import Value
 import os
 import sys
 import socket
@@ -49,7 +50,7 @@ __all__ = ["esi_cluster_setup", "cluster_cleanup"]
 # Setup SLURM cluster
 def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_startup=100,
                       timeout=60, interactive=True, interactive_wait=120, start_client=True,
-                      **kwargs):
+                      job_extra=[], **kwargs):
     """
     Start a distributed Dask cluster of parallel processing workers using SLURM
     (or local multi-processing)
@@ -93,6 +94,8 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
         If `True`, a distributed computing client is launched and attached to
         the workers. If `start_client` is `False`, only a distributed
         computing cluster is started to which compute-clients can connect.
+    job_extra : list
+        Extra sbatch parameters to pass to SLURMCluster.
     **kwargs : dict
         Additional keyword arguments can be used to control job-submission details.
 
@@ -200,17 +203,31 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
             mem_per_job = None
     if mem_per_job is not None:
         msg = "{} `mem_per_job` has to be a valid memory specifier (e.g., '8GB', '12000MB'), not {}"
+        lgl = "string representation of requested memory (e.g., '8GB', '12000MB')"
         if not isinstance(mem_per_job, str):
             if isSpyModule:
                 raise SPYTypeError(mem_per_job, varname="mem_per_job", expected="string")
             else:
                 raise TypeError(msg.format(funcName, str(mem_per_job)))
         if not any(szstr in mem_per_job for szstr in ["MB", "GB"]):
-            lgl = "string representation of requested memory (e.g., '8GB', '12000MB')"
             if isSpyModule:
                 raise SPYValueError(legal=lgl, varname="mem_per_job", actual=mem_per_job)
             else:
                 raise ValueError(msg.format(funcName, str(mem_per_job)))
+        memNumeric = mem_per_job.replace("MB","").replace("GB","")
+        try:
+            memVal = float(memNumeric)
+        except:
+            if isSpyModule:
+                raise SPYValueError(legal=lgl, varname="mem_per_job", actual=mem_per_job)
+            else:
+                raise ValueError(msg.format(funcName, str(mem_per_job)))
+        if memVal <= 0:
+            if isSpyModule:
+                raise SPYValueError(legal=lgl, varname="mem_per_job", actual=mem_per_job)
+            else:
+                raise ValueError(msg.format(funcName, str(mem_per_job)))
+
 
     # Parse job-waiter count
     try:
@@ -277,6 +294,29 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
             msg = "{} `start_client` has to be Boolean, not {}"
             raise TypeError(msg.format(funcName, str(interactive)))
 
+    # Determine if job_extra is a list
+    if not isinstance(job_extra, list):
+        if isSpyModule:
+            raise SPYTypeError(job_extra, varname="job_extra", expected="list")
+        else:
+            msg = "{} `job_extra` has to be List, not {}"
+            raise TypeError(msg.format(funcName, str(job_extra)))
+
+    # Determine if job_extra options are valid
+    for option in job_extra:
+        msg = "{} `job_extra` has to be a valid sbatch option, not {}"
+        if not isinstance(option, str):
+            if isSpyModule:
+                raise SPYTypeError(option, varname="option", expected="string")
+            else:
+                raise TypeError(msg.format(funcName, str(option)))
+        if not option[0] == "-":
+            lgl = "job_extra options should be flagged with - or --"
+            if isSpyModule:
+                raise SPYValueError(legal=lgl, varname="option", actual=option)
+            else:
+                raise ValueError(lgl)
+
     # Set/get "hidden" kwargs
     workers_per_job = kwargs.get("workers_per_job", 1)
     try:
@@ -292,41 +332,46 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
     except Exception as exc:
         raise exc
 
-    slurm_wdir = kwargs.get("slurmWorkingDirectory", None)
-    if slurm_wdir is None:
+    # Either parse provided '--output' option or append default output folder
+    userOutSpec = [option.startswith("--output") or option.startswith("-o") for option in job_extra]
+    if any(userOutSpec):
+        userOut = job_extra[userOutSpec.index(True)]
+        outSpec = userOut.split("=")
+        if len(outSpec) != 2:
+            lgl = "the SLURM output directory must be specified using -o/--output=/path/to/file"
+            if isSpyModule:
+                raise SPYValueError(legal=lgl, varname="job_extra", actual=userOut)
+            else:
+                raise ValueError("{} {}, not {}".format(funcName, lgl, userOut))
+        slurm_wdir = os.path.split(outSpec[1])[0]
+        if len(slurm_wdir) > 0:
+            if isSpyModule:
+                try:
+                    io_parser(slurm_wdir, varname="job_extra", isfile=False)
+                except Exception as exc:
+                    raise exc
+            else:
+                msg = "{} `slurmWorkingDirectory` has to be an existing directory, not {}"
+                if not os.path.isdir(os.path.expanduser(slurm_wdir)):
+                    raise ValueError(msg.format(funcName, str(slurm_wdir)))
+    else:
         usr = getpass.getuser()
         slurm_wdir = "/mnt/hpx/slurm/{usr:s}/{usr:s}_{date:s}"
         slurm_wdir = slurm_wdir.format(usr=usr,
                                        date=datetime.now().strftime('%Y%m%d-%H%M%S'))
         os.makedirs(slurm_wdir, exist_ok=True)
-    else:
-        if isSpyModule:
-            try:
-                io_parser(slurm_wdir, varname="slurmWorkingDirectory", isfile=False)
-            except Exception as exc:
-                raise exc
-        else:
-            msg = "{} `slurmWorkingDirectory` has to be an existing directory, not {}"
-            if not isinstance(slurm_wdir, str):
-                raise TypeError(msg.format(funcName, str(slurm_wdir)))
-            if not os.path.isdir(os.path.expanduser(slurm_wdir)):
-                raise ValueError(msg.format(funcName, str(slurm_wdir)))
-
-    # Hotfix for upgraded cluster-nodes: point to correct Python executable if working from /home
-    pyExec = sys.executable
-    if sys.executable.startswith("/home"):
-        pyExec = "/mnt/gs" + sys.executable
+        out_files = os.path.join(slurm_wdir, "slurm-%j.out")
+        job_extra.append("--output={}".format(out_files))
 
     # Create `SLURMCluster` object using provided parameters
-    out_files = os.path.join(slurm_wdir, "slurm-%j.out")
     cluster = SLURMCluster(cores=n_cores,
                            memory=mem_per_job,
                            processes=workers_per_job,
                            local_directory=slurm_wdir,
                            queue=partition,
-                           python=pyExec,
+                           python=sys.executable,
                            header_skip=["-t", "--mem"],
-                           job_extra=["--output={}".format(out_files)])
+                           job_extra=job_extra)
                            # interface="asdf", # interface is set via `psutil.net_if_addrs()`
                            # job_extra=["--hint=nomultithread",
                            #            "--threads-per-core=1"]
@@ -503,13 +548,17 @@ def _logging_setup():
     """
     Local helper for in-place substitutions of `print` and `showwarning` in ACME standalone mode
     """
-    pFunc = print
-    wFunc = showwarning
-    allLoggers = list(logging.root.manager.loggerDict.keys())
-    idxList = [allLoggers.index(loggerName) for loggerName in allLoggers \
-        for moduleName in ["ACME", "ParallelMap"] if moduleName in loggerName]
-    if len(idxList) > 0:
-        logger = logging.getLogger(allLoggers[idxList[0]])
-        pFunc = logger.info
-        wFunc = lambda msg, wrngType, fileName, lineNo: logger.warning(msg)
+    if isSpyModule:
+        pFunc = print
+        wFunc = SPYWarning
+    else:
+        pFunc = print
+        wFunc = showwarning
+        allLoggers = list(logging.root.manager.loggerDict.keys())
+        idxList = [allLoggers.index(loggerName) for loggerName in allLoggers \
+            for moduleName in ["ACME", "ParallelMap"] if moduleName in loggerName]
+        if len(idxList) > 0:
+            logger = logging.getLogger(allLoggers[idxList[0]])
+            pFunc = logger.info
+            wFunc = lambda msg, wrngType, fileName, lineNo: logger.warning(msg)
     return pFunc, wFunc

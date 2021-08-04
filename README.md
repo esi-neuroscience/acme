@@ -21,12 +21,19 @@ is itself part of the SyNCoPy package.
 
 ## Installation
 
-ACME can be installed with pip
+ACME can be installed with `pip`
 
 ```
 pip install esi-acme
 ```
+
+or via `conda`
+```
+conda install -c conda-forge esi-acme
+```
+
 To get the latest development version, simply clone our GitHub repository:
+
 ```
 git clone https://github.com/esi-neuroscience/acme.git
 ```

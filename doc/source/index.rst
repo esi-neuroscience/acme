@@ -15,14 +15,24 @@ is itself part of SyNCoPy.
 
 Getting Started
 ---------------
-The :doc:`Quickstart Guide <quickstart>` covers installation and basic usage of ACME.
-More information can be found in the docstrings of the respective classes and
-functions, specifically, :meth:`acme.ParallelMap.__init__`,
-:func:`~acme.esi_cluster_setup` and :class:`~acme.ACMEdaemon`.
+Please have a look at the :doc:`Quickstart Guide <quickstart>`.
+
+Examples
+--------
+Simple to advanced Usage examples our collected on our `GitHub Page <https://github.com/esi-neuroscience/acme#usage>`_.
+
+User Guide
+----------
+A more elaborate tour illustrating how to use ACME in various scenarios is
+provided in the :ref:`User Walkthrough <userguide>`.
+
+API Documentation
+-----------------
+The full source code documentation can be found in the :doc:`API Docs <api>`.
 
 Contact
 -------
-To report bugs or ask questions please use our `GitHub issue tracker <https://github.com/esi-neuroscience/acme/issues>`_.
+To report bugs or ask questions please use our `GitHub Issue Tracker <https://github.com/esi-neuroscience/acme/issues>`_.
 
 Navigation
 ----------
