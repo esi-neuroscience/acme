@@ -21,13 +21,8 @@ authors:
   orcid: https://orcid.org/0000-0001-6233-1866
 license: BSD-3-Clause
 keywords:
-- large-scale electrophysiology
-- computational-neuroscience
 - high-performance computing
 - parallel computing
-- systems-neuroscience
-- spectral-methods
-- brain
 repository-code: https://github.com/esi-neuroscience/syncopy
 version: 0.2a1.dev10
 date-released: '2021-07-22'

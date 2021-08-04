@@ -6,6 +6,17 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [v0.2b] - 2021-08-04
+### NEW
+- Support for custom `sbatch` arguments (thanks to @KatharineShapcott)
+
+### FIXED
+- Made ID fetching of crashed SLURM jobs more robust
+- Corrected faulty override of `print`/`showwarning` in case ACME was called
+  from within SyNCoPy.
+- Cleaned up fetching of SLURM worker memory
+- Corrected keywords in CITATION.cff
+
 ## [v0.2a] - 2021-05-18
 ### NEW
 - Made ACME PEP 517 compliant: added pyproject.toml and modified setup.py
