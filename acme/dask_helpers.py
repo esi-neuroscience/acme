@@ -332,11 +332,6 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
     except Exception as exc:
         raise exc
 
-    # Hotfix for upgraded cluster-nodes: point to correct Python executable if working from /home
-    pyExec = sys.executable
-    if sys.executable.startswith("/home"):
-        pyExec = "/mnt/gs" + sys.executable
-
     # Either parse provided '--output' option or append default output folder
     userOutSpec = [option.startswith("--output") or option.startswith("-o") for option in job_extra]
     if any(userOutSpec):
@@ -374,7 +369,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
                            processes=workers_per_job,
                            local_directory=slurm_wdir,
                            queue=partition,
-                           python=pyExec,
+                           python=sys.executable,
                            header_skip=["-t", "--mem"],
                            job_extra=job_extra)
                            # interface="asdf", # interface is set via `psutil.net_if_addrs()`

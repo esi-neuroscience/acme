@@ -283,7 +283,6 @@ class TestParallelMap():
             assert len(client.cluster.workers) == pmap.n_jobs
             partition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
             assert "8GB" in partition
-            # FIXME memStr = client.cluster.workers[worker0].worker_process_memory
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
             assert int(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
@@ -336,9 +335,6 @@ class TestParallelMap():
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
             assert int(memory[0] / 1000**3) == int(mem_per_job.replace("GB", ""))
-            # FIXME
-            # memStr = client.cluster.workers[worker0].worker_process_memory
-            # assert int(float(memStr.replace("GB", ""))) == int(mem_per_job.replace("GB", ""))
 
         # Let `cluster_cleanup` murder the custom setup and ensure it did its job
         if not existingClient:
@@ -372,9 +368,6 @@ class TestParallelMap():
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
             assert int(memory[0] / 1000**2) == int(mem_per_job.replace("MB", ""))
-            # FIXME
-            # memStr = client.cluster.workers[worker0].worker_process_memory
-            # assert int(float(memStr.replace("GB", ""))) * 1000 == int(mem_per_job.replace("MB", ""))
         if not existingClient:
             cluster_cleanup(pmap.client)
 
