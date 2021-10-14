@@ -5,12 +5,16 @@
 
 # Builtin/3rd party package imports
 import inspect
+import sys
 import numpy as np
 import dask.array as da
 
 # Local imports
 from .backend import ACMEdaemon
 from . import shared as acs
+isSpyModule = False
+if "syncopy" in sys.modules:
+    isSpyModule = True
 
 __all__ = ["ParallelMap"]
 
@@ -18,7 +22,8 @@ __all__ = ["ParallelMap"]
 # Main context manager for parallel execution of user-defined functions
 class ParallelMap(object):
 
-    msgName = "<ParallelMap>"
+    msgName = "{pre:s}<{pkg:s}ParallelMap>".format(pre="Syncopy " if isSpyModule else "",
+                                                   pkg="ACME: " if isSpyModule else "")
     argv = None
     kwargv = None
     func = None

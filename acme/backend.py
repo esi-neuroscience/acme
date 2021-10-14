@@ -24,8 +24,11 @@ import numpy as np
 
 # Local imports
 from . import __path__
-from .dask_helpers import esi_cluster_setup, cluster_cleanup
+from .dask_helpers import esi_cluster_setup, cluster_cleanup, _tag_client
 from . import shared as acs
+isSpyModule = False
+if "syncopy" in sys.modules:
+    isSpyModule = True
 
 __all__ = ["ACMEdaemon"]
 
@@ -191,11 +194,11 @@ class ACMEdaemon(object):
             # If `taskID` is not an explicit kw-arg of `func` and `func` does not
             # accept "anonymous" `**kwargs`, don't save anything but return stuff
             if self.kwargv.get("taskID") is None:
-                # and "kwargs" not in inspect.signature(self.func).parameters.keys():
-                msg = "`write_worker_results` is `False` and `taskID` is not a keyword argument of {}. " +\
-                    "Results will be collected in memory by caller - this might be slow and can lead " +\
-                    "to excessive memory consumption. "
-                self.log.warning(msg.format(self.func.__name__))
+                if not isSpyModule:
+                    msg = "`write_worker_results` is `False` and `taskID` is not a keyword argument of {}. " +\
+                        "Results will be collected in memory by caller - this might be slow and can lead " +\
+                        "to excessive memory consumption. "
+                    self.log.warning(msg.format(self.func.__name__))
                 self.collect_results = True
             else:
                 self.kwargv["taskID"] = self.task_ids
@@ -449,7 +452,8 @@ class ACMEdaemon(object):
 
         # If wanted (not recommended) collect computed results in local memory
         if self.collect_results:
-            self.log.info("Gathering results in local memory")
+            if not isSpyModule:
+                self.log.info("Gathering results in local memory")
             values = self.client.gather(futures)
         else:
             values = None

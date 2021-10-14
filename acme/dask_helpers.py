@@ -46,7 +46,10 @@ from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, get_client
 from datetime import datetime, timedelta
 
-__all__ = ["esi_cluster_setup", "cluster_cleanup"]
+# Be optimistic: prepare success message to be used throughout this module
+_successMsg = "{name:s} Cluster dashboard accessible at {dash:s}"
+
+__all__ = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup"]
 
 
 # Setup SLURM cluster
@@ -137,13 +140,9 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
     customPrint, customWarning = _logging_setup()
 
     # For later reference: dynamically fetch name of current function
-    funcName = ""
-    if isSpyModule:
-        funcName = "Syncopy "
-    funcName = funcName + "<{}>".format(inspect.currentframe().f_code.co_name)
-
-    # Be optimistic: prepare success message
-    successMsg = "{name:s} Cluster dashboard accessible at {dash:s}"
+    funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
+                                                 pkg="ACME: " if isSpyModule else "",
+                                                 name=inspect.currentframe().f_code.co_name)
 
     # Retrieve all partitions currently available in SLURM
     proc = subprocess.Popen("sinfo -h -o %P",
@@ -165,13 +164,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
             else:
                 startLocal = True
             if startLocal:
-                client = Client()
-                successMsg = "{name:s} Local parallel computing client ready. \n" + successMsg
-                customPrint(successMsg.format(name=funcName, dash=client.cluster.dashboard_link))
-                if start_client:
-                    return client
-                return client.cluster
-            return
+                return local_cluster_setup(start_client=start_client)
 
         # SLURM is installed, but something's wrong
         msg = "{preamble:s}SLURM queuing system from node {node:s}. " +\
@@ -383,7 +376,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
         raise TimeoutError(err.format(timeout))
 
     # Highlight how to connect to dask performance monitor
-    customPrint(successMsg.format(name=funcName, dash=cluster.dashboard_link))
+    customPrint(_successMsg.format(name=funcName, dash=cluster.dashboard_link))
 
     # If client was requested, return that instead of the created cluster
     if start_client:
@@ -445,6 +438,36 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
 
     return False
 
+
+def local_cluster_setup(start_client=True):
+    """
+    Coming soon...
+    """
+
+    # Re-direct printing/warnings to ACME logger outside of SyNCoPy
+    customPrint, _ = _logging_setup()
+
+    # For later reference: dynamically fetch name of current function
+    funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
+                                                 pkg="ACME: " if isSpyModule else "",
+                                                 name=inspect.currentframe().f_code.co_name)
+
+    # Determine if a dask client was requested
+    if not isinstance(start_client, bool):
+        msg = "{} `start_client` has to be Boolean, not {}"
+        raise customTypeError(start_client if isSpyModule else msg.format(funcName, str(start_client)),
+                              varname="start_client",
+                              expected="bool")
+
+    # Start the actual distributed client
+    client = Client()
+    successMsg = "{name:s} Local parallel computing client ready. \n" + _successMsg
+    customPrint(successMsg.format(name=funcName, dash=client.cluster.dashboard_link))
+    if start_client:
+        return client
+    return client.cluster
+
+
 def cluster_cleanup(client=None):
     """
     Stop and close dangling parallel processing workers
@@ -469,10 +492,9 @@ def cluster_cleanup(client=None):
     customPrint, customWarning = _logging_setup()
 
     # For later reference: dynamically fetch name of current function
-    funcName = ""
-    if isSpyModule:
-        funcName = "Syncopy "
-    funcName = funcName + "<{}>".format(inspect.currentframe().f_code.co_name)
+    funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
+                                                 pkg="ACME: " if isSpyModule else "",
+                                                 name=inspect.currentframe().f_code.co_name)
 
     # Attempt to establish connection to dask client
     if client is None:
