@@ -180,7 +180,7 @@ class ACMEdaemon(object):
 
         # Next, vet `n_calls` which is needed to validate `argv` and `kwargv`
         try:
-            acs._scalar_parser(n_calls, varname="n_calls", ntype="int_like", lims=[2, np.inf])
+            acs._scalar_parser(n_calls, varname="n_calls", ntype="int_like", lims=[1, np.inf])
         except Exception as exc:
             raise exc
 
