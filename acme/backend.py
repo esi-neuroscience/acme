@@ -24,7 +24,7 @@ import numpy as np
 
 # Local imports
 from . import __path__
-from .dask_helpers import esi_cluster_setup, cluster_cleanup, _tag_client
+from .dask_helpers import esi_cluster_setup, cluster_cleanup
 from . import shared as acs
 isSpyModule = False
 if "syncopy" in sys.modules:
@@ -33,7 +33,7 @@ if "syncopy" in sys.modules:
 __all__ = ["ACMEdaemon"]
 
 
-# Main context manager for parallel execution of user-defined functions
+# Main manager for parallel execution of user-defined functions
 class ACMEdaemon(object):
 
     __slots__ = "func", "argv", "kwargv", "n_calls", "n_jobs", "acme_func", \
@@ -66,7 +66,75 @@ class ACMEdaemon(object):
         verbose=None,
         logfile=None):
         """
-        Coming soon...
+        Manager class for performing concurrent user function calls
+
+        Parameters
+        ----------
+        pmap : :class:~`acme.ParallelMap` context manager or None
+            If `pmap` is not `None`, `:class:~`acme.ACMEDaemon` assumes
+            that that the provided :class:~`acme.ParallelMap` instance has already
+            been properly set up to process `func` (all input arguments parsed and
+            properly formatted). All other input arguments of `:class:~`acme.ACMEDaemon`
+            are extracted from the provided :class:~`acme.ParallelMap` instance.
+            If `pmap` is `None`, `:class:~`acme.ACMEDaemon` runs in "stand-alone"
+            mode: all remaining arguments have to be manually supplied (in the
+            correct format)
+        func : callable
+            User-defined function to be executed concurrently. See :class:~`acme.ParallelMap`
+            for details.
+        argv : list of lists
+            Positional arguments of `func`: all elements of have to be list-like
+            with lengths `n_calls` or 1
+        kwargv : list of dicts
+            Keyword arguments of `func`: all values of have to be list-like with
+            lengths `n_calls` or 1
+        n_calls : int
+            Number of concurrent calls of `func` to perform. If `pmap` is not `None`,
+            then ``n_calls = pmap.n_inputs``
+        n_jobs : int or "auto"
+            Number of SLURM jobs (=workers) to spawn. See :class:~`acme.ParallelMap`
+            for details.
+        write_worker_results : bool
+            If `True`, the return value(s) of `func` is/are saved on disk. See
+            :class:~`acme.ParallelMap` for details.
+        write_pickle : bool
+            If `True`, the return value(s) of `func` is/are pickled to disk. See
+            :class:~`acme.ParallelMap` for details.
+        partition : str
+            Name of SLURM partition to use. See :class:~`acme.ParallelMap` for details.
+        mem_per_job : str
+            Memory booking for each SLURM worker. See :class:~`acme.ParallelMap` for details.
+        setup_timeout : int
+            Timeout period (in seconds) for SLURM workers to come online. See
+            :class:~`acme.ParallelMap` for details.
+        setup_interactive : bool
+            If `True`, user input is queried in case not enough SLURM workers could
+            be started within `setup_timeout` seconds. See :class:~`acme.ParallelMap`
+            for details.
+        stop_client : bool or "auto"
+            If `"auto"`, automatically started distributed computing clients
+            are shut down at the end of computation, while user-provided clients
+            are left untouched. See :class:~`acme.ParallelMap` for details.
+        verbose : None or bool
+            If `None` (default), general run-time information as well as warnings
+            and errors are shown. See :class:~`acme.ParallelMap` for details.
+        logfile : None or bool or str
+            If `None` (default) or `False`, all run-time information as well as errors and
+            warnings are printed to the command line only. See :class:~`acme.ParallelMap`
+            for details.
+
+        Returns
+        -------
+        results : list
+            If `write_worker_results` is `True`, `results` is a list of HDF5 file-names
+            containing computed results. If `write_worker_results` is `False`,
+            results is a list comprising the actual return values of `func`.
+            If `:class:~`acme.ACMEDaemon` was instantiated by :class:~`acme.ParallelMap`,
+            results are propagated back to :class:~`acme.ParallelMap`.
+
+        See also
+        --------
+        ParallelMap : Context manager and main user interface
         """
 
         # The only error checking happening in `__init__`
@@ -100,6 +168,10 @@ class ACMEdaemon(object):
                             stop_client=stop_client)
 
     def initialize(self, func, argv, kwargv, n_calls):
+        """
+        Parse (provided) inputs: make sure positional and keyword args are
+        properly formatted for concurrently calling `func`
+        """
 
         # Ensure `func` is callable
         if not callable(func):
@@ -145,6 +217,10 @@ class ACMEdaemon(object):
         self.has_slurm = acs.is_slurm_node()
 
     def prepare_output(self, write_worker_results, write_pickle):
+        """
+        If `write_*` is `True` set up directories for saving output HDF5 containers
+        (or pickle files). Warn if results are to be collected in memory
+        """
 
         # Basal sanity check for Boolean flags
         if not isinstance(write_worker_results, bool):
@@ -215,6 +291,15 @@ class ACMEdaemon(object):
         setup_timeout=180,
         setup_interactive=True,
         stop_client="auto"):
+        """
+        Setup or fetch dask distributed processing client. Depending on available
+        hardware, either start a local multi-processing client or launch a
+        worker cluster via SLURM.
+
+        Also ensure that ad-hoc clients created here are stopped and worker jobs
+        are properly released at the end of computation. However, ensure any client
+        not created by `prepare_client` is **not** automatically cleaned up.
+        """
 
         # Modify automatic setting of `stop_client` if requested
         msg = "{} `stop_client` has to be 'auto' or Boolean, not {}"
@@ -284,6 +369,10 @@ class ACMEdaemon(object):
         self.n_jobs = len(self.client.cluster.workers)
 
     def select_queue(self):
+        """
+        A brute-force guessing approach as to which SLURM queue best suits
+        a given work-load. Currently not used by `ACMEdaemon`.
+        """
 
         # FIXME: Very much WIP - everyting below is just a scratchpad, nothing final yet
         nSamples = min(self.n_calls, max(5, min(1, int(0.05*self.n_calls))))
@@ -304,6 +393,13 @@ class ACMEdaemon(object):
         # kwargBag = [{key:value[k] for key, value in self.kwargv.items()} for k in range(self.n_calls)]
 
     def compute(self, debug=False):
+        """
+        Perform the actual parallel execution of `func`
+
+        If `debug` is `True`, use a single-threaded dask scheduler that does
+        not actually process anythin concurrently but uses the dask framework
+        in a sequential setup.
+        """
 
         # Ensure `debug` is a simple Boolean flag
         if not isinstance(debug, bool):
@@ -482,12 +578,22 @@ class ACMEdaemon(object):
         return values
 
     def cleanup(self):
+        """
+        Shut down any ad-hoc distributed computing clients created by `prepare_client`
+        """
         if self.stop_client and self.client is not None:
             cluster_cleanup(self.client)
             self.client = None
 
     @staticmethod
     def func_wrapper(*args, **kwargs):
+        """
+        If the output of `func` is saved to disk, wrap `func` with this static
+        method to take care of filling up HDF5/pickle files
+
+        If writing to HDF5 fails, use an "emergency-pickling" mechanism to try
+        to save the output of `func` using pickle instead
+        """
 
         # Extract everything from `kwargs` appended by `ACMEdaemon`
         func = kwargs.pop("userFunc")

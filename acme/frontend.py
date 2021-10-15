@@ -448,6 +448,8 @@ class ParallelMap(object):
         See also
         --------
         esi_cluster_setup : spawn custom SLURM worker clients
+        local_cluster_setup : start a local Dask multi-processing cluster on the host machine
+        ACMEdaemon : Manager class performing the actual concurrent processing
         """
 
         # First and foremost, set up logging system (unless logger is already present)
@@ -469,6 +471,14 @@ class ParallelMap(object):
                                  stop_client=stop_client)
 
     def prepare_input(self, func, n_inputs, *args, **kwargs):
+        """
+        User input parser
+
+        Ensure `func` can actually process provided arguments. If `n_inputs` was
+        not set, attempt to infer the number of required concurrent function
+        calls from `args` and `kwargs`. In addition, ensure the size of each
+        argument is "reasonable" for propagation across multiple workers.
+        """
 
         # Ensure `func` really is a function and `n_inputs` makes sense
         if not callable(func):
@@ -621,15 +631,28 @@ class ParallelMap(object):
         self.func = func
 
     def compute(self):
+        """
+        Shortcut to launch parallel computation via `ACMEdaemon`
+        """
         if hasattr(self, "daemon"):
             self.daemon.compute()
 
     def cleanup(self):
+        """
+        Shortcut to corresponding cleanup-routine provided by `ACMEdaemon`
+        """
         if hasattr(self, "daemon"):
             self.daemon.cleanup
 
     def __enter__(self):
+        """
+        If `ParallelMap` is used as context manager, launch `ACMEdaemon`
+        """
         return self.daemon
 
     def __exit__(self, exception_type, exception_value, exception_traceback):
+        """
+        If `ParallelMap` is used as context manager, close any ad-hoc computing
+        clients created by `ACMEdaemon`
+        """
         self.daemon.cleanup()

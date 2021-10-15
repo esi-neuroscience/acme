@@ -24,5 +24,5 @@ keywords:
 - high-performance computing
 - parallel computing
 repository-code: https://github.com/esi-neuroscience/syncopy
-version: 0.2a1.dev20
-date-released: '2021-10-13'
+version: 0.2a1.dev22
+date-released: '2021-10-15'

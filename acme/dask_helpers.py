@@ -133,6 +133,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
 
     See also
     --------
+    local_cluster_setup : start a local Dask multi-processing cluster on the host machine
     cluster_cleanup : remove dangling parallel processing job-clusters
     """
 
@@ -441,7 +442,36 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
 
 def local_cluster_setup(start_client=True):
     """
-    Coming soon...
+    Start a local distributed Dask multi-processing cluster
+
+    Parameters
+    ----------
+    start_client : bool
+        If `True`, a distributed computing client is launched and attached to
+        the workers. If `start_client` is `False`, only a distributed
+        computing cluster is started to which compute-clients can connect.
+
+    Returns
+    -------
+    proc : object
+        A distributed computing client (if ``start_client = True``) or
+        a distributed computing cluster (otherwise).
+
+    Examples
+    --------
+    The following command launches a local distributed computing cluster using
+    all CPU core available on the host machine
+
+    >>> client = local_cluster_setup()
+
+    The underlying distributed computing cluster can be accessed using
+
+    >>> client.cluster
+
+    See also
+    --------
+    esi_cluster_setup : Start a distributed Dask cluster using SLURM
+    cluster_cleanup : remove dangling parallel processing job-clusters
     """
 
     # Re-direct printing/warnings to ACME logger outside of SyNCoPy
