@@ -237,7 +237,7 @@ class ACMEdaemon(object):
 
             # On the ESI cluster, save results on HPX, otherwise use location of `func`
             if self.has_slurm:
-                outDir = "/mnt/hpx/home/{usr:s}/".format(usr=getpass.getuser())
+                outDir = "/cs/home/{usr:s}/".format(usr=getpass.getuser())
             else:
                 outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
             outDir = os.path.join(outDir, "ACME_{date:s}")

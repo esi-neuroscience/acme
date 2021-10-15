@@ -162,10 +162,10 @@ class ParallelMap(object):
         of the corresponding filenames:
 
         >>> results
-        ['/mnt/hpx/home/username/ACME_20201217-135011-448825/f_0.h5',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_1.h5',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_2.h5',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_3.h5']
+        ['/cs/home/username/ACME_20201217-135011-448825/f_0.h5',
+         '/cs/home/username/ACME_20201217-135011-448825/f_1.h5',
+         '/cs/home/username/ACME_20201217-135011-448825/f_2.h5',
+         '/cs/home/username/ACME_20201217-135011-448825/f_3.h5']
 
         The contents of the containers can be accessed using `h5py`, e.g.,
 
@@ -330,10 +330,10 @@ class ParallelMap(object):
         which yields
 
         >>> results
-        ['/mnt/hpx/home/username/ACME_20201217-135011-448825/f_0.pickle',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_1.pickle',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_2.pickle',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_3.pickle']
+        ['/cs/home/username/ACME_20201217-135011-448825/f_0.pickle',
+         '/cs/home/username/ACME_20201217-135011-448825/f_1.pickle',
+         '/cs/home/username/ACME_20201217-135011-448825/f_2.pickle',
+         '/cs/home/username/ACME_20201217-135011-448825/f_3.pickle']
 
         Note that debugging programs running in parallel can be quite tricky.
         For instance, assume the function `f` is (erroneously) called with `z`
@@ -356,7 +356,7 @@ class ParallelMap(object):
 
             Function:  execute_task
             args:      ((<function reify at 0x7f425c25b0d0>, (<function map_chunk at 0x7f425c25b4c0>,
-            <function ACMEdaemon.func_wrapper at 0x7f42569f1e50>, [[2], [4], [None], ['/mnt/hpx/home/fuertingers/ACME_20201217-160137-984430'],
+            <function ACMEdaemon.func_wrapper at 0x7f42569f1e50>, [[2], [4], [None], ['/cs/home/fuertingers/ACME_20201217-160137-984430'],
             ['f_0.h5'], [0], [<function f at 0x7f425c34bee0>]], ['z', 'outDir', 'outFile', 'taskID', 'userFunc'], {})))
             kwargs:    {}
             Exception: TypeError("unsupported operand type(s) for *: 'int' and 'NoneType'")

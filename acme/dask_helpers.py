@@ -335,7 +335,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
                     raise ValueError(msg.format(funcName, str(slurm_wdir)))
     else:
         usr = getpass.getuser()
-        slurm_wdir = "/mnt/hpx/slurm/{usr:s}/{usr:s}_{date:s}"
+        slurm_wdir = "/cs/slurm/{usr:s}/{usr:s}_{date:s}"
         slurm_wdir = slurm_wdir.format(usr=usr,
                                        date=datetime.now().strftime('%Y%m%d-%H%M%S'))
         os.makedirs(slurm_wdir, exist_ok=True)
