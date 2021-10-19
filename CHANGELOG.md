@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### NEW
+- Included function `local_cluster_setup` to launch a local distributed Dask
+  multi-processing cluster running on the host machine
+
+### CHANGED
+- Refined integration with [SyNCoPy](http://www.syncopy.org)
+
+### FIXED
+- Repaired auto-generated semantic version strings (use only release number + letter,
+  remove local ".dev0" suffix from official release versions)
 
 ## [v0.2b] - 2021-08-04
 ### NEW

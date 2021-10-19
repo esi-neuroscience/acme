@@ -305,7 +305,8 @@ def prepare_log(func, caller=None, logfile=False, verbose=None):
 
 def ctrlc_catcher(*excargs, **exckwargs):
     """
-    Docstring coming soon(ish)...
+    Custom Traceback for properly handling CTRL + C interrupts while parallel
+    computations are running
     """
 
     # Depending on the number of input arguments, we're either in Jupyter/iPython
