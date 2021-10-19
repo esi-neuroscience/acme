@@ -1,4 +1,6 @@
-# ACME: Asynchronous Computing Made Easy
+![ACME_logo](https://raw.githubusercontent.com/esi-neuroscience/acme/master/doc/source/_static/acme_logo.png)
+
+# ACME: Asynchronous Computing Made ESI
 
 main: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=main)](https://travis-ci.com/esi-neuroscience/acme)
 [![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/main/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
@@ -36,6 +38,8 @@ To get the latest development version, simply clone our GitHub repository:
 
 ```
 git clone https://github.com/esi-neuroscience/acme.git
+cd acme/
+pip install -e .
 ```
 
 ## Usage

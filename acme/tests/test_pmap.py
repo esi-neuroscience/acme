@@ -178,7 +178,7 @@ class TestParallelMap():
         # Create tmp directory and create data-containers
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
         if useSLURM:
-            tempDir = "/mnt/hpx/home/{}/acme_tmp".format(getpass.getuser())
+            tempDir = "/cs/home/{}/acme_tmp".format(getpass.getuser())
         os.makedirs(tempDir, exist_ok=True)
         sigName = os.path.join(tempDir, "sigdata.h5")
         origName = os.path.join(tempDir, "origdata.h5")
@@ -224,7 +224,7 @@ class TestParallelMap():
         # Simulate user-defined results-directory
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
         if useSLURM:
-            tempDir2 = "/mnt/hpx/home/{}/acme_tmp_lowpass_hard".format(getpass.getuser())
+            tempDir2 = "/cs/home/{}/acme_tmp_lowpass_hard".format(getpass.getuser())
         shutil.rmtree(tempDir2, ignore_errors=True)
         os.makedirs(tempDir2, exist_ok=True)
 
@@ -627,7 +627,7 @@ class TestParallelMap():
             cluster_cleanup(client)
 
             # Test if invalid extra args are caught
-            slurmOut = "/mnt/hpx/home/{}/acme_out".format(getpass.getuser())
+            slurmOut = "/cs/home/{}/acme_out".format(getpass.getuser())
             with pytest.raises(TypeError):
                 esi_cluster_setup(job_extra="--output={}".format(slurmOut), interactive=False)
             cluster_cleanup()

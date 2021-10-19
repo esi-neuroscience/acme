@@ -6,6 +6,7 @@ stages:
 
 intellinux:
     stage: tox
+    allow_failure: true
     tags:
     - slurm
     only:
@@ -23,6 +24,7 @@ intellinux:
 
 powerlinux:
     stage: tox
+    allow_failure: true
     tags:
     - power
     only:
@@ -55,6 +57,7 @@ intelwin:
 
 slurmtest:
     stage: slurm
+    allow_failure: true
     tags:
     - slurm
     only:
