@@ -5,12 +5,16 @@
 
 # Builtin/3rd party package imports
 import inspect
+import sys
 import numpy as np
 import dask.array as da
 
 # Local imports
 from .backend import ACMEdaemon
 from . import shared as acs
+isSpyModule = False
+if "syncopy" in sys.modules:
+    isSpyModule = True
 
 __all__ = ["ParallelMap"]
 
@@ -18,7 +22,8 @@ __all__ = ["ParallelMap"]
 # Main context manager for parallel execution of user-defined functions
 class ParallelMap(object):
 
-    msgName = "<ParallelMap>"
+    msgName = "{pre:s}<{pkg:s}ParallelMap>".format(pre="Syncopy " if isSpyModule else "",
+                                                   pkg="ACME: " if isSpyModule else "")
     argv = None
     kwargv = None
     func = None
@@ -157,10 +162,10 @@ class ParallelMap(object):
         of the corresponding filenames:
 
         >>> results
-        ['/mnt/hpx/home/username/ACME_20201217-135011-448825/f_0.h5',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_1.h5',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_2.h5',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_3.h5']
+        ['/cs/home/username/ACME_20201217-135011-448825/f_0.h5',
+         '/cs/home/username/ACME_20201217-135011-448825/f_1.h5',
+         '/cs/home/username/ACME_20201217-135011-448825/f_2.h5',
+         '/cs/home/username/ACME_20201217-135011-448825/f_3.h5']
 
         The contents of the containers can be accessed using `h5py`, e.g.,
 
@@ -325,10 +330,10 @@ class ParallelMap(object):
         which yields
 
         >>> results
-        ['/mnt/hpx/home/username/ACME_20201217-135011-448825/f_0.pickle',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_1.pickle',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_2.pickle',
-         '/mnt/hpx/home/username/ACME_20201217-135011-448825/f_3.pickle']
+        ['/cs/home/username/ACME_20201217-135011-448825/f_0.pickle',
+         '/cs/home/username/ACME_20201217-135011-448825/f_1.pickle',
+         '/cs/home/username/ACME_20201217-135011-448825/f_2.pickle',
+         '/cs/home/username/ACME_20201217-135011-448825/f_3.pickle']
 
         Note that debugging programs running in parallel can be quite tricky.
         For instance, assume the function `f` is (erroneously) called with `z`
@@ -351,7 +356,7 @@ class ParallelMap(object):
 
             Function:  execute_task
             args:      ((<function reify at 0x7f425c25b0d0>, (<function map_chunk at 0x7f425c25b4c0>,
-            <function ACMEdaemon.func_wrapper at 0x7f42569f1e50>, [[2], [4], [None], ['/mnt/hpx/home/fuertingers/ACME_20201217-160137-984430'],
+            <function ACMEdaemon.func_wrapper at 0x7f42569f1e50>, [[2], [4], [None], ['/cs/home/fuertingers/ACME_20201217-160137-984430'],
             ['f_0.h5'], [0], [<function f at 0x7f425c34bee0>]], ['z', 'outDir', 'outFile', 'taskID', 'userFunc'], {})))
             kwargs:    {}
             Exception: TypeError("unsupported operand type(s) for *: 'int' and 'NoneType'")
@@ -443,6 +448,8 @@ class ParallelMap(object):
         See also
         --------
         esi_cluster_setup : spawn custom SLURM worker clients
+        local_cluster_setup : start a local Dask multi-processing cluster on the host machine
+        ACMEdaemon : Manager class performing the actual concurrent processing
         """
 
         # First and foremost, set up logging system (unless logger is already present)
@@ -464,6 +471,14 @@ class ParallelMap(object):
                                  stop_client=stop_client)
 
     def prepare_input(self, func, n_inputs, *args, **kwargs):
+        """
+        User input parser
+
+        Ensure `func` can actually process provided arguments. If `n_inputs` was
+        not set, attempt to infer the number of required concurrent function
+        calls from `args` and `kwargs`. In addition, ensure the size of each
+        argument is "reasonable" for propagation across multiple workers.
+        """
 
         # Ensure `func` really is a function and `n_inputs` makes sense
         if not callable(func):
@@ -616,15 +631,28 @@ class ParallelMap(object):
         self.func = func
 
     def compute(self):
+        """
+        Shortcut to launch parallel computation via `ACMEdaemon`
+        """
         if hasattr(self, "daemon"):
             self.daemon.compute()
 
     def cleanup(self):
+        """
+        Shortcut to corresponding cleanup-routine provided by `ACMEdaemon`
+        """
         if hasattr(self, "daemon"):
             self.daemon.cleanup
 
     def __enter__(self):
+        """
+        If `ParallelMap` is used as context manager, launch `ACMEdaemon`
+        """
         return self.daemon
 
     def __exit__(self, exception_type, exception_value, exception_traceback):
+        """
+        If `ParallelMap` is used as context manager, close any ad-hoc computing
+        clients created by `ACMEdaemon`
+        """
         self.daemon.cleanup()
