@@ -5,6 +5,9 @@
 
 .. title:: ACME Documentation
 
+.. image:: https://raw.githubusercontent.com/esi-neuroscience/acme/master/doc/source/_static/acme_logo.png
+   :alt: ACME-Logo
+
 Welcome to the Documentation of ACME
 ====================================
 ACME (**A**\synchronous **C**\omputing **M**\ade **E**\asy, pronounced *"ak-mee"*)
