@@ -1,5 +1,5 @@
 cff-version: 1.1.0
-title: 'ACME: Asynchronous Computing Made Easy'
+title: 'ACME: Asynchronous Computing Made ESI'
 message: If you use this software, please cite it based on metadata found in this
   file. ACME is based on the parallelization engine used in SyNCoPy and is itself
   part of the SyNCoPy package.
