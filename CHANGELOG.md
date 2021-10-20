@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### FIXED
+- Updated dependency setup: dask 2.25/2.30 do not work with click 8.+ in a
+  SLURM cluster context
 
 ## [v0.2c] - 2021-10-19
 ### NEW

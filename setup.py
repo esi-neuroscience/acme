@@ -23,7 +23,7 @@ version = get_version(root='.', relative_to=__file__, local_scheme="no-local-ver
 # keep the local `tag.devx` scheme
 versionParts = version.split(".dev")
 if versionParts[-1] == "0":
-    version = versionParts[0]
+    version = "v0.2c"
     versionKws = {"use_scm_version" : False, "version" : version}
 else:
     versionKws = {"use_scm_version" : {"local_scheme": "no-local-version"}}
