@@ -10,6 +10,7 @@ dependencies:
   - dask >= 2.25, < 2.26
   - distributed >= 2.25, < 2.26
   - fsspec >= 0.3.3
+  - click < 8.0
   - bokeh
   - h5py >= 2.9, < 3
   - tqdm >= 4.31

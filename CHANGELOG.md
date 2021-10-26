@@ -6,6 +6,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [v0.2d] - 2021-10-26
+### FIXED
+- Updated dependency setup: dask 2.25/2.30 does not work with click 8.+ in a
+  SLURM cluster context
+- Refined query to check for active workers in a dask client: ensure workers
+  are not only attached to a client but actually have resources available
+
 ## [v0.2c] - 2021-10-19
 ### NEW
 - Included function `local_cluster_setup` to launch a local distributed Dask
