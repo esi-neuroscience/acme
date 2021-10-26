@@ -419,7 +419,7 @@ class ACMEdaemon(object):
             self.prepare_client(n_jobs=self.n_jobs, stop_client=self.stop_client)
 
         # Check if the underlying parallel computing cluster hosts actually usable workers
-        if len(self.client.cluster.workers) == 0:
+        if len([w["memory_limit"] for w in self.client.cluster.scheduler_info["workers"].values()]) == 0:
             msg = "{} no active workers found in distributed computing cluster {} " +\
                 "Consider running \n" +\
                 "\timport dask.distributed as dd; dd.get_client().restart()\n" +\
