@@ -12,6 +12,9 @@ import sys
 sys.path.insert(0, ".")
 from conda2pip import conda2pip
 
+# Set release version by hand
+releaseVersion = "0.2rc2"
+
 # Get necessary and optional package dependencies
 required, _ = conda2pip(return_lists=True)
 
@@ -19,12 +22,10 @@ required, _ = conda2pip(return_lists=True)
 # test-PyPI versions, which are ordered by recency)
 version = get_version(root='.', relative_to=__file__, local_scheme="no-local-version")
 
-# For release-versions, remove local versioning suffix "dev0"; for TestPyPI uploads,
-# keep the local `tag.devx` scheme
-versionParts = version.split(".dev")
-if versionParts[-1] == "0":
-    version = "v0.2d"
-    versionKws = {"use_scm_version" : False, "version" : version}
+# Release versions (commits at tag) have suffix "dev0": use `releaseVersion` as
+# fixed version. for TestPyPI uploads, keep the local `tag.devx` scheme
+if version.split(".dev")[-1] == "0":
+    versionKws = {"use_scm_version" : False, "version" : releaseVersion}
 else:
     versionKws = {"use_scm_version" : {"local_scheme": "no-local-version"}}
 
