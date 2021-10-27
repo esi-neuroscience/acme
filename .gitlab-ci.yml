@@ -93,6 +93,7 @@ pypitest:
     - tarname="$(basename -- $(ls dist/*.tar.gz) .tar.gz)"
     - version=$(sed -e 's/esi-acme-\(.*\)/\1/' <<< "$tarname")
     - twine upload --repository testpypi --config-file=~/.esipypirc dist/*
+    - sleep 300
     - conda create --yes --name piptest python=3.8
     - conda activate piptest
     - conda install --yes pip
