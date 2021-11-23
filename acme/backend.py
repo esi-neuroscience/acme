@@ -9,6 +9,7 @@ import getpass
 import datetime
 import inspect
 import numbers
+import collections
 import os
 import sys
 import glob
@@ -439,7 +440,9 @@ class ACMEdaemon(object):
         # to this (single!) future on the cluster for submission
         for ak, arg in enumerate(self.argv):
             if len(arg) == 1:
-                ftArg = self.client.scatter(arg, broadcast=True)[0]
+                ftArg = self.client.scatter(arg, broadcast=True)
+                if isinstance(ftArg, collections.abc.Sized):
+                    ftArg = ftArg[0]
                 self.argv[ak] = [ftArg] * self.n_calls
 
         # Same as above but for keyword-arguments
