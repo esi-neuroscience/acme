@@ -13,7 +13,7 @@ sys.path.insert(0, ".")
 from conda2pip import conda2pip
 
 # Set release version by hand
-releaseVersion = "0.2rc2"
+releaseVersion = "0.2rc3"
 
 # Get necessary and optional package dependencies
 required, _ = conda2pip(return_lists=True)

@@ -6,6 +6,19 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.2rc3] - 2021-11-24
+### NEW
+- Added macOS as officially supported platform. A corresponding CI job has been
+  set up as well.
+
+### CHANGED
+- Updated `email` and `homepage` tags in setup.cfg to comply with new setuptools
+  packaging standard
+
+### FIXED
+- NumPy arrays with singleton dimensions triggered a nondescript `TypeError` in
+  `ACMEDaemon` due to incorrect indexing before broadcasting.
+
 ## [0.2rc2] - 2021-10-26
 ### CHANGED
 - Updated versioning scheme to be PEP 440 compliant
