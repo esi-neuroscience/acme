@@ -12,7 +12,7 @@ dependencies:
   - tqdm >= 4.31
   - colorama
   # Optional packages required for running the test-suite and building the HTML docs
-  - scipy >= 1.5, < 1.6
+  - scipy
   - numpydoc
   - sphinx_bootstrap_theme
   - pytest-cov
