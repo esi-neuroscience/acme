@@ -285,7 +285,7 @@ class TestParallelMap():
             assert "8GB" in partition
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
-            assert int(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
+            assert round(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
 
         # Same, but use custom log-file
         for handler in pmap.log.handlers:
@@ -334,7 +334,7 @@ class TestParallelMap():
             assert actualPartition == partition
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
-            assert int(memory[0] / 1000**3) == int(mem_per_job.replace("GB", ""))
+            assert round(memory[0] / 1000**3) == int(mem_per_job.replace("GB", ""))
 
         # Let `cluster_cleanup` murder the custom setup and ensure it did its job
         if not existingClient:
@@ -367,7 +367,7 @@ class TestParallelMap():
             assert actualPartition == partition
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
-            assert int(memory[0] / 1000**2) == int(mem_per_job.replace("MB", ""))
+            assert round(memory[0] / 1000**3) * 1000 == int(mem_per_job.replace("MB", ""))
         if not existingClient:
             cluster_cleanup(pmap.client)
 

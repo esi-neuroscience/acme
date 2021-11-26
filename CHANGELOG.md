@@ -6,8 +6,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
-## [0.2rc3] - 2021-11-24
+## [0.2rc3] - 2021-11-26
 ### NEW
+- Upgraded dask version used by ACME (anything below 2021.12)
 - Added macOS as officially supported platform. A corresponding CI job has been
   set up as well.
 

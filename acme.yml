@@ -7,11 +7,7 @@ dependencies:
   - python >= 3.7, < 3.9
   - pip
   - numpy >= 1.0, < 2.0
-  - dask >= 2.25, < 2.26
-  - distributed >= 2.25, < 2.26
-  - fsspec >= 0.3.3
-  - click < 8.0
-  - bokeh
+  - dask < 2021.12
   - h5py >= 2.9, < 3
   - tqdm >= 4.31
   - colorama
