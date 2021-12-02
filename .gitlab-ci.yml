@@ -106,6 +106,7 @@ pypitest:
     - conda activate acme
     - conda install --yes twine keyring rfc3986
     - conda update --yes twine keyring rfc3986
+    - rm -rf dist/ build/ esi_acme.egg-info/
     - python setup.py sdist bdist_wheel
     - tarname="$(basename -- $(ls dist/*.tar.gz) .tar.gz)"
     - version=$(sed -e 's/esi-acme-\(.*\)/\1/' <<< "$tarname")
