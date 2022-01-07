@@ -1,8 +1,8 @@
 cff-version: 1.1.0
 title: 'ACME: Asynchronous Computing Made ESI'
 message: If you use this software, please cite it based on metadata found in this
-  file. ACME is based on the parallelization engine used in SyNCoPy and is itself
-  part of the SyNCoPy package.
+  file. ACME provides functionality to execute Python functions concurrently and
+  is itself used as the parallelization engine of SyNCoPy.
 authors:
 - affiliation: Ernst Strüngmann Institute for Neuroscience in Cooperation with Max
     Planck Society
@@ -23,6 +23,6 @@ license: BSD-3-Clause
 keywords:
 - high-performance computing
 - parallel computing
-repository-code: https://github.com/esi-neuroscience/syncopy
+repository-code: https://github.com/esi-neuroscience/acme
 version: 0.2rc4.dev0
 date-released: '2021-11-24'

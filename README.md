@@ -10,7 +10,7 @@ dev: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=dev
 ## Summary
 
 The objective of ACME (pronounced *"ak-mee"*) is to provide easy-to-use
-wrappers for calling Python functions in parallel ("embarassingly parallel workloads").
+wrappers for calling Python functions concurrently ("embarassingly parallel workloads").
 ACME is developed at the
 [Ernst Strüngmann Institute (ESI) gGmbH for Neuroscience in Cooperation with Max Planck Society](https://www.esi-frankfurt.de/>)
 and released free of charge under the
@@ -18,25 +18,25 @@ and released free of charge under the
 ACME relies on the concurrent processing library [Dask](https://docs.dask.org/en/latest/>)
 and was primarily designed to facilitate the use of [SLURM](https://slurm.schedmd.com/documentation.html)
 on the ESI HPC cluster. However, local multi-processing hardware (i.e., multi-core CPUs)
-is fully supported as well. ACME is based on the parallelization engine used in [SyNCoPy](http://www.syncopy.org/) and
-is itself part of the SyNCoPy package.
+is fully supported as well. ACME is itself used as the parallelization engine of [SyNCoPy](http://www.syncopy.org/).
 
 ## Installation
 
 ACME can be installed with `pip`
 
-```
+```shell
 pip install esi-acme
 ```
 
 or via `conda`
-```
+
+```shell
 conda install -c conda-forge esi-acme
 ```
 
 To get the latest development version, simply clone our GitHub repository:
 
-```
+```shell
 git clone https://github.com/esi-neuroscience/acme.git
 cd acme/
 pip install -e .
