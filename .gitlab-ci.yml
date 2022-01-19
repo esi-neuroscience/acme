@@ -8,7 +8,7 @@ intellinux:
     stage: tox
     allow_failure: true
     tags:
-    - slurm
+    - deploy
     only:
     - main
     - dev
@@ -17,7 +17,7 @@ intellinux:
         GIT_FETCH_EXTRA_FLAGS: --tags
         NO_SLURM: "true"
     script:
-    - source /opt/conda/etc/profile.d/conda.sh
+    - source $HOME/miniconda/etc/profile.d/conda.sh
     - conda env update -f acme.yml --prune
     - conda activate acme
     - tox
