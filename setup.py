@@ -7,7 +7,6 @@ import ruamel.yaml
 from setuptools_scm import get_version
 
 # Local imports
-import os
 import sys
 sys.path.insert(0, ".")
 from conda2pip import conda2pip
