@@ -8,7 +8,6 @@ import subprocess
 import warnings
 import inspect
 import sys
-import dask.distributed as dd
 from pkg_resources import get_distribution, DistributionNotFound
 
 # Get package version: either via meta-information from egg or via latest git commit
@@ -45,7 +44,7 @@ try:
     import IPython
     ipy.ipyTBshower = IPython.core.interactiveshell.InteractiveShell.showtraceback
     IPython.core.interactiveshell.InteractiveShell.showtraceback = ctrlc_catcher
-except:
+except NameError:
     sys.excepthook = ctrlc_catcher
 
 # Manage user-exposed namespace imports

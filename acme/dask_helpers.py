@@ -11,6 +11,7 @@ import subprocess
 import getpass
 import time
 import inspect
+import textwrap
 import numpy as np
 from tqdm import tqdm
 if sys.platform == "win32":
@@ -52,12 +53,12 @@ _successMsg = "{name:s} Cluster dashboard accessible at {dash:s}"
 __all__ = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup"]
 
 
-# Setup SLURM cluster
+# Setup SLURM jobs on the ESI HPC cluster
 def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_startup=100,
                       timeout=60, interactive=True, interactive_wait=120, start_client=True,
                       job_extra=[], **kwargs):
     """
-    Start a distributed Dask cluster of parallel processing workers using SLURM
+    Start a Dask distributed SLURM worker cluster on the ESI HPC infrastructure
     (or local multi-processing)
 
     Parameters
@@ -82,22 +83,22 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
         the code does not proceed until either 100 SLURM jobs are running or the
         `timeout` interval has been exceeded.
     timeout : int
-        Number of seconds to wait for requested jobs to start up (see `n_jobs_startup`).
+        Number of seconds to wait for requested jobs to start (see `n_jobs_startup`).
     interactive : bool
         If `True`, user input is queried in case not enough jobs (set by `n_jobs_startup`)
         could be started in the provided waiting period (determined by `timeout`).
         The code waits `interactive_wait` seconds for a user choice - if none is
-        provided, it continues with the current number of spawned jobs (if greater
+        provided, it continues with the current number of running jobs (if greater
         than zero). If `interactive` is `False` and no job could not be started
         within `timeout` seconds, a `TimeoutError` is raised.
     interactive_wait : int
         Countdown interval (seconds) to wait for a user response in case fewer than
-        `n_jobs_startup` workers could be started. If no choice is provided within
+        `n_jobs_startup` jobs could be started. If no choice is provided within
         the given time, the code automatically proceeds with the current number of
-        active workers.
+        active dask workers.
     start_client : bool
         If `True`, a distributed computing client is launched and attached to
-        the workers. If `start_client` is `False`, only a distributed
+        the dask worker cluster. If `start_client` is `False`, only a distributed
         computing cluster is started to which compute-clients can connect.
     job_extra : list
         Extra sbatch parameters to pass to SLURMCluster.
@@ -133,6 +134,135 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
 
     See also
     --------
+    slurm_cluster_setup : start a distributed Dask cluster of parallel processing workers using SLURM
+    local_cluster_setup : start a local Dask multi-processing cluster on the host machine
+    cluster_cleanup : remove dangling parallel processing job-clusters
+    """
+
+    # Re-direct printing/warnings to ACME logger outside of SyNCoPy
+    customPrint, customWarning = _logging_setup()
+
+    # For later reference: dynamically fetch name of current function
+    funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
+                                                 pkg="ACME: " if isSpyModule else "",
+                                                 name=inspect.currentframe().f_code.co_name)
+
+    # Check if SLURM's `sinfo` can be accessed
+    proc = subprocess.Popen("sinfo",
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, shell=True)
+    _, err = proc.communicate()
+
+    # Any non-zero return-code means SLURM is not ready to use
+    if proc.returncode != 0:
+
+        # SLURM is not installed: either allocate `LocalCluster` or just leave
+        if proc.returncode > 0:
+            if interactive:
+                msg = "{name:s} SLURM does not seem to be installed on this machine " +\
+                    "({host:s}). Do you want to start a local multi-processing " +\
+                    "computing client instead? "
+                startLocal = user_yesno(msg.format(name=funcName, host=socket.gethostname()),
+                                        default="no")
+            else:
+                startLocal = True
+            if startLocal:
+                return local_cluster_setup(interactive=interactive, start_client=start_client)
+
+        # SLURM is installed, but something's wrong
+        msg = "{preamble:s}SLURM queuing system from node {node:s}. " +\
+              "Original error message below:\n{error:s}"
+        raise customIOError(msg.format(preamble=funcName + " Cannot access " if not isSpyModule else "",
+                                       node=socket.gethostname(),
+                                       error=err))
+
+    # Extract by-job worker and core-count from anonymous keyword args (if provided);
+    # otherwise, use defaults
+    workers_per_job = kwargs.get("workers_per_job", 1)
+    n_cores = kwargs.get("n_cores", 1)
+
+    # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
+    # but we may need to append to it, so ensure that's possible)
+    if not isinstance(job_extra, list):
+        msg = "{} `job_extra` has to be List, not {}"
+        raise customTypeError(job_extra if isSpyModule else msg.format(funcName, str(job_extra)),
+                              varname="job_extra",
+                              expected="list")
+
+    # If '--output' was not provided, append default output folder to `job_extra`
+    if not any(option.startswith("--output") or option.startswith("-o") for option in job_extra):
+        usr = getpass.getuser()
+        slurm_wdir = "/cs/slurm/{usr:s}/{usr:s}_{date:s}"
+        slurm_wdir = slurm_wdir.format(usr=usr,
+                                       date=datetime.now().strftime('%Y%m%d-%H%M%S'))
+        os.makedirs(slurm_wdir, exist_ok=True)
+        out_files = os.path.join(slurm_wdir, "slurm-%j.out")
+        job_extra.append("--output={}".format(out_files))
+
+    # Let the SLURM-specific setup function do the rest
+    slurm_cluster_setup(partition, n_cores, n_jobs, workers_per_job, mem_per_job,
+                        n_jobs_startup, timeout, interactive, interactive_wait,
+                        start_client, job_extra, invalid_partitions=["DEV", "PPC"], **kwargs)
+
+
+# Setup SLURM cluster
+def slurm_cluster_setup(partition, n_cores, n_jobs, workers_per_job, mem_per_job,
+                        n_jobs_startup, timeout, interactive, interactive_wait,
+                        start_client, job_extra, invalid_partitions=[]):
+    """
+    Start a distributed Dask cluster of parallel processing workers using SLURM
+
+    Parameters
+    ----------
+    partition : str
+        Name of SLURM partition/queue to use
+    n_cores : int
+        Number of CPU cores per SLURM job
+    n_jobs : int
+        Number of SLURM jobs to spawn
+    workers_per_job : int
+        Number of processess (=dask workers) to use per job. Should be greater
+        than one only if the chosen partition contains nodes that expose multiple
+        cores per job.
+    mem_per_job : str
+        Memory allocation for each job
+    n_jobs_startup : int
+        Number of spawned jobs to wait for. The code does not return until either
+        `n_jobs_startup` SLURM jobs are running or the `timeout` interval (see
+        below) has been exceeded.
+    timeout : int
+        Number of seconds to wait for requested jobs to start (see `n_jobs_startup`).
+    interactive : bool
+        If `True`, user input is queried in case not enough jobs (set by `n_jobs_startup`)
+        could be started in the provided waiting period (determined by `timeout`).
+        The code waits `interactive_wait` seconds for a user choice - if none is
+        provided, it continues with the current number of running jobs (if greater
+        than zero). If `interactive` is `False` and no job could not be started
+        within `timeout` seconds, a `TimeoutError` is raised.
+    interactive_wait : int
+        Countdown interval (seconds) to wait for a user response in case fewer than
+        `n_jobs_startup` jobs could be started. If no choice is provided within
+        the given time, the code automatically proceeds with the current number of
+        active dask workers.
+    start_client : bool
+        If `True`, a distributed computing client is launched and attached to
+        the dask worker cluster. If `start_client` is `False`, only a distributed
+        computing cluster is started to which compute-clients can connect.
+    job_extra : list
+        Extra sbatch parameters to pass to SLURMCluster.
+    invalid_partition : list
+        List of partition names (strings) that are not available for launching
+        dask workers.
+
+    Returns
+    -------
+    proc : object
+        A distributed computing client (if ``start_client = True``) or
+        a distributed computing cluster (otherwise).
+
+    See also
+    --------
+    esi_cluster_setup : start a SLURM worker cluster on the ESI HPC infrastructure
     local_cluster_setup : start a local Dask multi-processing cluster on the host machine
     cluster_cleanup : remove dangling parallel processing job-clusters
     """
@@ -153,260 +283,14 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
 
     # Any non-zero return-code means SLURM is not ready to use
     if proc.returncode != 0:
-
-        # SLURM is not installed: either allocate `LocalCluster` or just leave
-        if proc.returncode > 0:
-            if interactive:
-                msg = "{name:s} SLURM does not seem to be installed on this machine " +\
-                    "({host:s}). Do you want to start a local multi-processing " +\
-                    "computing client instead? "
-                startLocal = user_yesno(msg.format(name=funcName, host=socket.gethostname()),
-                                        default="no")
-            else:
-                startLocal = True
-            if startLocal:
-                msg = "{name:s}"
-                return local_cluster_setup(start_client=start_client)
-
-        # SLURM is installed, but something's wrong
         msg = "{preamble:s}SLURM queuing system from node {node:s}. " +\
               "Original error message below:\n{error:s}"
         raise customIOError(msg.format(preamble=funcName + " Cannot access " if not isSpyModule else "",
                                        node=socket.gethostname(),
                                        error=err))
 
-    slurm_cluster_setup(partition, n_jobs, mem_per_job, n_jobs_startup, timeout,
-                        interactive, interactive_wait, start_client, job_extra,
-                        sinfo_output, invalid_partitions=["DEV", "PPC"], **kwargs)
-    # # Format subprocess shell output
-    # options = out.split()
-
-    # # Make sure we're in a valid partition (exclude IT partitions from output message)
-    # if partition not in options:
-    #     valid = list(set(options).difference(["DEV", "PPC"]))
-    #     lgl = "'" + "or '".join(opt + "' " for opt in valid)
-    #     msg = "{} Invalid partition selection {}, available SLURM partitions are {}"
-    #     raise customValueError(legal=lgl if isSpyModule else msg.format(funcName, str(partition), lgl),
-    #                            varname="partition",
-    #                            actual=partition)
-
-    # # Parse job count
-    # try:
-    #     scalar_parser(n_jobs, varname="n_jobs", ntype="int_like", lims=[1, np.inf])
-    # except Exception as exc:
-    #     raise exc
-
-    # # Get requested memory per job
-    # if isinstance(mem_per_job, str):
-    #     if mem_per_job == "auto":
-    #         mem_per_job = None
-    # if mem_per_job is not None:
-    #     msg = "{} `mem_per_job` has to be a valid memory specifier (e.g., '8GB', '12000MB'), not {}"
-    #     lgl = "string representation of requested memory (e.g., '8GB', '12000MB')"
-    #     if not isinstance(mem_per_job, str):
-    #         raise customTypeError(mem_per_job if isSpyModule else msg.format(funcName, str(mem_per_job)),
-    #                               varname="mem_per_job",
-    #                               expected="string")
-    #     if not any(szstr in mem_per_job for szstr in ["MB", "GB"]):
-    #         raise customValueError(legal=lgl if isSpyModule else msg.format(funcName, str(mem_per_job)),
-    #                                varname="mem_per_job",
-    #                                actual=mem_per_job)
-    #     memNumeric = mem_per_job.replace("MB","").replace("GB","")
-    #     try:
-    #         memVal = float(memNumeric)
-    #     except:
-    #         raise customValueError(legal=lgl if isSpyModule else msg.format(funcName, str(mem_per_job)),
-    #                                varname="mem_per_job",
-    #                                actual=mem_per_job)
-    #     if memVal <= 0:
-    #         raise customValueError(legal=lgl if isSpyModule else msg.format(funcName, str(mem_per_job)),
-    #                                varname="mem_per_job",
-    #                                actual=mem_per_job)
-
-
-    # # Parse job-waiter count
-    # try:
-    #     scalar_parser(n_jobs_startup, varname="n_jobs_startup", ntype="int_like", lims=[0, np.inf])
-    # except Exception as exc:
-    #     raise exc
-
-    # # Get memory limit (*in MB*) of chosen partition (guaranteed to exist, cf. above)
-    # pc = subprocess.run("scontrol -o show partition {}".format(partition),
-    #                     capture_output=True, check=True, shell=True, text=True)
-    # try:
-    #     mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0])
-    # except IndexError:
-    #     try:
-    #         mem_lim = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
-    #     except IndexError:
-    #         mem_lim = np.inf
-
-    # # Consolidate requested memory with chosen partition (or assign default memory)
-    # if mem_per_job is None:
-    #     mem_per_job = str(mem_lim) + "MB"
-    # else:
-    #     if "MB" in mem_per_job:
-    #         mem_req = int(mem_per_job[:mem_per_job.find("MB")])
-    #     else:
-    #         mem_req = int(round(float(mem_per_job[:mem_per_job.find("GB")]) * 1000))
-    #     if mem_req > mem_lim:
-    #         msg = "{name:s}`mem_per_job` exceeds limit of {lim:d}GB for partition {par:s}. " +\
-    #             "Capping memory at partition limit. "
-    #         customWarning(msg.format(name=funcName + " " if not isSpyModule else "", lim=mem_lim, par=partition),
-    #                       RuntimeWarning, __file__, inspect.currentframe().f_lineno)
-    #         mem_per_job = str(int(mem_lim)) + "GB"
-
-    # # Parse requested timeout period
-    # try:
-    #     scalar_parser(timeout, varname="timeout", ntype="int_like", lims=[1, np.inf])
-    # except Exception as exc:
-    #     raise exc
-
-    # # Parse requested interactive waiting period
-    # try:
-    #     scalar_parser(interactive_wait, varname="interactive_wait", ntype="int_like",
-    #                   lims=[0, np.inf])
-    # except Exception as exc:
-    #     raise exc
-
-    # # Determine if cluster allocation is happening interactively
-    # if not isinstance(interactive, bool):
-    #     msg = "{} `interactive` has to be Boolean, not {}"
-    #     raise customTypeError(interactive if isSpyModule else msg.format(funcName, str(interactive)),
-    #                           varname="interactive",
-    #                           expected="bool")
-
-    # # Determine if a dask client was requested
-    # if not isinstance(start_client, bool):
-    #     msg = "{} `start_client` has to be Boolean, not {}"
-    #     raise customTypeError(start_client if isSpyModule else msg.format(funcName, str(start_client)),
-    #                           varname="start_client",
-    #                           expected="bool")
-
-    # # Determine if job_extra is a list
-    # if not isinstance(job_extra, list):
-    #     msg = "{} `job_extra` has to be List, not {}"
-    #     raise customTypeError(job_extra if isSpyModule else msg.format(funcName, str(job_extra)),
-    #                           varname="job_extra",
-    #                           expected="list")
-
-    # # Determine if job_extra options are valid
-    # for option in job_extra:
-    #     msg = "{} `job_extra` has to be a valid sbatch option, not {}"
-    #     if not isinstance(option, str):
-    #         raise customTypeError(option if isSpyModule else msg.format(funcName, str(option)),
-    #                               varname="option",
-    #                               expected="string")
-    #     if not option[0] == "-":
-    #         lgl = "job_extra options should be flagged with - or --"
-    #         raise customValueError(legal=lgl, varname="option", actual=option)
-
-    # Set/get "hidden" kwargs
-    workers_per_job = kwargs.get("workers_per_job", 1)
-    # try:
-    #     scalar_parser(workers_per_job, varname="workers_per_job",
-    #                   ntype="int_like", lims=[1, 8])
-    # except Exception as exc:
-    #     raise exc
-
-    n_cores = kwargs.get("n_cores", 1)
-    # try:
-    #     scalar_parser(n_cores, varname="n_cores",
-    #                   ntype="int_like", lims=[1, np.inf])
-    # except Exception as exc:
-    #     raise exc
-
-    # Either parse provided '--output' option or append default output folder
-    userOutSpec = [option.startswith("--output") or option.startswith("-o") for option in job_extra]
-    if any(userOutSpec):
-        userOut = job_extra[userOutSpec.index(True)]
-        outSpec = userOut.split("=")
-        if len(outSpec) != 2:
-            lgl = "the SLURM output directory must be specified using -o/--output=/path/to/file"
-            raise customValueError(legal=lgl if isSpyModule else "{} {}, not {}".format(funcName, lgl, userOut),
-                                   varname="job_extra",
-                                   actual=userOut)
-        slurm_wdir = os.path.split(outSpec[1])[0]
-        if len(slurm_wdir) > 0:
-            if isSpyModule:
-                try:
-                    spy.shared.parsers.io_parser(slurm_wdir, varname="job_extra", isfile=False)
-                except Exception as exc:
-                    raise exc
-            else:
-                msg = "{} `slurmWorkingDirectory` has to be an existing directory, not {}"
-                if not os.path.isdir(os.path.expanduser(slurm_wdir)):
-                    raise ValueError(msg.format(funcName, str(slurm_wdir)))
-    else:
-        usr = getpass.getuser()
-        slurm_wdir = "/cs/slurm/{usr:s}/{usr:s}_{date:s}"
-        slurm_wdir = slurm_wdir.format(usr=usr,
-                                       date=datetime.now().strftime('%Y%m%d-%H%M%S'))
-        os.makedirs(slurm_wdir, exist_ok=True)
-        out_files = os.path.join(slurm_wdir, "slurm-%j.out")
-        job_extra.append("--output={}".format(out_files))
-
-    # Create `SLURMCluster` object using provided parameters
-    cluster = SLURMCluster(cores=n_cores,
-                           memory=mem_per_job,
-                           processes=workers_per_job,
-                           local_directory=slurm_wdir,
-                           queue=partition,
-                           python=sys.executable,
-                           header_skip=["-t", "--mem"],
-                           job_extra=job_extra)
-                           # interface="asdf", # interface is set via `psutil.net_if_addrs()`
-
-    # Compute total no. of workers and up-scale cluster accordingly
-    total_workers = n_jobs * workers_per_job
-    worker_count = min(total_workers, n_jobs_startup)
-    if worker_count < total_workers:
-        # cluster.adapt(minimum=worker_count, maximum=total_workers)
-        cluster.scale(total_workers)
-        msg = "{} Requested job-count {} exceeds `n_jobs_startup`: " +\
-            "waiting for {} jobs to come online, then proceed"
-        customPrint(msg.format(funcName, total_workers, n_jobs_startup))
-    else:
-        cluster.scale(total_workers)
-
-    # Fire up waiting routine to avoid unfinished cluster setups
-    if _cluster_waiter(cluster, funcName, worker_count, timeout, interactive, interactive_wait):
-        return
-
-    # Kill a zombie cluster in non-interactive mode
-    if not interactive and _count_running_workers(cluster) == 0:
-        cluster.close()
-        err = "SLURM jobs could not be started within given time-out " +\
-              "interval of {0:d} seconds"
-        raise TimeoutError(err.format(timeout))
-
-    # Highlight how to connect to dask performance monitor
-    customPrint(_successMsg.format(name=funcName, dash=cluster.dashboard_link))
-
-    # If client was requested, return that instead of the created cluster
-    if start_client:
-        return Client(cluster)
-    return cluster
-
-
-def slurm_cluster_setup(partition, n_cores, n_jobs, wokers_per_job, mem_per_job,
-                        n_jobs_startup, timeout, interactive, interactive_wait,
-                        start_client, job_extra, sinfo_output,
-                        invalid_partitions=[], **kwargs):
-    """
-    asdf
-    """
-
-    # Re-direct printing/warnings to ACME logger outside of SyNCoPy
-    customPrint, customWarning = _logging_setup()
-
-    # For later reference: dynamically fetch name of current function
-    funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
-                                                 pkg="ACME: " if isSpyModule else "",
-                                                 name=inspect.currentframe().f_code.co_name)
-
     # Format subprocess shell output
-    options = sinfo_output.split()
+    options = out.split()
 
     # Make sure we're in a valid partition
     if partition not in options:
@@ -541,8 +425,69 @@ def slurm_cluster_setup(partition, n_cores, n_jobs, wokers_per_job, mem_per_job,
     except Exception as exc:
         raise exc
 
+    # Check validity of '--output' option if provided
+    userOutSpec = [option.startswith("--output") or option.startswith("-o") for option in job_extra]
+    if any(userOutSpec):
+        userOut = job_extra[userOutSpec.index(True)]
+        outSpec = userOut.split("=")
+        if len(outSpec) != 2:
+            lgl = "the SLURM output directory must be specified using -o/--output=/path/to/file"
+            raise customValueError(legal=lgl if isSpyModule else "{} {}, not {}".format(funcName, lgl, userOut),
+                                   varname="job_extra",
+                                   actual=userOut)
+        slurm_wdir = os.path.split(outSpec[1])[0]
+        if len(slurm_wdir) > 0:
+            if isSpyModule:
+                try:
+                    spy.shared.parsers.io_parser(slurm_wdir, varname="job_extra", isfile=False)
+                except Exception as exc:
+                    raise exc
+            else:
+                msg = "{} `slurmWorkingDirectory` has to be an existing directory, not {}"
+                if not os.path.isdir(os.path.expanduser(slurm_wdir)):
+                    raise ValueError(msg.format(funcName, str(slurm_wdir)))
 
+    # Create `SLURMCluster` object using provided parameters
+    cluster = SLURMCluster(cores=n_cores,
+                           memory=mem_per_job,
+                           processes=workers_per_job,
+                           local_directory=slurm_wdir,
+                           queue=partition,
+                           python=sys.executable,
+                           header_skip=["-t", "--mem"],
+                           job_extra=job_extra)
+                           # interface="asdf", # interface is set via `psutil.net_if_addrs()`
 
+    # Compute total no. of workers and up-scale cluster accordingly
+    total_workers = n_jobs * workers_per_job
+    worker_count = min(total_workers, n_jobs_startup)
+    if worker_count < total_workers:
+        # cluster.adapt(minimum=worker_count, maximum=total_workers)
+        cluster.scale(total_workers)
+        msg = "{} Requested job-count {} exceeds `n_jobs_startup`: " +\
+            "waiting for {} jobs to come online, then proceed"
+        customPrint(msg.format(funcName, total_workers, n_jobs_startup))
+    else:
+        cluster.scale(total_workers)
+
+    # Fire up waiting routine to avoid unfinished cluster setups
+    if _cluster_waiter(cluster, funcName, worker_count, timeout, interactive, interactive_wait):
+        return
+
+    # Kill a zombie cluster in non-interactive mode
+    if not interactive and _count_running_workers(cluster) == 0:
+        cluster.close()
+        err = "SLURM jobs could not be started within given time-out " +\
+              "interval of {0:d} seconds"
+        raise TimeoutError(err.format(timeout))
+
+    # Highlight how to connect to dask performance monitor
+    customPrint(_successMsg.format(name=funcName, dash=cluster.dashboard_link))
+
+    # If client was requested, return that instead of the created cluster
+    if start_client:
+        return Client(cluster)
+    return cluster
 
 
 def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, interactive_wait):
@@ -600,12 +545,16 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
     return False
 
 
-def local_cluster_setup(start_client=True):
+def local_cluster_setup(interactive=True, start_client=True):
     """
     Start a local distributed Dask multi-processing cluster
 
     Parameters
     ----------
+    interactive : bool
+        If `True`, a confirmation dialog is displayed to ensure proper encapsulation
+        of calls to `local_cluster_setup` inside a script's main module block.
+        See Notes for details. If `interactive` is `False`, the dialog is not shown.
     start_client : bool
         If `True`, a distributed computing client is launched and attached to
         the workers. If `start_client` is `False`, only a distributed
@@ -617,10 +566,39 @@ def local_cluster_setup(start_client=True):
         A distributed computing client (if ``start_client = True``) or
         a distributed computing cluster (otherwise).
 
+    Notes
+    -----
+    The way Python spawns new processes requires an explicit separation of initialization
+    code (i.e., code blocks that should only be executed once) from the actual
+    program code. Specifically, everything that is supposed to be invoked only
+    once by the parent spawner must be encapsulated in a script's main block.
+    Otherwise, initialization code is not only run once by the parent process but
+    executed by every child process at import time.
+
+    This means that starting a local multi-processing cluster *has* to be wrapped
+    inside a script's main module block, otherwise, every child process created by
+    the multi-processing cluster starts a multi-processing cluster itself and so
+    on escalating to an infinite recursion. Thus, if `local_cluster_setup` is
+    called inside a script, it has to be encapsulated in the script's main module
+    block, i.e.,
+
+    .. code-block:: python
+
+        if __name__ == "__main__":
+            ...
+            local_cluster_setup()
+            ...
+
+    Note that this capsulation is **only** required inside Python scripts. Launching
+    `local_cluster_setup` in the (i)Python shell or inside a Jupyter notebook
+    does not suffer from this problem.
+    A more in-depth technical discussion of this limitation can be found in
+    `Dask's GitHub issue tracker <https://github.com/dask/distributed/issues/2520>`_.
+
     Examples
     --------
     The following command launches a local distributed computing cluster using
-    all CPU core available on the host machine
+    all CPU cores available on the host machine
 
     >>> client = local_cluster_setup()
 
@@ -642,12 +620,53 @@ def local_cluster_setup(start_client=True):
                                                  pkg="ACME: " if isSpyModule else "",
                                                  name=inspect.currentframe().f_code.co_name)
 
+    # Determine if cluster allocation is happening interactively
+    if not isinstance(interactive, bool):
+        msg = "{} `interactive` has to be Boolean, not {}"
+        raise customTypeError(interactive if isSpyModule else msg.format(funcName, str(interactive)),
+                              varname="interactive",
+                              expected="bool")
+
     # Determine if a dask client was requested
     if not isinstance(start_client, bool):
         msg = "{} `start_client` has to be Boolean, not {}"
         raise customTypeError(start_client if isSpyModule else msg.format(funcName, str(start_client)),
                               varname="start_client",
                               expected="bool")
+
+    # Check, if we're running inside a Jupyter notebook...
+    try:
+        ipy = get_ipython()
+        if ipy.__class__.__name__ == "ZMQInteractiveShell":
+            maybeScript = False # Jupyter Notebook
+        else:
+            maybeScript = True  # iPython shell
+    except NameError:
+        maybeScript = True      # Python shell
+
+    # ...if not, print warning/info message
+    if maybeScript:
+        msg = """\
+        {name:s}If you use a script to start a local parallel computing client, please ensure
+        the call to `local_cluster_setup` is wrapped inside a main module block, i.e.,
+
+            if __name__ == "__main__":
+                ...
+                local_cluster_setup()
+                ...
+
+        Otherwise, a RuntimeError is raised due to an infinite recursion triggered by
+        new processes being started before the calling process can finish its bootstrapping
+        phase.
+        """
+        customPrint(textwrap.dedent(msg.format(name=funcName + " " if not isSpyModule else "")))
+
+    # Additional safe-guard: if a script is executed, double-check with the user
+    # for proper main idiom usage
+    if interactive:
+        msg = "{name:s}If launched from a script, did you wrap your code inside a main module block?"
+        if not user_yesno(msg.format(name=funcName + " " if not isSpyModule else ""), default="no"):
+            return
 
     # Start the actual distributed client
     client = Client()
