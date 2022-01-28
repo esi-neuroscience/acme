@@ -8,7 +8,6 @@ import time
 import getpass
 import datetime
 import inspect
-import numbers
 import collections
 import os
 import sys
@@ -615,7 +614,7 @@ class ACMEdaemon(object):
                 h5name = os.path.join(outDir, fname)
                 with h5py.File(h5name, "w") as h5f:
                     if isinstance(result, (list, tuple)):
-                        if not all(isinstance(value, (numbers.Number, str)) for value in result):
+                        if not all(isinstance(value, (np.number, str)) for value in result):
                             for rk, res in enumerate(result):
                                 h5f.create_dataset("result_{}".format(rk), data=res)
                         else:

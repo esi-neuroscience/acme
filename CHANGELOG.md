@@ -5,6 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### NEW
+### CHANGED
+- Do not parse scalars using `numbers.Number`, use `numpy.number` instead to
+  catch Boolean values
+
+### REMOVED
+### DEPRECATED
+### FIXED
 
 ## [0.2rc3] - 2021-11-26
 ### NEW
