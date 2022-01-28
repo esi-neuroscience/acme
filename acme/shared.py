@@ -8,7 +8,6 @@ import os
 import sys
 import subprocess
 import inspect
-import numbers
 import logging
 import warnings
 import datetime
@@ -94,7 +93,7 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
 
     # Make sure `var` is a scalar-like number
     msg = "{caller:s} `{varname:s}` has to be {scalartype:s} between {lower:s} and {upper:s}, not {var:s}"
-    if isinstance(var, numbers.Number):
+    if isinstance(var, np.number):
         error = False
         if ntype == "int_like":
             scalartype = "an integer"
