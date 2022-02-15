@@ -16,6 +16,7 @@ import glob
 import pickle
 import logging
 import functools
+import psutil
 import tqdm
 import h5py
 import dask
@@ -160,6 +161,12 @@ class ACMEdaemon(object):
         # Set up output handler
         self.prepare_output(write_worker_results, write_pickle)
 
+        dryrun = True
+        if dryrun:
+            self.perform_dryrun()
+            # import ipdb; ipdb.set_trace()
+
+
         # Either use existing dask client or start a fresh instance
         self.prepare_client(n_jobs=n_jobs,
                             partition=partition,
@@ -283,6 +290,25 @@ class ACMEdaemon(object):
 
             # The "raw" user-provided function is used in the computation
             self.acme_func = self.func
+
+    def perform_dryrun(self):
+
+        dryRunIdx = np.random.choice(self.n_calls, size=1)[0]
+        dryRunArgs = [arg[dryRunIdx] for arg in self.argv]
+        dryRunKwargs = [{key:value[dryRunIdx] for key, value in self.kwargv.items()}][0]
+
+        tic = time.perf_counter()
+        mem0 = psutil.Process().memory_info().rss / 1024 ** 2
+        self.acme_func(*dryRunArgs, **dryRunKwargs)
+        mem1 = psutil.Process().memory_info().rss / 1024 ** 2
+        toc = time.perf_counter()
+
+        # if setup_interactive:
+        #     ask if continue
+
+
+        import ipdb; ipdb.set_trace()
+        #dryRunArgs =
 
     def prepare_client(
         self,

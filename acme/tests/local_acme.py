@@ -16,10 +16,17 @@ if acme_path not in sys.path:
 # Import package
 from acme import ParallelMap
 
+def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+    return (sum(x) + y) * z * w.max()
+
+
 # Prepare code to be executed using, e.g., iPython's `%run` magic command
 if __name__ == "__main__":
 
     # Test stuff within here...
-    pass
+
+    pmap = ParallelMap(f, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2)
+    with pmap as p:
+        p.compute()
 
 

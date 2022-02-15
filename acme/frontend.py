@@ -630,10 +630,6 @@ class ParallelMap(object):
         # Finally, attach user-provided function to class instance
         self.func = func
 
-        dryrun = True
-        if dryrun:
-            import ipdb; ipdb.set_trace()
-
     def compute(self):
         """
         Shortcut to launch parallel computation via `ACMEdaemon`
