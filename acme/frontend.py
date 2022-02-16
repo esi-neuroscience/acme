@@ -45,6 +45,7 @@ class ParallelMap(object):
         setup_interactive=True,
         stop_client="auto",
         verbose=None,
+        dryrun=False,
         logfile=None,
         **kwargs):
         """
@@ -85,10 +86,10 @@ class ParallelMap(object):
             Name of SLURM partition to use. If `"auto"` (default), the memory footprint
             of `func` is estimated using dry-run stubs based on randomly sampling
             provided `args` and `kwargs`. Estimated memory usage dictates queue
-            auto-selection under the assumption of short run-times. For instance,
-            with a predicted memory footprint of 6 GB the `"8GBXS"` queue is selected
-            (minimal but sufficient memory and shortest runtime). To override
-            auto-selection, provide name of SLURM queue explicitly. See
+            auto-selection under the assumption of short run-times. For instance, on
+            the ESI cluster a predicted memory footprint of 6 GB causes the `"8GBXS"`
+            queue to be selected (minimal but sufficient memory and shortest runtime).
+            To override auto-selection, provide name of SLURM queue explicitly. See, e.g.,
             :func:`~acme.esi_cluster_setup` for details.
         n_jobs : int or "auto"
             Number of SLURM jobs (=workers) to spawn. If `"auto"` (default), then
@@ -120,6 +121,14 @@ class ParallelMap(object):
             If `None` (default), general run-time information as well as warnings
             and errors are shown. If `True`, additionally debug information is
             shown. If `False`, only warnings and errors are propagated.
+        dryrun : bool
+            If `True` the user-provided function `func` is executed once using
+            one of the input argument tuples prepared for the parallel workers (picked
+            at random). If `setup_interactive` is `True`, a prompt asks if the
+            actual parallel execution of `func` is supposed to be launched after the
+            dry-run. The `dryrun` keyword is intended to test the correct
+            distribution of arguments across workers prior to the actual concurrent
+            computation.
         logfile : None or bool or str
             If `None` (default) or `False`, all run-time information as well as errors and
             warnings are printed to the command line only. If `True`, an auto-generated

@@ -13,9 +13,11 @@ import collections
 import os
 import sys
 import glob
+import shutil
 import pickle
 import logging
 import functools
+from attr import has
 import psutil
 import tqdm
 import h5py
@@ -27,6 +29,7 @@ import numpy as np
 # Local imports
 from . import __path__
 from .dask_helpers import esi_cluster_setup, cluster_cleanup
+from .shared import user_yesno
 from . import shared as acs
 isSpyModule = False
 if "syncopy" in sys.modules:
@@ -60,6 +63,7 @@ class ACMEdaemon(object):
         n_jobs="auto",
         write_worker_results=True,
         write_pickle=False,
+        dryrun=False,
         partition="auto",
         mem_per_job="auto",
         setup_timeout=60,
@@ -102,6 +106,9 @@ class ACMEdaemon(object):
         write_pickle : bool
             If `True`, the return value(s) of `func` is/are pickled to disk. See
             :class:~`acme.ParallelMap` for details.
+        dryrun : bool
+            If `True`, a dry-run of calling `func` is performed using a single
+            `args`, `kwargs` tuple. See :class:~`acme.ParallelMap` for details.
         partition : str
             Name of SLURM partition to use. See :class:~`acme.ParallelMap` for details.
         mem_per_job : str
@@ -162,10 +169,11 @@ class ACMEdaemon(object):
         self.prepare_output(write_worker_results, write_pickle)
 
         dryrun = True
+        # If requested, perform single-worker dry-run (and quit if desired)
         if dryrun:
-            self.perform_dryrun()
-            # import ipdb; ipdb.set_trace()
-
+            goOn = self.perform_dryrun(setup_interactive)
+            if not goOn:
+                return
 
         # Either use existing dask client or start a fresh instance
         self.prepare_client(n_jobs=n_jobs,
@@ -291,24 +299,58 @@ class ACMEdaemon(object):
             # The "raw" user-provided function is used in the computation
             self.acme_func = self.func
 
-    def perform_dryrun(self):
+    def perform_dryrun(self, setup_interactive):
+        """
+        Execute user function with one prepared randomly picked args, kwargs combo
+        """
 
+        # Randomly pick a scheduled job (`dryRunIdx`) and extract its prepared args and kwargs
         dryRunIdx = np.random.choice(self.n_calls, size=1)[0]
-        dryRunArgs = [arg[dryRunIdx] for arg in self.argv]
-        dryRunKwargs = [{key:value[dryRunIdx] for key, value in self.kwargv.items()}][0]
+        dryRunArgs = [arg[dryRunIdx] if len(arg) > 1 else arg[0] for arg in self.argv]
+        dryRunKwargs = [{key:value[dryRunIdx] if len(value) > 1 else value[0] \
+            for key, value in self.kwargv.items()}][0]
 
-        tic = time.perf_counter()
+        # Create log entry
+        msg = "Performing a single dry-run of {fname:s} simulating randomly " +\
+            "picked worker #{wrknum:d} with automatically distributed arguments"
+        self.log.info(msg.format(fname=self.func.__name__, wrknum=dryRunIdx))
+
+        # Use resident memory size (in MB) to estimate job's memory footprint and measure elapsed time
         mem0 = psutil.Process().memory_info().rss / 1024 ** 2
+        tic = time.perf_counter()
         self.acme_func(*dryRunArgs, **dryRunKwargs)
-        mem1 = psutil.Process().memory_info().rss / 1024 ** 2
         toc = time.perf_counter()
+        mem1 = psutil.Process().memory_info().rss / 1024 ** 2
 
-        # if setup_interactive:
-        #     ask if continue
+        # Remove any generated output files
+        if "outDir" in self.kwargv.keys():
+            fname = os.path.join(self.kwargv["outDir"][dryRunIdx], self.kwargv["outFile"][dryRunIdx])
+            os.unlink(fname)
 
+        # Compute elapsed time and memory usage
+        elapsedTime = toc - tic
+        memUsage = mem1 - mem0
 
-        import ipdb; ipdb.set_trace()
-        #dryRunArgs =
+        # Prepare info message
+        memUnit = "MB"
+        if memUsage > 1000:
+            memUsage /= 1024
+            memUnit = "GB"
+        msg = "Dry-run completed. Elapsed time is {runtime:f} seconds, " +\
+            "estimated memory consumption was {memused:3.2f} {memunit:s}."
+        self.log.info(msg.format(runtime=elapsedTime, memused=memUsage, memunit=memUnit))
+
+        # If the worker setup is supposed to be interactive, ask for confirmation
+        # here as well; if execution is terminated, remove auto-generated output directory
+        goOn = True
+        if setup_interactive:
+            msg = "Do you want to continue executing {fname:s} with the provided arguments?"
+            if not user_yesno(msg.format(fname=self.func.__name__), default="yes"):
+                if "outDir" in self.kwargv.keys():
+                    shutil.rmtree(self.kwargv["outDir"][dryRunIdx], ignore_errors=True)
+                goOn = False
+
+        return goOn
 
     def prepare_client(
         self,
@@ -427,6 +469,10 @@ class ACMEdaemon(object):
         not actually process anythin concurrently but uses the dask framework
         in a sequential setup.
         """
+
+        # If `prepare_client` has not been called yet, don't attempt to compute anything
+        if not hasattr(self, "client"):
+            return
 
         # Ensure `debug` is a simple Boolean flag
         if not isinstance(debug, bool):
@@ -610,6 +656,10 @@ class ACMEdaemon(object):
         """
         Shut down any ad-hoc distributed computing clients created by `prepare_client`
         """
+
+        # If `prepare_client` has not been launched yet, just get outta here
+        if not hasattr(self, "client"):
+            return
         if self.stop_client and self.client is not None:
             cluster_cleanup(self.client)
             self.client = None
