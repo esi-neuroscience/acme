@@ -13,6 +13,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### CHANGED
 - Do not parse scalars using `numbers.Number`, use `numpy.number` instead to
   catch Boolean values
+- Included `conda clean` in CD pipeline to avoid disk fillup by unused conda
+  packages/cache
 
 ### REMOVED
 ### DEPRECATED

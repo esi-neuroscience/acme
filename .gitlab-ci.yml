@@ -18,6 +18,7 @@ intellinux:
         NO_SLURM: "true"
     script:
     - source $HOME/miniconda/etc/profile.d/conda.sh
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
     - tox
@@ -35,6 +36,7 @@ powerlinux:
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
     - source /opt/conda/etc/profile.d/conda.sh
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
     - tox -p 0
@@ -51,6 +53,7 @@ intelwin:
         PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda.bat activate acme
     - tox
@@ -68,6 +71,7 @@ m1macos:
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
     - source /opt/conda/etc/profile.d/conda.sh
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
     - tox -p 0
@@ -102,6 +106,7 @@ pypitest:
     script:
     - source $HOME/miniconda/etc/profile.d/conda.sh
     - conda update --yes conda
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
     - conda install --yes twine keyring rfc3986
@@ -132,6 +137,7 @@ pypideploy:
     script:
     - source $HOME/miniconda/etc/profile.d/conda.sh
     - conda update --yes conda
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
     - conda install --yes twine keyring rfc3986
