@@ -473,6 +473,7 @@ class ParallelMap(object):
                                  n_jobs=n_jobs,
                                  write_worker_results=write_worker_results,
                                  write_pickle=write_pickle,
+                                 dryrun=dryrun,
                                  partition=partition,
                                  mem_per_job=mem_per_job,
                                  setup_timeout=setup_timeout,

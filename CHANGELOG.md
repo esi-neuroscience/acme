@@ -6,6 +6,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 ### NEW
+- Included new `dryrun` keyword in `ParallelMap` to test-drive ACME's automatically
+  generated argument lists simulating a single (randomly picked) worker call prior
+  to the actual concurrent computation (addresses #39)
+
 ### CHANGED
 - Do not parse scalars using `numbers.Number`, use `numpy.number` instead to
   catch Boolean values

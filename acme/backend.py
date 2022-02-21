@@ -168,7 +168,6 @@ class ACMEdaemon(object):
         # Set up output handler
         self.prepare_output(write_worker_results, write_pickle)
 
-        dryrun = True
         # If requested, perform single-worker dry-run (and quit if desired)
         if dryrun:
             goOn = self.perform_dryrun(setup_interactive)

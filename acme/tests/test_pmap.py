@@ -608,6 +608,20 @@ class TestParallelMap():
         # Clean up tmp folder
         shutil.rmtree(tempDir, ignore_errors=True)
 
+    # test dryrun keyword
+    def test_dryrun(self, monkeypatch):
+
+        # This call tests two things: first, the actual dryrun must work, second
+        # using pytest's monkeypatch fixture user-input is simulated. If a user
+        # decides to not move ahead after the dryrun the auto-generated output
+        # directory must be cleaned up
+        monkeypatch.setattr("builtins.input", lambda _ : "n")
+        pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4, setup_interactive=True, dryrun=True)
+
+        # Ensure auto-generated output dir has been successfully removed
+        outDir = pmap.kwargv["outDir"][0]
+        assert os.path.exists(outDir) is False
+
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):
 
@@ -651,8 +665,8 @@ class TestParallelMap():
         else:
             client = esi_cluster_setup(n_jobs=6, interactive=False)
 
-        # Re-run tests with pre-allocated client (except for `test_cancel`)
-        skipTests = ["test_existing_cluster", "test_cancel"]
+        # Re-run tests with pre-allocated client (except for `test_cancel` and `test_dryrun`)
+        skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun"]
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:
