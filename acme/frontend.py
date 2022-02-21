@@ -398,14 +398,11 @@ class ParallelMap(object):
         ACME's automatically generated argument lists prior to the actual concurrent
         computation, e.g.,
 
-        .. code-block:: python
-
-            with ParallelMap(f, [2, 4, 6, 8], 4, dryrun=True) as pmap:
-                results = pmap.compute()
-
-            <ParallelMap> INFO: Performing a single dry-run of f simulating randomly picked worker #1 with automatically distributed arguments
-            <ParallelMap> INFO: Dry-run completed. Elapsed time is 0.004725 seconds, estimated memory consumption was 0.01 MB.
-            Do you want to continue executing f with the provided arguments? [Y/n] n
+        >>> with ParallelMap(f, [2, 4, 6, 8], 4, dryrun=True) as pmap:
+        >>>     results = pmap.compute()
+        <ParallelMap> INFO: Performing a single dry-run of f simulating randomly picked worker #1 with automatically distributed arguments
+        <ParallelMap> INFO: Dry-run completed. Elapsed time is 0.004725 seconds, estimated memory consumption was 0.01 MB.
+        Do you want to continue executing f with the provided arguments? [Y/n] n
 
         In general it is strongly recommended to make sure any function supplied
         to `ParallelMap` works as intended in a sequential setting prior to running

@@ -5,10 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+Performance improvements, new `dryrun` keyword and preparations for deploying
+ACME on other clusters
+
 ### NEW
+- Re-designed cluster startup code: added new function `slurm_cluster_setup` that
+  includes SLURM-specific (but ESI-agnostic) code for spinning up a `SLURMCluster`
 - Included new `dryrun` keyword in `ParallelMap` to test-drive ACME's automatically
   generated argument lists simulating a single (randomly picked) worker call prior
   to the actual concurrent computation (addresses #39)
+- Added helper function `is_esi_node` to determine if ACME is running on the ESI
+  HPC cluster
 
 ### CHANGED
 - Do not parse scalars using `numbers.Number`, use `numpy.number` instead to

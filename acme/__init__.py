@@ -30,7 +30,7 @@ except DistributionNotFound:
             out = "-999"
     __version__ = out.rstrip("\n")
 
-# # Import local modules
+# Import local modules
 from . import frontend, backend, shared, dask_helpers
 from .frontend import *
 from .backend import *

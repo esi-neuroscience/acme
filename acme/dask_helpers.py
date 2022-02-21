@@ -50,7 +50,7 @@ from datetime import datetime, timedelta
 # Be optimistic: prepare success message to be used throughout this module
 _successMsg = "{name:s} Cluster dashboard accessible at {dash:s}"
 
-__all__ = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup"]
+__all__ = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm_cluster_setup"]
 
 
 # Setup SLURM jobs on the ESI HPC cluster
@@ -228,6 +228,9 @@ def slurm_cluster_setup(partition, n_cores, n_jobs, workers_per_job, mem_per_job
                         start_client, job_extra, invalid_partitions=[]):
     """
     Start a distributed Dask cluster of parallel processing workers using SLURM
+
+    **NOTE** If you are working on the ESI HPC cluster, please use
+    :func:`~acme.esi_cluster_setup` instead!
 
     Parameters
     ----------

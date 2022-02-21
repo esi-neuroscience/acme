@@ -80,8 +80,8 @@ the workers collected in ``slurmClient``.
     In principle ACME can leverage any SLURM-controlled HPC infrastructure (CPU nodes,
     GPU nodes etc.). For users of the ESI HPC cluster ACME offers the above
     presented convenience function :func:`~acme.esi_cluster_setup`, however,
-    the underlying general purpose setup routine :func:`acme.dask_helpers.slurm_cluster_setup`
-    (which is invoked by :func:`~acme.slurm_cluster_setup`) can be used to
+    the underlying general purpose setup routine :func:`acme.slurm_cluster_setup`
+    (which is invoked by :func:`~acme.esi_cluster_setup`) can be used to
     start a parallel worker cluster on any distributed system controlled by SLURM.
     If you are interested in having a `*_cluster_setup` routine for your institution's
     HPC infrastructure being included in ACME, please open an issue in our
