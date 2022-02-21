@@ -99,10 +99,10 @@ class ParallelMap(object):
             ``n_jobs = int(n_inputs / 2)`` might be beneficial. See Notes for details.
         mem_per_job : str
             Memory booking for each SLURM worker. If `"auto"` (default), the standard
-            value is inferred from the used partition (if possible). See
+            value is inferred from the used partition (if possible). See, e.g.,
             :func:`~acme.esi_cluster_setup` for details.
         setup_timeout : int
-            Timeout period (in seconds) for SLURM workers to come online. See
+            Timeout period (in seconds) for SLURM workers to come online. See, e.g.,
             :func:`~acme.esi_cluster_setup` for details.
         setup_interactive : bool
             If `True` (default), user input is queried in case not enough SLURM
@@ -393,6 +393,20 @@ class ParallelMap(object):
 
             TypeError: unsupported operand type(s) for *: 'int' and 'NoneType'
 
+        In addition, the automaticall generated argument distribution to user-provided
+        functions can be tested via the `dryrun` keyword. This permits to test-drive
+        ACME's automatically generated argument lists prior to the actual concurrent
+        computation, e.g.,
+
+        .. code-block:: python
+
+            with ParallelMap(f, [2, 4, 6, 8], 4, dryrun=True) as pmap:
+                results = pmap.compute()
+
+            <ParallelMap> INFO: Performing a single dry-run of f simulating randomly picked worker #1 with automatically distributed arguments
+            <ParallelMap> INFO: Dry-run completed. Elapsed time is 0.004725 seconds, estimated memory consumption was 0.01 MB.
+            Do you want to continue executing f with the provided arguments? [Y/n] n
+
         In general it is strongly recommended to make sure any function supplied
         to `ParallelMap` works as intended in a sequential setting prior to running
         it in parallel.
@@ -456,7 +470,7 @@ class ParallelMap(object):
 
         See also
         --------
-        esi_cluster_setup : spawn custom SLURM worker clients
+        esi_cluster_setup : spawn custom SLURM worker clients on the ESI HPC cluster
         local_cluster_setup : start a local Dask multi-processing cluster on the host machine
         ACMEdaemon : Manager class performing the actual concurrent processing
         """

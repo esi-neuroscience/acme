@@ -176,14 +176,27 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
                                        node=socket.gethostname(),
                                        error=err))
 
-    # Extract by-job worker and core-count from anonymous keyword args (if provided);
-    # otherwise, use defaults
+    # Use default by-job worker count or extract it from anonymous keyword args (if provided)
     workers_per_job = 1
     if kwargs.get("workers_per_job") is not None:
         workers_per_job = kwargs.pop("workers_per_job")
-    n_cores = 1
+
+    # Extract by-job CPU core count from anonymous keyword args or...
     if kwargs.get("n_cores") is not None:
         n_cores = kwargs.pop("n_cores")
+    else:
+        # ...get memory limit (*in MB*) of chosen partition and set core count
+        # accordingly (multiple of 8 wrt to GB RAM)
+        try:
+            pc = subprocess.run("scontrol -o show partition {}".format(partition),
+                                capture_output=True, check=True, shell=True, text=True)
+            defMem = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
+        except Exception as exc:
+            msg = "{preamble:s}available memory per CPU in chosen SLURM partition. " +\
+                "Original error message below:\n{error:s}"
+            raise customIOError(msg.format(preamble=funcName + " Cannot access " if not isSpyModule else "",
+                                           error=str(exc)))
+        n_cores = int(defMem / 8000)
 
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
     # but we may need to append to it, so ensure that's possible)

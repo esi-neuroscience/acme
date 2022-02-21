@@ -5,6 +5,7 @@
 
 # Builtin/3rd party package imports
 import time
+import socket
 import getpass
 import datetime
 import inspect
@@ -28,8 +29,9 @@ import numpy as np
 
 # Local imports
 from . import __path__
-from .dask_helpers import esi_cluster_setup, cluster_cleanup
-from .shared import user_yesno
+from .dask_helpers import (esi_cluster_setup, local_cluster_setup,
+                           slurm_cluster_setup, cluster_cleanup)
+from .shared import user_yesno, is_esi_node
 from . import shared as acs
 isSpyModule = False
 if "syncopy" in sys.modules:
@@ -395,7 +397,7 @@ class ACMEdaemon(object):
         # If things are running locally, simply fire up a dask-distributed client,
         # otherwise go through the motions of preparing a full cluster job swarm
         if not self.has_slurm:
-            self.client = esi_cluster_setup(interactive=False)
+            self.client = local_cluster_setup(interactive=False)
 
         else:
 
@@ -405,10 +407,11 @@ class ACMEdaemon(object):
                 msg = "{} `partition` has to be 'auto' or a valid SLURM partition name, not {}"
                 raise TypeError(msg.format(self.msgName, str(partition)))
             if partition == "auto":
-                msg = "Automatic SLURM queueing selection not implemented yet. " +\
-                    "Falling back on default '8GBXS' partition. "
-                self.log.warning(msg)
-                partition = "8GBXS"
+                if is_esi_node():
+                    msg = "Automatic SLURM queueing selection not implemented yet. " +\
+                        "Falling back on default '8GBXS' partition. "
+                    self.log.warning(msg)
+                    partition = "8GBXS"
                 # self.select_queue()
 
             # Either use `n_jobs = n_calls` (default) or parse provided value
@@ -423,10 +426,31 @@ class ACMEdaemon(object):
                 except Exception as exc:
                     raise exc
 
-            # All set, remaining input processing is done by `esi_cluster_setup`
-            self.client = esi_cluster_setup(partition=partition, n_jobs=n_jobs,
-                                            mem_per_job=mem_per_job, timeout=setup_timeout,
-                                            interactive=setup_interactive, start_client=True)
+            # All set, remaining input processing is done by respective `*_cluster_setup` routines
+            if is_esi_node():
+                self.client = esi_cluster_setup(partition=partition, n_jobs=n_jobs,
+                                                mem_per_job=mem_per_job, timeout=setup_timeout,
+                                                interactive=setup_interactive, start_client=True)
+
+            # Unknown cluster node, use vanilla config
+            else:
+                wrng = "Cluster node {} not recognized. Falling back to vanilla " +\
+                    "SLURM setup allocating one worker and one core per job"
+                self.log.warning(wrng.format(socket.getfqdn()))
+                workers_per_job = 1
+                n_cores = 1
+                self.client = slurm_cluster_setup(partition=partition,
+                                                  n_cores=n_cores,
+                                                  n_jobs=n_jobs,
+                                                  workers_per_job=workers_per_job,
+                                                  mem_per_job=mem_per_job,
+                                                  n_jobs_startup=100,
+                                                  timeout=setup_timeout,
+                                                  interactive=setup_interactive,
+                                                  interactive_wait=120,
+                                                  start_client=True,
+                                                  job_extra=[],
+                                                  invalid_partitions=[])
 
             # If startup is aborted by user, get outta here
             if self.client is None:

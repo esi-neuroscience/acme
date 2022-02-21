@@ -6,6 +6,7 @@
 # Builtin/3rd party package imports
 import os
 import sys
+import socket
 import subprocess
 import inspect
 import logging
@@ -77,10 +78,15 @@ def is_slurm_node():
     out, _ = subprocess.Popen("sinfo --version",
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               text=True, shell=True).communicate()
-    if len(out) > 0:
-        return True
-    else:
-        return False
+    return len(out) > 0
+
+
+def is_esi_node():
+    """
+    Returns `True` if code is running on an ESI cluster node, `False` otherwise
+    """
+    fqdn = socket.getfqdn()
+    return fqdn.startswith("esi-sv") and fqdn.endswith(".esi.local")
 
 
 def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.inf]):
