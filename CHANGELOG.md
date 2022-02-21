@@ -19,6 +19,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### REMOVED
 ### DEPRECATED
 ### FIXED
+- On the ESI HPC cluster set the job CPU count depending on the chosen partition
+  (one core per 8GB of RAM, e.g., jobs in a 32GB RAM partition now use 4 cores
+  instead of just one)
 
 ## [0.2rc3] - 2021-11-26
 ### NEW

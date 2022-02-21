@@ -178,8 +178,12 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
 
     # Extract by-job worker and core-count from anonymous keyword args (if provided);
     # otherwise, use defaults
-    workers_per_job = kwargs.get("workers_per_job", 1)
-    n_cores = kwargs.get("n_cores", 1)
+    workers_per_job = 1
+    if kwargs.get("workers_per_job") is not None:
+        workers_per_job = kwargs.pop("workers_per_job")
+    n_cores = 1
+    if kwargs.get("n_cores") is not None:
+        n_cores = kwargs.pop("n_cores")
 
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
     # but we may need to append to it, so ensure that's possible)
