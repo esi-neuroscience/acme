@@ -25,6 +25,10 @@ ACME on other clusters
 
 ### REMOVED
 ### DEPRECATED
+- Retired `conda2pip` in favor of the modern setup.cfg dependency management
+  system. ACME's dependencies are now listed in setup.cfg which is used to
+  populate the conda environment file acme.yml at setup time.
+
 ### FIXED
 - On the ESI HPC cluster set the job CPU count depending on the chosen partition
   (one core per 8GB of RAM, e.g., jobs in a 32GB RAM partition now use 4 cores
