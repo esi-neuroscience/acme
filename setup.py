@@ -18,7 +18,8 @@ pipPkgs = ["dask-jobqueue", "sphinx_automodapi"]
 for k in range(len(pipPkgs)):
     pkg = pipPkgs[k]
     pipPkgs[k] = allPkgs.pop([allPkgs.index(dep) for dep in allPkgs if pkg in dep][0])
-allPkgs += ["pip", {"pip" : pipPkgs}]
+pyVer = setupOpts
+allPkgs += ["python " + str(setupOpts["python_requires"]), "pip", {"pip" : pipPkgs}]
 ymlDict = {"name" : "acme",
            "channels" : ["defaults", "conda-forge"],
            "dependencies" : allPkgs}
