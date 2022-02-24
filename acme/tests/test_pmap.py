@@ -24,6 +24,7 @@ from scipy import signal
 
 # Import main actors here
 from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
+from acme.dask_helpers import customIOError
 from acme.shared import is_slurm_node
 
 # Construct decorators for skipping certain tests
@@ -629,7 +630,7 @@ class TestParallelMap():
         if useSLURM:
 
             # Ensure invalid partition/memory specifications are caught
-            with pytest.raises(ValueError):
+            with pytest.raises(customIOError):
                 esi_cluster_setup(partition="invalid", interactive=False)
             cluster_cleanup()
             with pytest.raises(ValueError):

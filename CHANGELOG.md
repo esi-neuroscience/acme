@@ -28,11 +28,13 @@ ACME on other clusters
 - Retired `conda2pip` in favor of the modern setup.cfg dependency management
   system. ACME's dependencies are now listed in setup.cfg which is used to
   populate the conda environment file acme.yml at setup time.
+- Retired travis CI tests since free test runs are exhausted. Migrated to GitHub
+  actions (and re-included codecov)
 
 ### FIXED
 - On the ESI HPC cluster set the job CPU count depending on the chosen partition
-  (one core per 8GB of RAM, e.g., jobs in a 32GB RAM partition now use 4 cores
-  instead of just one)
+  if not explicitly provided by the user (one core per 8GB of RAM, e.g., jobs in
+  a 32GB RAM partition now use 4 cores instead of just one)
 
 ## [0.2rc3] - 2021-11-26
 ### NEW
