@@ -216,10 +216,10 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
         out_files = os.path.join(slurm_wdir, "slurm-%j.out")
         job_extra.append("--output={}".format(out_files))
 
-    # Let the SLURM-specific setup function do the rest
-    slurm_cluster_setup(partition, n_cores, n_jobs, workers_per_job, mem_per_job,
-                        n_jobs_startup, timeout, interactive, interactive_wait,
-                        start_client, job_extra, invalid_partitions=["DEV", "PPC"], **kwargs)
+    # Let the SLURM-specific setup function do the rest (returns client or cluster)
+    return slurm_cluster_setup(partition, n_cores, n_jobs, workers_per_job, mem_per_job,
+                               n_jobs_startup, timeout, interactive, interactive_wait,
+                               start_client, job_extra, invalid_partitions=["DEV", "PPC"], **kwargs)
 
 
 # Setup SLURM cluster
