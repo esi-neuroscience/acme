@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+CHANGELOG:
+## [Unreleased]
+### NEW
+### CHANGED
+### REMOVED
+### DEPRECATED
+### FIXED
+
 ## [0.20] - 2022-02-28
 Performance improvements, new `dryrun` keyword and preparations for deploying
 ACME on other clusters
@@ -23,7 +31,6 @@ ACME on other clusters
 - Included `conda clean` in CD pipeline to avoid disk fillup by unused conda
   packages/cache
 
-### REMOVED
 ### DEPRECATED
 - Retired `conda2pip` in favor of the modern setup.cfg dependency management
   system. ACME's dependencies are now listed in setup.cfg which is used to

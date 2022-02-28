@@ -18,7 +18,6 @@ import shutil
 import pickle
 import logging
 import functools
-from attr import has
 import psutil
 import tqdm
 import h5py
