@@ -5,16 +5,21 @@
 
 # Builtin/3rd party package imports
 import time
+import socket
 import getpass
 import datetime
 import inspect
 import numbers
+import collections
 import os
 import sys
 import glob
+import shutil
 import pickle
 import logging
 import functools
+from attr import has
+import psutil
 import tqdm
 import h5py
 import dask
@@ -24,7 +29,9 @@ import numpy as np
 
 # Local imports
 from . import __path__
-from .dask_helpers import esi_cluster_setup, cluster_cleanup
+from .dask_helpers import (esi_cluster_setup, local_cluster_setup,
+                           slurm_cluster_setup, cluster_cleanup)
+from .shared import user_yesno, is_esi_node
 from . import shared as acs
 isSpyModule = False
 if "syncopy" in sys.modules:
@@ -58,6 +65,7 @@ class ACMEdaemon(object):
         n_jobs="auto",
         write_worker_results=True,
         write_pickle=False,
+        dryrun=False,
         partition="auto",
         mem_per_job="auto",
         setup_timeout=60,
@@ -100,6 +108,9 @@ class ACMEdaemon(object):
         write_pickle : bool
             If `True`, the return value(s) of `func` is/are pickled to disk. See
             :class:~`acme.ParallelMap` for details.
+        dryrun : bool
+            If `True`, a dry-run of calling `func` is performed using a single
+            `args`, `kwargs` tuple. See :class:~`acme.ParallelMap` for details.
         partition : str
             Name of SLURM partition to use. See :class:~`acme.ParallelMap` for details.
         mem_per_job : str
@@ -158,6 +169,12 @@ class ACMEdaemon(object):
 
         # Set up output handler
         self.prepare_output(write_worker_results, write_pickle)
+
+        # If requested, perform single-worker dry-run (and quit if desired)
+        if dryrun:
+            goOn = self.perform_dryrun(setup_interactive)
+            if not goOn:
+                return
 
         # Either use existing dask client or start a fresh instance
         self.prepare_client(n_jobs=n_jobs,
@@ -283,6 +300,59 @@ class ACMEdaemon(object):
             # The "raw" user-provided function is used in the computation
             self.acme_func = self.func
 
+    def perform_dryrun(self, setup_interactive):
+        """
+        Execute user function with one prepared randomly picked args, kwargs combo
+        """
+
+        # Randomly pick a scheduled job (`dryRunIdx`) and extract its prepared args and kwargs
+        dryRunIdx = np.random.choice(self.n_calls, size=1)[0]
+        dryRunArgs = [arg[dryRunIdx] if len(arg) > 1 else arg[0] for arg in self.argv]
+        dryRunKwargs = [{key:value[dryRunIdx] if len(value) > 1 else value[0] \
+            for key, value in self.kwargv.items()}][0]
+
+        # Create log entry
+        msg = "Performing a single dry-run of {fname:s} simulating randomly " +\
+            "picked worker #{wrknum:d} with automatically distributed arguments"
+        self.log.info(msg.format(fname=self.func.__name__, wrknum=dryRunIdx))
+
+        # Use resident memory size (in MB) to estimate job's memory footprint and measure elapsed time
+        mem0 = psutil.Process().memory_info().rss / 1024 ** 2
+        tic = time.perf_counter()
+        self.acme_func(*dryRunArgs, **dryRunKwargs)
+        toc = time.perf_counter()
+        mem1 = psutil.Process().memory_info().rss / 1024 ** 2
+
+        # Remove any generated output files
+        if "outDir" in self.kwargv.keys():
+            fname = os.path.join(self.kwargv["outDir"][dryRunIdx], self.kwargv["outFile"][dryRunIdx])
+            os.unlink(fname)
+
+        # Compute elapsed time and memory usage
+        elapsedTime = toc - tic
+        memUsage = mem1 - mem0
+
+        # Prepare info message
+        memUnit = "MB"
+        if memUsage > 1000:
+            memUsage /= 1024
+            memUnit = "GB"
+        msg = "Dry-run completed. Elapsed time is {runtime:f} seconds, " +\
+            "estimated memory consumption was {memused:3.2f} {memunit:s}."
+        self.log.info(msg.format(runtime=elapsedTime, memused=memUsage, memunit=memUnit))
+
+        # If the worker setup is supposed to be interactive, ask for confirmation
+        # here as well; if execution is terminated, remove auto-generated output directory
+        goOn = True
+        if setup_interactive:
+            msg = "Do you want to continue executing {fname:s} with the provided arguments?"
+            if not user_yesno(msg.format(fname=self.func.__name__), default="yes"):
+                if "outDir" in self.kwargv.keys():
+                    shutil.rmtree(self.kwargv["outDir"][dryRunIdx], ignore_errors=True)
+                goOn = False
+
+        return goOn
+
     def prepare_client(
         self,
         n_jobs="auto",
@@ -327,7 +397,7 @@ class ACMEdaemon(object):
         # If things are running locally, simply fire up a dask-distributed client,
         # otherwise go through the motions of preparing a full cluster job swarm
         if not self.has_slurm:
-            self.client = esi_cluster_setup(interactive=False)
+            self.client = local_cluster_setup(interactive=False)
 
         else:
 
@@ -337,10 +407,11 @@ class ACMEdaemon(object):
                 msg = "{} `partition` has to be 'auto' or a valid SLURM partition name, not {}"
                 raise TypeError(msg.format(self.msgName, str(partition)))
             if partition == "auto":
-                msg = "Automatic SLURM queueing selection not implemented yet. " +\
-                    "Falling back on default '8GBXS' partition. "
-                self.log.warning(msg)
-                partition = "8GBXS"
+                if is_esi_node():
+                    msg = "Automatic SLURM queueing selection not implemented yet. " +\
+                        "Falling back on default '8GBXS' partition. "
+                    self.log.warning(msg)
+                    partition = "8GBXS"
                 # self.select_queue()
 
             # Either use `n_jobs = n_calls` (default) or parse provided value
@@ -355,10 +426,31 @@ class ACMEdaemon(object):
                 except Exception as exc:
                     raise exc
 
-            # All set, remaining input processing is done by `esi_cluster_setup`
-            self.client = esi_cluster_setup(partition=partition, n_jobs=n_jobs,
-                                            mem_per_job=mem_per_job, timeout=setup_timeout,
-                                            interactive=setup_interactive, start_client=True)
+            # All set, remaining input processing is done by respective `*_cluster_setup` routines
+            if is_esi_node():
+                self.client = esi_cluster_setup(partition=partition, n_jobs=n_jobs,
+                                                mem_per_job=mem_per_job, timeout=setup_timeout,
+                                                interactive=setup_interactive, start_client=True)
+
+            # Unknown cluster node, use vanilla config
+            else:
+                wrng = "Cluster node {} not recognized. Falling back to vanilla " +\
+                    "SLURM setup allocating one worker and one core per job"
+                self.log.warning(wrng.format(socket.getfqdn()))
+                workers_per_job = 1
+                n_cores = 1
+                self.client = slurm_cluster_setup(partition=partition,
+                                                  n_cores=n_cores,
+                                                  n_jobs=n_jobs,
+                                                  workers_per_job=workers_per_job,
+                                                  mem_per_job=mem_per_job,
+                                                  n_jobs_startup=100,
+                                                  timeout=setup_timeout,
+                                                  interactive=setup_interactive,
+                                                  interactive_wait=120,
+                                                  start_client=True,
+                                                  job_extra=[],
+                                                  invalid_partitions=[])
 
             # If startup is aborted by user, get outta here
             if self.client is None:
@@ -401,6 +493,10 @@ class ACMEdaemon(object):
         in a sequential setup.
         """
 
+        # If `prepare_client` has not been called yet, don't attempt to compute anything
+        if not hasattr(self, "client"):
+            return
+
         # Ensure `debug` is a simple Boolean flag
         if not isinstance(debug, bool):
             msg = "{} `debug` has to be `True` or `False`, not {}"
@@ -439,7 +535,9 @@ class ACMEdaemon(object):
         # to this (single!) future on the cluster for submission
         for ak, arg in enumerate(self.argv):
             if len(arg) == 1:
-                ftArg = self.client.scatter(arg, broadcast=True)[0]
+                ftArg = self.client.scatter(arg, broadcast=True)
+                if isinstance(ftArg, collections.abc.Sized):
+                    ftArg = ftArg[0]
                 self.argv[ak] = [ftArg] * self.n_calls
 
         # Same as above but for keyword-arguments
@@ -581,6 +679,10 @@ class ACMEdaemon(object):
         """
         Shut down any ad-hoc distributed computing clients created by `prepare_client`
         """
+
+        # If `prepare_client` has not been launched yet, just get outta here
+        if not hasattr(self, "client"):
+            return
         if self.stop_client and self.client is not None:
             cluster_cleanup(self.client)
             self.client = None

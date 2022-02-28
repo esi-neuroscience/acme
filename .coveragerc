@@ -11,6 +11,5 @@ exclude_lines =
 ignore_errors = True
 omit =
     acme/tests/*
-    *conda2pip.py
     *setup.py
     test_*

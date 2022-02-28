@@ -2,41 +2,44 @@
 
 # ACME: Asynchronous Computing Made ESI
 
-main: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=main)](https://travis-ci.com/esi-neuroscience/acme)
+main: [![tests+codecov](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml/badge.svg?branch=main)](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml)
 [![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/main/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
-dev: [![Build Status](https://travis-ci.com/esi-neuroscience/acme.svg?branch=dev)](https://travis-ci.com/esi-neuroscience/acme)
+
+
+dev: [![tests+codecov](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml/badge.svg?branch=dev)](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml)
 [![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/dev/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
 
 ## Summary
 
 The objective of ACME (pronounced *"ak-mee"*) is to provide easy-to-use
-wrappers for calling Python functions in parallel ("embarassingly parallel workloads").
+wrappers for calling Python functions concurrently ("embarassingly parallel workloads").
 ACME is developed at the
 [Ernst Strüngmann Institute (ESI) gGmbH for Neuroscience in Cooperation with Max Planck Society](https://www.esi-frankfurt.de/>)
 and released free of charge under the
 [BSD 3-Clause "New" or "Revised" License](https://en.wikipedia.org/wiki/BSD_licenses#3-clause_license_(%22BSD_License_2.0%22,_%22Revised_BSD_License%22,_%22New_BSD_License%22,_or_%22Modified_BSD_License%22)).
 ACME relies on the concurrent processing library [Dask](https://docs.dask.org/en/latest/>)
 and was primarily designed to facilitate the use of [SLURM](https://slurm.schedmd.com/documentation.html)
-on the ESI HPC cluster. However, local multi-processing hardware (i.e., multi-core CPUs)
-is fully supported as well. ACME is based on the parallelization engine used in [SyNCoPy](http://www.syncopy.org/) and
-is itself part of the SyNCoPy package.
+on the ESI HPC cluster (although other HPC infrastructure running SLURM can be
+leveraged as well). Local multi-processing hardware (i.e., multi-core CPUs)
+is fully supported too. ACME is itself used as the parallelization engine of [SyNCoPy](http://www.syncopy.org/).
 
 ## Installation
 
 ACME can be installed with `pip`
 
-```
+```shell
 pip install esi-acme
 ```
 
 or via `conda`
-```
+
+```shell
 conda install -c conda-forge esi-acme
 ```
 
 To get the latest development version, simply clone our GitHub repository:
 
-```
+```shell
 git clone https://github.com/esi-neuroscience/acme.git
 cd acme/
 pip install -e .

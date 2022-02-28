@@ -8,7 +8,6 @@ import subprocess
 import warnings
 import inspect
 import sys
-import dask.distributed as dd
 from pkg_resources import get_distribution, DistributionNotFound
 
 # Get package version: either via meta-information from egg or via latest git commit
@@ -31,7 +30,7 @@ except DistributionNotFound:
             out = "-999"
     __version__ = out.rstrip("\n")
 
-# # Import local modules
+# Import local modules
 from . import frontend, backend, shared, dask_helpers
 from .frontend import *
 from .backend import *
@@ -45,7 +44,7 @@ try:
     import IPython
     ipy.ipyTBshower = IPython.core.interactiveshell.InteractiveShell.showtraceback
     IPython.core.interactiveshell.InteractiveShell.showtraceback = ctrlc_catcher
-except:
+except NameError:
     sys.excepthook = ctrlc_catcher
 
 # Manage user-exposed namespace imports

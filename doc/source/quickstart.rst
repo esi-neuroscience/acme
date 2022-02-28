@@ -19,9 +19,9 @@ or via `conda <https://www.anaconda.com/products/individual>`_
 
     conda install -c conda-forge esi-acme
 
-ACME is also part of the `Syncopy package <https://pypi.org/project/esi-syncopy/>`_.
+ACME is the parallelization engine of `Syncopy <https://pypi.org/project/esi-syncopy/>`_.
 If you're working on the ESI HPC cluster installing ACME and/or SyNCoPy is only necessary if
-you create your own Conda environment.
+you create your own conda environment.
 On the ESI cluster, all current pre-configured reference environments
 (`ESI-202xa/b`) provide the respective most recent ACME version. These environments
 can be easily started using the `ESI JupyterHub <https://jupyterhub.esi.local>`_
@@ -57,11 +57,12 @@ the :class:`~acme.ParallelMap` context manager. Thus, for most use-cases importi
     with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
         pmap.compute()
 
-More fine-grained control over allocated resources and load-balancer options is available
-via the routine :func:`~acme.esi_cluster_setup`. It permits to launch a custom-tailored
-"cluster" of parallel workers (corresponding to CPU cores if run on a single machine, i.e.,
-laptop or workstation, or compute jobs if run on a cluster computing manager such as SLURM).
-Thus, instead of letting ACME automatically allocate a worker swarm, more fine-grained
+On the ESI HPC cluster the routine :func:`~acme.esi_cluster_setup` offers
+more fine-grained control over allocated resources and load-balancer options.
+It permits to launch a custom-tailored "cluster" of parallel workers (corresponding
+to CPU cores if run on a single machine, i.e., laptop or workstation, or compute jobs
+if run on a cluster computing manager such as SLURM). Thus, instead of letting
+ACME automatically allocate a worker swarm, more fine-grained
 control over resource allocation and management can be achieved via running
 :func:`~acme.esi_cluster_setup` **before** launching the actual calculation.
 For example,
@@ -74,6 +75,18 @@ starts 10 concurrent SLURM workers in the `16GBXL` queue if run on the ESI HPC
 cluster. Any subsequent invocation of :class:`~acme.ParallelMap` will automatically
 pick up ``slurmClient`` and distribute any occurring computational payload across
 the workers collected in ``slurmClient``.
+
+.. note::
+    In principle ACME can leverage any SLURM-controlled HPC infrastructure (CPU nodes,
+    GPU nodes etc.). For users of the ESI HPC cluster ACME offers the above
+    presented convenience function :func:`~acme.esi_cluster_setup`, however,
+    the underlying general purpose setup routine :func:`acme.slurm_cluster_setup`
+    (which is invoked by :func:`~acme.esi_cluster_setup`) can be used to
+    start a parallel worker cluster on any distributed system controlled by SLURM.
+    If you are interested in having a `*_cluster_setup` routine for your institution's
+    HPC infrastructure being included in ACME, please open an issue in our
+    `GitHub Issue Tracker <https://github.com/esi-neuroscience/acme/issues>`_.
+
 
 More Information
 ^^^^^^^^^^^^^^^^

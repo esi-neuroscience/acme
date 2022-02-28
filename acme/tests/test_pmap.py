@@ -4,7 +4,6 @@
 #
 
 # Builtin/3rd party package imports
-from multiprocessing import Value
 import os
 import sys
 import pickle
@@ -15,7 +14,6 @@ import getpass
 import time
 import itertools
 import logging
-from typing import Type
 import h5py
 import pytest
 import signal as sys_signal
@@ -26,10 +24,11 @@ from scipy import signal
 
 # Import main actors here
 from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
+from acme.dask_helpers import customIOError
 from acme.shared import is_slurm_node
 
 # Construct decorators for skipping certain tests
-skip_in_win32 = pytest.mark.skipif(sys.platform == "win32", reason="Not running in Windows")
+skip_if_not_linux = pytest.mark.skipif(sys.platform != "linux", reason="Only works in Linux")
 
 # Functions that act as stand-ins for user-funcs
 def simple_func(x, y, z=3):
@@ -285,7 +284,11 @@ class TestParallelMap():
             assert "8GB" in partition
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
-            assert int(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
+            assert round(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
+
+        # Wait a sec (literally) for dask to collect its bearings (after the
+        # `get_client` above) before proceeding
+        time.sleep(1.0)
 
         # Same, but use custom log-file
         for handler in pmap.log.handlers:
@@ -297,7 +300,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          logfile=customLog,
                          verbose=True,
-                         stop_client=True,
+                         stop_client=not existingClient,
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.kwargv["outDir"][0])
@@ -306,8 +309,12 @@ class TestParallelMap():
             assert len(fl.readlines()) > 1
 
         # Ensure client has been stopped
-        with pytest.raises(ValueError):
-            dd.get_client()
+        if not existingClient:
+            with pytest.raises(ValueError):
+                dd.get_client()
+
+        # Wait a sec (literally) to give dask enough time to close the client
+        time.sleep(1.0)
 
         # Underbook SLURM (more calls than jobs)
         partition = "8GBXS"
@@ -334,7 +341,7 @@ class TestParallelMap():
             assert actualPartition == partition
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
-            assert int(memory[0] / 1000**3) == int(mem_per_job.replace("GB", ""))
+            assert round(memory[0] / 1000**3) == int(mem_per_job.replace("GB", ""))
 
         # Let `cluster_cleanup` murder the custom setup and ensure it did its job
         if not existingClient:
@@ -367,7 +374,7 @@ class TestParallelMap():
             assert actualPartition == partition
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
-            assert int(memory[0] / 1000**2) == int(mem_per_job.replace("MB", ""))
+            assert round(memory[0] / 1000**3) * 1000 == int(mem_per_job.replace("MB", ""))
         if not existingClient:
             cluster_cleanup(pmap.client)
 
@@ -482,7 +489,7 @@ class TestParallelMap():
             shutil.rmtree(folder, ignore_errors=True)
 
     # test if KeyboardInterrupts are handled correctly
-    @skip_in_win32
+    @skip_if_not_linux
     def test_cancel(self):
 
         # Setup temp-directory layout for subprocess-scripts and prepare interpreters
@@ -602,6 +609,20 @@ class TestParallelMap():
         # Clean up tmp folder
         shutil.rmtree(tempDir, ignore_errors=True)
 
+    # test dryrun keyword
+    def test_dryrun(self, monkeypatch):
+
+        # This call tests two things: first, the actual dryrun must work, second
+        # using pytest's monkeypatch fixture user-input is simulated. If a user
+        # decides to not move ahead after the dryrun the auto-generated output
+        # directory must be cleaned up
+        monkeypatch.setattr("builtins.input", lambda _ : "n")
+        pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4, setup_interactive=True, dryrun=True)
+
+        # Ensure auto-generated output dir has been successfully removed
+        outDir = pmap.kwargv["outDir"][0]
+        assert os.path.exists(outDir) is False
+
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):
 
@@ -609,7 +630,7 @@ class TestParallelMap():
         if useSLURM:
 
             # Ensure invalid partition/memory specifications are caught
-            with pytest.raises(ValueError):
+            with pytest.raises(customIOError):
                 esi_cluster_setup(partition="invalid", interactive=False)
             cluster_cleanup()
             with pytest.raises(ValueError):
@@ -645,8 +666,8 @@ class TestParallelMap():
         else:
             client = esi_cluster_setup(n_jobs=6, interactive=False)
 
-        # Re-run tests with pre-allocated client (except for `test_cancel`)
-        skipTests = ["test_existing_cluster", "test_cancel"]
+        # Re-run tests with pre-allocated client (except for `test_cancel` and `test_dryrun`)
+        skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun"]
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:

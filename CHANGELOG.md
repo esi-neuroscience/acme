@@ -4,7 +4,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.20] - 2022-02-28
+Performance improvements, new `dryrun` keyword and preparations for deploying
+ACME on other clusters
+
+### NEW
+- Re-designed cluster startup code: added new function `slurm_cluster_setup` that
+  includes SLURM-specific (but ESI-agnostic) code for spinning up a `SLURMCluster`
+- Included new `dryrun` keyword in `ParallelMap` to test-drive ACME's automatically
+  generated argument lists simulating a single (randomly picked) worker call prior
+  to the actual concurrent computation (addresses #39)
+- Added helper function `is_esi_node` to determine if ACME is running on the ESI
+  HPC cluster
+
+### CHANGED
+- Do not parse scalars using `numbers.Number`, use `numpy.number` instead to
+  catch Boolean values
+- Included `conda clean` in CD pipeline to avoid disk fillup by unused conda
+  packages/cache
+
+### REMOVED
+### DEPRECATED
+- Retired `conda2pip` in favor of the modern setup.cfg dependency management
+  system. ACME's dependencies are now listed in setup.cfg which is used to
+  populate the conda environment file acme.yml at setup time.
+- Retired travis CI tests since free test runs are exhausted. Migrated to GitHub
+  actions (and re-included codecov)
+
+### FIXED
+- On the ESI HPC cluster set the job CPU count depending on the chosen partition
+  if not explicitly provided by the user (one core per 8GB of RAM, e.g., jobs in
+  a 32GB RAM partition now use 4 cores instead of just one)
+
+## [0.2rc3] - 2021-11-26
+### NEW
+- Upgraded dask version used by ACME (anything below 2021.12)
+- Added macOS as officially supported platform. A corresponding CI job has been
+  set up as well.
+
+### CHANGED
+- Updated `email` and `homepage` tags in setup.cfg to comply with new setuptools
+  packaging standard
+
+### FIXED
+- NumPy arrays with singleton dimensions triggered a nondescript `TypeError` in
+  `ACMEDaemon` due to incorrect indexing before broadcasting.
 
 ## [0.2rc2] - 2021-10-26
 ### CHANGED

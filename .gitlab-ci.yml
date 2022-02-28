@@ -8,7 +8,7 @@ intellinux:
     stage: tox
     allow_failure: true
     tags:
-    - slurm
+    - deploy
     only:
     - main
     - dev
@@ -17,7 +17,8 @@ intellinux:
         GIT_FETCH_EXTRA_FLAGS: --tags
         NO_SLURM: "true"
     script:
-    - source /opt/conda/etc/profile.d/conda.sh
+    - source $HOME/miniconda/etc/profile.d/conda.sh
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
     - tox
@@ -35,6 +36,7 @@ powerlinux:
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
     - source /opt/conda/etc/profile.d/conda.sh
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
     - tox -p 0
@@ -51,9 +53,28 @@ intelwin:
         PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda.bat activate acme
     - tox
+
+m1macos:
+    stage: tox
+    allow_failure: true
+    tags:
+    - macos
+    only:
+    - main
+    - dev
+    variables:
+        PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
+        GIT_FETCH_EXTRA_FLAGS: --tags
+    script:
+    - source /opt/conda/etc/profile.d/conda.sh
+    - conda clean --all -y
+    - conda env update -f acme.yml --prune
+    - conda activate acme
+    - tox -p 0
 
 slurmtest:
     stage: slurm
@@ -85,14 +106,17 @@ pypitest:
     script:
     - source $HOME/miniconda/etc/profile.d/conda.sh
     - conda update --yes conda
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
     - conda install --yes twine keyring rfc3986
     - conda update --yes twine keyring rfc3986
+    - rm -rf dist/ build/ esi_acme.egg-info/
     - python setup.py sdist bdist_wheel
     - tarname="$(basename -- $(ls dist/*.tar.gz) .tar.gz)"
     - version=$(sed -e 's/esi-acme-\(.*\)/\1/' <<< "$tarname")
     - twine upload --repository testpypi --config-file=~/.esipypirc dist/*
+    - sleep 300
     - conda create --yes --name piptest python=3.8
     - conda activate piptest
     - conda install --yes pip
@@ -113,9 +137,11 @@ pypideploy:
     script:
     - source $HOME/miniconda/etc/profile.d/conda.sh
     - conda update --yes conda
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
     - conda install --yes twine keyring rfc3986
     - conda update --yes twine keyring rfc3986
+    - rm -rf dist/ build/ esi_acme.egg-info/
     - python setup.py sdist bdist_wheel
     - twine upload --config-file=~/.esipypirc dist/*

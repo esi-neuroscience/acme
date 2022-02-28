@@ -45,6 +45,7 @@ class ParallelMap(object):
         setup_interactive=True,
         stop_client="auto",
         verbose=None,
+        dryrun=False,
         logfile=None,
         **kwargs):
         """
@@ -85,10 +86,10 @@ class ParallelMap(object):
             Name of SLURM partition to use. If `"auto"` (default), the memory footprint
             of `func` is estimated using dry-run stubs based on randomly sampling
             provided `args` and `kwargs`. Estimated memory usage dictates queue
-            auto-selection under the assumption of short run-times. For instance,
-            with a predicted memory footprint of 6 GB the `"8GBXS"` queue is selected
-            (minimal but sufficient memory and shortest runtime). To override
-            auto-selection, provide name of SLURM queue explicitly. See
+            auto-selection under the assumption of short run-times. For instance, on
+            the ESI cluster a predicted memory footprint of 6 GB causes the `"8GBXS"`
+            queue to be selected (minimal but sufficient memory and shortest runtime).
+            To override auto-selection, provide name of SLURM queue explicitly. See, e.g.,
             :func:`~acme.esi_cluster_setup` for details.
         n_jobs : int or "auto"
             Number of SLURM jobs (=workers) to spawn. If `"auto"` (default), then
@@ -98,10 +99,10 @@ class ParallelMap(object):
             ``n_jobs = int(n_inputs / 2)`` might be beneficial. See Notes for details.
         mem_per_job : str
             Memory booking for each SLURM worker. If `"auto"` (default), the standard
-            value is inferred from the used partition (if possible). See
+            value is inferred from the used partition (if possible). See, e.g.,
             :func:`~acme.esi_cluster_setup` for details.
         setup_timeout : int
-            Timeout period (in seconds) for SLURM workers to come online. See
+            Timeout period (in seconds) for SLURM workers to come online. See, e.g.,
             :func:`~acme.esi_cluster_setup` for details.
         setup_interactive : bool
             If `True` (default), user input is queried in case not enough SLURM
@@ -120,6 +121,14 @@ class ParallelMap(object):
             If `None` (default), general run-time information as well as warnings
             and errors are shown. If `True`, additionally debug information is
             shown. If `False`, only warnings and errors are propagated.
+        dryrun : bool
+            If `True` the user-provided function `func` is executed once using
+            one of the input argument tuples prepared for the parallel workers (picked
+            at random). If `setup_interactive` is `True`, a prompt asks if the
+            actual parallel execution of `func` is supposed to be launched after the
+            dry-run. The `dryrun` keyword is intended to test the correct
+            distribution of arguments across workers prior to the actual concurrent
+            computation.
         logfile : None or bool or str
             If `None` (default) or `False`, all run-time information as well as errors and
             warnings are printed to the command line only. If `True`, an auto-generated
@@ -384,6 +393,17 @@ class ParallelMap(object):
 
             TypeError: unsupported operand type(s) for *: 'int' and 'NoneType'
 
+        In addition, the automaticall generated argument distribution to user-provided
+        functions can be tested via the `dryrun` keyword. This permits to test-drive
+        ACME's automatically generated argument lists prior to the actual concurrent
+        computation, e.g.,
+
+        >>> with ParallelMap(f, [2, 4, 6, 8], 4, dryrun=True) as pmap:
+        >>>     results = pmap.compute()
+        <ParallelMap> INFO: Performing a single dry-run of f simulating randomly picked worker #1 with automatically distributed arguments
+        <ParallelMap> INFO: Dry-run completed. Elapsed time is 0.004725 seconds, estimated memory consumption was 0.01 MB.
+        Do you want to continue executing f with the provided arguments? [Y/n] n
+
         In general it is strongly recommended to make sure any function supplied
         to `ParallelMap` works as intended in a sequential setting prior to running
         it in parallel.
@@ -447,7 +467,7 @@ class ParallelMap(object):
 
         See also
         --------
-        esi_cluster_setup : spawn custom SLURM worker clients
+        esi_cluster_setup : spawn custom SLURM worker clients on the ESI HPC cluster
         local_cluster_setup : start a local Dask multi-processing cluster on the host machine
         ACMEdaemon : Manager class performing the actual concurrent processing
         """
@@ -464,6 +484,7 @@ class ParallelMap(object):
                                  n_jobs=n_jobs,
                                  write_worker_results=write_worker_results,
                                  write_pickle=write_pickle,
+                                 dryrun=dryrun,
                                  partition=partition,
                                  mem_per_job=mem_per_job,
                                  setup_timeout=setup_timeout,
