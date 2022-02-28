@@ -1,28 +1,28 @@
-cff-version: 1.1.0
-title: 'ACME: Asynchronous Computing Made ESI'
-message: If you use this software, please cite it based on metadata found in this
-  file. ACME provides functionality to execute Python functions concurrently and
-  is itself used as the parallelization engine of SyNCoPy.
 authors:
-- affiliation: Ernst Strüngmann Institute for Neuroscience in Cooperation with Max
-    Planck Society
+- affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
+    \ Max Planck Society"
   family-names: Fuertinger
   given-names: Stefan
   orcid: https://orcid.org/0000-0002-8118-036X
-- affiliation: Ernst Strüngmann Institute for Neuroscience in Cooperation with Max
-    Planck Society
+- affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
+    \ Max Planck Society"
   family-names: Shapcott
   given-names: Katharine
   orcid: https://orcid.org/0000-0001-8618-5779
-- affiliation: Ernst Strüngmann Institute for Neuroscience in Cooperation with Max
-    Planck Society
+- affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
+    \ Max Planck Society"
   family-names: Schmiedt
   given-names: Joscha
   orcid: https://orcid.org/0000-0001-6233-1866
-license: BSD-3-Clause
+cff-version: 1.1.0
+date-released: '2022-02-28'
 keywords:
 - high-performance computing
 - parallel computing
+license: BSD-3-Clause
+message: If you use this software, please cite it based on metadata found in this
+  file. ACME provides functionality to execute Python functions concurrently and is
+  itself used as the parallelization engine of SyNCoPy.
 repository-code: https://github.com/esi-neuroscience/acme
-version: 0.2rc4.dev0
-date-released: '2021-11-24'
+title: 'ACME: Asynchronous Computing Made ESI'
+version: 0.2rc3.dev33

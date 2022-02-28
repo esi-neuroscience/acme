@@ -8,7 +8,7 @@ import yaml
 from setuptools_scm import get_version
 
 # Set release version by hand
-releaseVersion = "0.2rc3"
+releaseVersion = "0.20"
 
 # Read dependencies from setup.cfg and create conda environment file
 envFile = "acme.yml"
