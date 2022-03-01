@@ -12,7 +12,7 @@ CHANGELOG:
 ### DEPRECATED
 ### FIXED
 
-## [0.20] - 2022-02-28
+## [0.21] - 2022-03-01
 Performance improvements, new `dryrun` keyword and preparations for deploying
 ACME on other clusters
 
