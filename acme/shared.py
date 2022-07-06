@@ -85,8 +85,7 @@ def is_esi_node():
     """
     Returns `True` if code is running on an ESI cluster node, `False` otherwise
     """
-    fqdn = socket.getfqdn()
-    return fqdn.startswith("esi-sv") and fqdn.endswith(".esi.local")
+    return socket.gethostname().startswith("esi-sv") and os.path.isdir("/cs")
 
 
 def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.inf]):
