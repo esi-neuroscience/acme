@@ -251,7 +251,7 @@ class ACMEdaemon(object):
         # If automatic saving of results is requested, make necessary preparations
         if write_worker_results:
 
-            # On the ESI cluster, save results on HPX, otherwise use location of `func`
+            # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
             if self.has_slurm:
                 outDir = "/cs/home/{usr:s}/".format(usr=getpass.getuser())
             else:

@@ -3,7 +3,7 @@ name: Run tests and determine coverage
 on:
   # Triggers the workflow on push or pull request events
   push:
-    branches: [ dev ]
+    branches: [main, dev]
   pull_request:
 
   # Allows you to run this workflow manually from the Actions tab

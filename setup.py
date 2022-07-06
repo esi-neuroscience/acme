@@ -1,14 +1,15 @@
 # Builtins
 import datetime
 from setuptools import setup
-from setuptools.config import read_configuration
+from setuptools.config.setupcfg import read_configuration
+import subprocess
 
 # External packages
 import yaml
 from setuptools_scm import get_version
 
 # Set release version by hand
-releaseVersion = "0.21"
+releaseVersion = "2022.07"
 
 # Read dependencies from setup.cfg and create conda environment file
 envFile = "acme.yml"
@@ -30,15 +31,15 @@ with open(envFile, 'w') as ymlFile:
     ymlFile.write(msg)
     yaml.dump(ymlDict, ymlFile, default_flow_style=False)
 
-# Get package version for citationFile (for dev-builds this might differ from
-# test-PyPI versions, which are ordered by recency)
-version = get_version(root='.', relative_to=__file__, local_scheme="no-local-version")
-
-# Release versions (commits at tag) have suffix "dev0": use `releaseVersion` as
-# fixed version. for TestPyPI uploads, keep the local `tag.devx` scheme
-if version.split(".dev")[-1] == "0":
-    versionKws = {"use_scm_version" : False, "version" : releaseVersion}
+# If code has not been obtained via `git` or we're inside the main branch,
+# use the hard-coded `releaseVersion` as version. Otherwise keep the local `tag.devx`
+# scheme for TestPyPI uploads
+proc = subprocess.run("git branch --show-current", shell=True, capture_output=True, text=True)
+if proc.returncode !=0 or proc.stdout.strip() == "main":
+    version = releaseVersion
+    versionKws = {"use_scm_version" : False, "version" : version}
 else:
+    version = get_version(root='.', relative_to=__file__, local_scheme="no-local-version")
     versionKws = {"use_scm_version" : {"local_scheme": "no-local-version"}}
 
 # Update citation file

@@ -4,13 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-CHANGELOG:
-## [Unreleased]
-### NEW
+## [2022.07] - 2022-07-06
+Bugfixes, new versioning scheme and updated dependencies.
+
 ### CHANGED
-### REMOVED
-### DEPRECATED
+- Modified versioning scheme: use date-based version tags instead of increasing
+  numbers
+- Updated `dask`, `dask-jobqueue` and `scipy` dependency requirements
+- Removed any mentions of "hpx" from the code after upgrading the main file-server
+  of the ESI cluster
+
 ### FIXED
+- Repaired broken FQDN detection in `is_esi_node`
 
 ## [0.21] - 2022-03-01
 Performance improvements, new `dryrun` keyword and preparations for deploying
