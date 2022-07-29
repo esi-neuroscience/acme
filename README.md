@@ -23,6 +23,8 @@ on the ESI HPC cluster (although other HPC infrastructure running SLURM can be
 leveraged as well). Local multi-processing hardware (i.e., multi-core CPUs)
 is fully supported too. ACME is itself used as the parallelization engine of [SyNCoPy](http://www.syncopy.org/).
 
+![](https://github.com/esi-neuroscience/acme/blob/main/doc/source/_static/acme_demo.gif)
+
 ## Installation
 
 ACME can be installed with `pip`
