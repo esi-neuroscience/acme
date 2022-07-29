@@ -27,7 +27,9 @@ Simple to advanced Usage examples our collected on our `GitHub Page <https://git
 User Guide
 ----------
 A more elaborate tour illustrating how to use ACME in various scenarios is
-provided in the :ref:`User Walkthrough <userguide>`.
+provided in the :doc:`User Walkthrough <userguide>`. A short intro for how to use
+ACME in your processing pipeline is provided in :doc:`Best Practices <best_practices>`.
+Things don't go as planned? Take a look at :doc:`Troubleshooting + FAQ <troubleshooting_faq>`.
 
 API Documentation
 -----------------
@@ -49,4 +51,6 @@ Navigation
    :hidden:
 
    quickstart
+   best_practices
+   troubleshooting_faq
    api

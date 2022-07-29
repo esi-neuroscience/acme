@@ -92,6 +92,5 @@ More Information
 ^^^^^^^^^^^^^^^^
 
 Details about optional arguments of :class:`~acme.ParallelMap` are summarized in
-its constructor :meth:`~acme.ParallelMap.__init__` method.
-Additional :class:`~acme.ParallelMap` usage examples are provided in the repository's
-`README <https://github.com/esi-neuroscience/acme#acme-asynchronous-computing-made-easy>`_.
+its constructor :meth:`~acme.ParallelMap.__init__` method. Additional usage examples
+and tutorials are provided in the :doc:`User Walkthrough <userguide>`.

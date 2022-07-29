@@ -83,6 +83,8 @@ with pmap as p:
 ### Advanced Use
 
 Allocate custom `client` object and recycle it for several computations
+(use `slurm_cluster_setup` on non-ESI HPC infrastructure or `local_cluster_setup`
+when working on your local machine)
 
 ```python
 import numpy as np
@@ -157,4 +159,4 @@ This way tools like `pdb` or ``%debug`` IPython magics can be used.
 To report bugs or ask questions please use our
 [GitHub issue tracker](https://github.com/esi-neuroscience/acme/issues).
 More usage details and background information is available in our
-[online documentation](https://esi-acme.readthedocs.io/en/latest/).
+[online documentation](https://esi-acme.readthedocs.io).
