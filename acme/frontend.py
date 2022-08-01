@@ -126,8 +126,8 @@ class ParallelMap(object):
             one of the input argument tuples prepared for the parallel workers (picked
             at random). If `setup_interactive` is `True`, a prompt asks if the
             actual parallel execution of `func` is supposed to be launched after the
-            dry-run. The `dryrun` keyword is intended to test the correct
-            distribution of arguments across workers prior to the actual concurrent
+            dry-run. The `dryrun` keyword is intended to to estimate memory consumption
+            as well as runtime of worker jobs prior to the actual concurrent
             computation.
         logfile : None or bool or str
             If `None` (default) or `False`, all run-time information as well as errors and

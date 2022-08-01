@@ -304,11 +304,8 @@ class ACMEdaemon(object):
         Execute user function with one prepared randomly picked args, kwargs combo
         """
 
-        # Randomly pick a scheduled job (`dryRunIdx`) and extract its prepared args and kwargs
-        dryRunIdx = np.random.choice(self.n_calls, size=1)[0]
-        dryRunArgs = [arg[dryRunIdx] if len(arg) > 1 else arg[0] for arg in self.argv]
-        dryRunKwargs = [{key:value[dryRunIdx] if len(value) > 1 else value[0] \
-            for key, value in self.kwargv.items()}][0]
+        # Let helper randomly pick a single scheduled job and prepare corresponding args + kwargs
+        dryRunIdx, dryRunArgs, dryRunKwargs = self._dryrun_setup(n_runs=1)
 
         # Create log entry
         msg = "Performing a single dry-run of {fname:s} simulating randomly " +\
@@ -351,6 +348,22 @@ class ACMEdaemon(object):
                 goOn = False
 
         return goOn
+
+    def _dryrun_setup(self, n_runs=None):
+        """
+        Pick scheduled job(s) at random and extract corresponding (already prepared!) args + kwargs
+        """
+
+        # If not provided, attempt to infer a "sane" default for the number of jobs to pick
+        if n_runs is None:
+            n_runs = min(self.n_calls, max(5, min(1, int(0.05 * self.n_calls))))
+
+        # Randomly pick `n_runs` jobs and extract positional and keyword args
+        dryRunIdx = np.random.choice(self.n_calls, size=n_runs)[0]
+        dryRunArgs = [arg[dryRunIdx] if len(arg) > 1 else arg[0] for arg in self.argv]
+        dryRunKwargs = [{key:value[dryRunIdx] if len(value) > 1 else value[0] \
+            for key, value in self.kwargv.items()}][0]
+        return dryRunIdx, dryRunArgs, dryRunKwargs
 
     def prepare_client(
         self,
@@ -462,20 +475,17 @@ class ACMEdaemon(object):
     def select_queue(self):
         """
         A brute-force guessing approach as to which SLURM queue best suits
-        a given work-load. Currently not used by `ACMEdaemon`.
+        a given work-load.
         """
-
-        # FIXME: Very much WIP - everyting below is just a scratchpad, nothing final yet
-        nSamples = min(self.n_calls, max(5, min(1, int(0.05*self.n_calls))))
-        dryRunInputs = np.random.choice(self.n_calls, size=nSamples, replace=False).tolist()
-
-        dryRun0 = dryRunInputs.pop()
-        args = [arg[dryRun0] for arg in self.argv]
-        kwargs = [{key:value[dryRun0] for key, value in self.kwargv.items()}][0]
 
         # use multi-processing module to launch `func` in background; terminate after
         # 60sec, get memory consumption, do this for all `dryRunInputs` -> pick
         # "shortest" queue w/appropriate memory (e.g., 16GBS, not 16GBXL)
+
+        proc = Process(target=self.acme_func, args=dryRunArgs, kwargs=dryRunKwargs)
+        mem0 = psutil.Process(proc.pid).memory_info().rss / 1024 ** 2 # estimate mem pressure every second?
+        time.sleep(60)
+
         tic = time.perf_counter()
         self.func(*args, **kwargs)
         toc = time.perf_counter()

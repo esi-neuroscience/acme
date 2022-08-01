@@ -229,9 +229,9 @@ which yields
 
     >>> results
     ['/cs/home/username/ACME_20201217-135011-448825/f_0.pickle',
-    '/cs/home/username/ACME_20201217-135011-448825/f_1.pickle',
-    '/cs/home/username/ACME_20201217-135011-448825/f_2.pickle',
-    '/cs/home/username/ACME_20201217-135011-448825/f_3.pickle']
+     '/cs/home/username/ACME_20201217-135011-448825/f_1.pickle',
+     '/cs/home/username/ACME_20201217-135011-448825/f_2.pickle',
+     '/cs/home/username/ACME_20201217-135011-448825/f_3.pickle']
 
 Debugging And Estimating Resource Consumption
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
