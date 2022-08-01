@@ -138,3 +138,28 @@ Then simply launching ``acme_script.py`` via iPython does the trick:
 .. code-block:: python
 
     >>> run acme_script.py
+
+**Note** Just like any regular Python module, ``my_func.py`` permits to define
+several distinct functions. This means, if, e.g., `func` requires additional helper
+routines, they can all be migrated to ``my_func.py``. For instance:
+
+``my_func.py``:
+
+.. code-block:: python
+
+    # -*- coding: utf-8 -*-
+    # My processing function
+
+    import numpy as np
+
+    def func(x, y, z=3):
+        help_here(...)
+        help_there(...)
+        return np.dot(x, y) + z
+
+    def help_here(...):
+        ...
+
+    def help_there(...):
+        ...
+

@@ -56,6 +56,12 @@ which yields
     >>> out
     array([18., 24., 30., 36.])
 
+**Note** The dataset name `'result_0'` stores the *first* return value of the
+user-provided function `f`. If `f` returns multiple quantities, analogously named
+datasets `'result_0'`, `'result_1'`, `'result_2'`, ... are automatically created
+in the constructed HDF5 container. See `Auto-Generated HDF5-Files`_
+for more details.
+
 Alternatively, results may be collected directly in memory by setting
 `write_worker_results` to `False`. This is **not** recommended, since
 values have to be gathered from compute nodes via ethernet (slow) and
@@ -227,8 +233,8 @@ which yields
     '/cs/home/username/ACME_20201217-135011-448825/f_2.pickle',
     '/cs/home/username/ACME_20201217-135011-448825/f_3.pickle']
 
-Debugging
-^^^^^^^^^
+Debugging And Estimating Resource Consumption
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Debugging programs running in parallel can be quite tricky.
 For instance, assume the function `f` is (erroneously) called with `z`
 set to `None`. In a regular sequential setting, identifying the problem
@@ -279,10 +285,11 @@ which results in
     ----> 2     return (x + y) * z
     TypeError: unsupported operand type(s) for *: 'int' and 'NoneType'
 
-In addition, the automatically generated argument distribution to user-provided
-functions can be tested via the `dryrun` keyword. This permits to test-drive
-ACME's automatically generated argument lists prior to the actual concurrent
-computation, e.g.,
+In addition, ACME can be used to estimate memory consumption as well as runtime
+of worker jobs *before* actually launching a full concurrent compute run. This
+functionality permits to get a (rough) estimate of resource requirements for queuing
+systems and it allows test-drive ACME's automatically generated argument lists
+prior to the actual concurrent computation. For instance,
 
 .. code-block:: python
 
