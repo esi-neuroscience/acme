@@ -51,6 +51,7 @@ Navigation
    :hidden:
 
    quickstart
+   userguide
    best_practices
    troubleshooting_faq
    api
