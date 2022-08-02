@@ -75,7 +75,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
         If `mem_per_job` is `None`, or `"auto"` it is attempted to infer a sane default value
         from the chosen partition, e.g., for ``partition = "8GBS"`` `mem_per_job` is
         automatically set to the allowed maximum of `'8GB'`. However, even in
-        queues with guaranted memory bookings, it is possible to allocate less
+        queues with guaranteed memory bookings, it is possible to allocate less
         memory than the allowed maximum per job to spawn numerous low-memory
         jobs. See Examples for details.
     n_jobs_startup : int
@@ -180,6 +180,20 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
     workers_per_job = 1
     if kwargs.get("workers_per_job") is not None:
         workers_per_job = kwargs.pop("workers_per_job")
+
+    # If partition is "auto" use `mem_per_job` to pick pseudo-optimal partition
+    # Note: the `np.where` gymnastic below is necessary since `argmin` refuses
+    # to return multiple matches; if `mem_per_job` is 12, then ``memDiff = [4, 4, ...]``,
+    # however, 8GB won't fit a 12GB job, so we have to pick the second match 16GB
+    if isinstance(partition, str) and partition == "auto":
+        customPrint("{}Automatically selecting SLURM partition...".format(funcName))
+        availPartitions = _get_slurm_partitions(funcName)
+        gbQueues = np.unique([int(queue.split("GB")[0]) for queue in availPartitions if queue[0].isdigit()])
+        memDiff = np.abs(gbQueues - mem_per_job)
+        queueIdx = np.where(memDiff == memDiff.min())[0][-1]
+        partition = "{}GBXS".format(gbQueues[queueIdx])
+        msg = "{preamble:s}Picked partition {p:s} based on estimated memory consumption of {m:s} GB"
+        customPrint(msg.format(preamble=funcName, p=partition, m=mem_per_job))
 
     # Extract by-job CPU core count from anonymous keyword args or...
     if kwargs.get("n_cores") is not None:
@@ -296,25 +310,11 @@ def slurm_cluster_setup(partition, n_cores, n_jobs, workers_per_job, mem_per_job
                                                  name=inspect.currentframe().f_code.co_name)
 
     # Retrieve all partitions currently available in SLURM
-    proc = subprocess.Popen("sinfo -h -o %P",
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, shell=True)
-    out, err = proc.communicate()
-
-    # Any non-zero return-code means SLURM is not ready to use
-    if proc.returncode != 0:
-        msg = "{preamble:s}SLURM queuing system from node {node:s}. " +\
-              "Original error message below:\n{error:s}"
-        raise customIOError(msg.format(preamble=funcName + " Cannot access " if not isSpyModule else "",
-                                       node=socket.gethostname(),
-                                       error=err))
-
-    # Format subprocess shell output
-    options = out.split()
+    availPartitions = _get_slurm_partitions(funcName)
 
     # Make sure we're in a valid partition
-    if partition not in options:
-        valid = list(set(options).difference(invalid_partitions))
+    if partition not in availPartitions:
+        valid = list(set(availPartitions).difference(invalid_partitions))
         lgl = "'" + "or '".join(opt + "' " for opt in valid)
         msg = "{} Invalid partition selection {}, available SLURM partitions are {}"
         raise customValueError(legal=lgl if isSpyModule else msg.format(funcName, str(partition), lgl),
@@ -508,6 +508,29 @@ def slurm_cluster_setup(partition, n_cores, n_jobs, workers_per_job, mem_per_job
     if start_client:
         return Client(cluster)
     return cluster
+
+
+def _get_slurm_partitions(funcName):
+    """
+    Coming soon...
+    """
+
+    # Retrieve all partitions currently available in SLURM
+    proc = subprocess.Popen("sinfo -h -o %P",
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, shell=True)
+    out, err = proc.communicate()
+
+    # Any non-zero return-code means SLURM is not ready to use
+    if proc.returncode != 0:
+        msg = "{preamble:s}SLURM queuing system from node {node:s}. " +\
+              "Original error message below:\n{error:s}"
+        raise customIOError(msg.format(preamble=funcName + " Cannot access " if not isSpyModule else "",
+                                       node=socket.gethostname(),
+                                       error=err))
+
+    # Return formatted subprocess shell output
+    return out.split()
 
 
 def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, interactive_wait):

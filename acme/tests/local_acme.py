@@ -19,6 +19,16 @@ from acme import ParallelMap
 def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
     return (sum(x) + y) * z * w.max()
 
+import time
+
+def g(x, y, z=3):
+    fSize = np.dtype("float").itemsize
+    arrSize = 4
+    time.sleep(10)
+    arr = np.ones((int(arrSize * 1024**3 / fSize), ))
+    time.sleep(300)
+    return (sum(x) + y) * z * arr.max()
+
 
 # Prepare code to be executed using, e.g., iPython's `%run` magic command
 if __name__ == "__main__":
@@ -26,8 +36,10 @@ if __name__ == "__main__":
     # Test stuff within here...
     # pass
 
-    pmap = ParallelMap(f, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2, dryrun=True)
-    with pmap as p:
-        p.compute()
+    pmap = ParallelMap(g, np.arange(100), 2)
+    pmap.daemon.estimate_memuse()
+
+    # with pmap as p:
+    #     p.compute()
 
 

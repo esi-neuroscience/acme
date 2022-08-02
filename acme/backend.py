@@ -18,6 +18,7 @@ import shutil
 import pickle
 import logging
 import functools
+import multiprocessing
 import psutil
 import tqdm
 import h5py
@@ -305,7 +306,7 @@ class ACMEdaemon(object):
         """
 
         # Let helper randomly pick a single scheduled job and prepare corresponding args + kwargs
-        dryRunIdx, dryRunArgs, dryRunKwargs = self._dryrun_setup(n_runs=1)
+        [dryRunIdx], [dryRunArgs], [dryRunKwargs] = self._dryrun_setup(n_runs=1)
 
         # Create log entry
         msg = "Performing a single dry-run of {fname:s} simulating randomly " +\
@@ -359,10 +360,13 @@ class ACMEdaemon(object):
             n_runs = min(self.n_calls, max(5, min(1, int(0.05 * self.n_calls))))
 
         # Randomly pick `n_runs` jobs and extract positional and keyword args
-        dryRunIdx = np.random.choice(self.n_calls, size=n_runs)[0]
-        dryRunArgs = [arg[dryRunIdx] if len(arg) > 1 else arg[0] for arg in self.argv]
-        dryRunKwargs = [{key:value[dryRunIdx] if len(value) > 1 else value[0] \
-            for key, value in self.kwargv.items()}][0]
+        dryRunIdx = np.random.choice(self.n_calls, size=n_runs, replace=False)
+        dryRunArgs = []
+        dryRunKwargs = []
+        for idx in dryRunIdx:
+            dryRunArgs.append([arg[idx] if len(arg) > 1 else arg[0] for arg in self.argv])
+            dryRunKwargs.append([{key:value[idx] if len(value) > 1 else value[0] \
+                for key, value in self.kwargv.items()}][0])
         return dryRunIdx, dryRunArgs, dryRunKwargs
 
     def prepare_client(
@@ -413,30 +417,27 @@ class ACMEdaemon(object):
 
         else:
 
-            # If `partition` is "auto", use `select_queue` to heuristically determine
-            # the "best" SLURM queue
+            # If `partition` is "auto", use `estimate_memuse` to heuristically determine
+            # average memory consumption of jobs
             if not isinstance(partition, str):
                 msg = "{} `partition` has to be 'auto' or a valid SLURM partition name, not {}"
                 raise TypeError(msg.format(self.msgName, str(partition)))
             if partition == "auto":
                 if is_esi_node():
-                    msg = "Automatic SLURM queueing selection not implemented yet. " +\
-                        "Falling back on default '8GBXS' partition. "
+                    msg = "Automatic SLURM partition selection is experimental"
                     self.log.warning(msg)
-                    partition = "8GBXS"
-                # self.select_queue()
+                    mem_per_job = self.estimate_memuse()
+                else:
+                    err = "Automatic SLURM partition selection currently only available " +\
+                        "on the ESI HPC cluster. "
+                    self.log.error(err)
 
-            # Either use `n_jobs = n_calls` (default) or parse provided value
+            # If `n_jobs` is `"auto`, set `n_jobs = n_calls` (default)
             msg = "{} `n_jobs` has to be 'auto' or an integer >= 2, not {}"
             if isinstance(n_jobs, str):
                 if n_jobs != "auto":
                     raise ValueError(msg.format(self.msgName, n_jobs))
                 n_jobs = self.n_calls
-            else:
-                try:
-                    acs._scalar_parser(n_jobs, varname="n_jobs", ntype="int_like", lims=[2, np.inf])
-                except Exception as exc:
-                    raise exc
 
             # All set, remaining input processing is done by respective `*_cluster_setup` routines
             if is_esi_node():
@@ -472,26 +473,68 @@ class ACMEdaemon(object):
         # Set `n_jobs` to no. of active workers in the initialized cluster
         self.n_jobs = len(self.client.cluster.workers)
 
-    def select_queue(self):
+    def estimate_memuse(self):
         """
-        A brute-force guessing approach as to which SLURM queue best suits
-        a given work-load.
+        A brute-force guessing approach to determine memory consumption of provided
+        workload
         """
 
-        # use multi-processing module to launch `func` in background; terminate after
-        # 60sec, get memory consumption, do this for all `dryRunInputs` -> pick
-        # "shortest" queue w/appropriate memory (e.g., 16GBS, not 16GBXL)
+        # Let helper randomly pick some jobs and prepare corresponding args + kwargs
+        dryRunIdx, dryRunArgs, dryRunKwargs = self._dryrun_setup()
 
-        proc = Process(target=self.acme_func, args=dryRunArgs, kwargs=dryRunKwargs)
-        mem0 = psutil.Process(proc.pid).memory_info().rss / 1024 ** 2 # estimate mem pressure every second?
-        time.sleep(60)
+        # Set run-time for each job (in seconds) and allocate arrays for memory
+        # consumption estimates (in GB)
+        runTime = 30
+        memPerSec = np.zeros((runTime,))
+        memPerJob = np.zeros((len(dryRunIdx),))
 
-        tic = time.perf_counter()
-        self.func(*args, **kwargs)
-        toc = time.perf_counter()
+        # Check if auto-generated output files have to be removed
+        rmOutDir = False
+        if "outDir" in self.kwargv.keys():
+            rmOutDir = True
 
-        # argBag = [[arg[k] for arg in self.argv] for k in range(self.n_calls)]
-        # kwargBag = [{key:value[k] for key, value in self.kwargv.items()} for k in range(self.n_calls)]
+        # Adequately warn about this heuristic gymnastics...
+        msg = "Estimating memory consumption of {fname:s} by running {numwrks:d} " +\
+            "random workers for {rtime:d} seconds..."
+        self.log.info(msg.format(fname=self.func.__name__, numwrks=len(dryRunIdx), rtime=runTime))
+        wmsg = "Launching worker #{wrknum:d}"
+
+        for i, idx in enumerate(dryRunIdx):
+
+            # Set up dedicated process to execute user-provided function w/allocated args/kwargs
+            proc = multiprocessing.Process(target=self.acme_func,
+                                           args=dryRunArgs[i],
+                                           kwargs=dryRunKwargs[i])
+
+            # Run user-func for `runTime` seconds, get memory footprint every second
+            proc.start()
+            with tqdm.tqdm(desc=wmsg.format(wrknum=idx),
+                           total=runTime,
+                           bar_format=self.tqdmFormat,
+                           position=0) as pbar:
+                for k in range(runTime):
+                    memPerSec[k] = psutil.Process(proc.pid).memory_info().rss / 1024 ** 3
+                    time.sleep(1)
+                    pbar.update(1)
+            proc.kill()
+
+            # Compute peak memory consumption across `runTime` seconds
+            memPerJob[i] = memPerSec.max()
+
+            # Remove auto-generated files (if any were created within `runTime` seconds)
+            if rmOutDir:
+                fname = os.path.join(self.kwargv["outDir"][idx], self.kwargv["outFile"][idx])
+                if os.path.isfile(fname):
+                    os.unlink(fname)
+
+        # Compute aggregate average memory consumption across all runs
+        memUsage = memPerJob.mean()
+
+        # Communicate results
+        msg = "Estimated memory consumption across {numwrks:d} runs is {memuse:3.2f} GB "
+        self.log.info(msg.format(numwrks=len(dryRunIdx), memuse=memUsage))
+
+        return max(1, int(round(memUsage)))
 
     def compute(self, debug=False):
         """
