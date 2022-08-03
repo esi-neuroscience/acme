@@ -534,7 +534,7 @@ class ACMEdaemon(object):
         msg = "Estimated memory consumption across {numwrks:d} runs is {memuse:3.2f} GB "
         self.log.info(msg.format(numwrks=len(dryRunIdx), memuse=memUsage))
 
-        return max(1, int(round(memUsage)))
+        return "estimate_memuse:" + str(max(1, int(round(memUsage))))
 
     def compute(self, debug=False):
         """
