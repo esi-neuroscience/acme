@@ -86,9 +86,10 @@ class ParallelMap(object):
             Name of SLURM partition to use. If `"auto"` (default), the memory footprint
             of `func` is estimated using dry-run stubs based on randomly sampling
             provided `args` and `kwargs`. Estimated memory usage dictates queue
-            auto-selection under the assumption of short run-times. For instance, on
-            the ESI cluster a predicted memory footprint of 6 GB causes the `"8GBXS"`
-            queue to be selected (minimal but sufficient memory and shortest runtime).
+            auto-selection under the assumption of short run-times (**currently only
+            supported on the ESI HPC cluster**). For instance, on a predicted memory
+            footprint of 6 GB causes the `"8GBXS"` partition to be selected (minimal
+            but sufficient memory and shortest runtime).
             To override auto-selection, provide name of SLURM queue explicitly. See, e.g.,
             :func:`~acme.esi_cluster_setup` for details.
         n_jobs : int or "auto"

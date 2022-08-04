@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2022.8] - 2022-08-05
+Bugfixes, new automatic ESI-HPC SLURM partition selection, expanded Python version
+compatibility and updated dependencies as well as online documentation overhaul.
+
+### NEW
+- On the ESI HPC cluster, using `partition="auto"` in `ParallelMap` now launches
+  a heuristic  automatic SLURM partition selection algorithm (instead of simply
+  falling back to the "8GBXS" partition)
+
+### CHANGED
+- Updated package dependencies (allow `h5py` ver 3.x) and expanded support for
+  recent Python versions (include 3.9)
+- Restructured and expanded online documentation based on suggestions from @naehert:
+  moved most examples and usage notes from `ParallelMap`'s docstring to dedicated
+  docu pages and added new "Troubleshooting + FAQ" site.
+
+### FIXED
+- Repeated `ParallelMap` calls ignored differing `logfile` specifications. This
+  has been corrected. In addition, the logging setup routine now ensures that only
+  one `FileHandler` is used (any existing non-default log-file locations are
+  removed from the logger to avoid generating multiple logs and/or accidentally
+  appending to existing logs from previous runs).
+
+
+### CHANGED
+- Modified versioning scheme: use date-based version tags instead of increasing
+
 ## [2022.7] - 2022-07-06
 Bugfixes, new versioning scheme and updated dependencies.
 
