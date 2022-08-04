@@ -186,7 +186,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
     # to return multiple matches; if `mem_per_job` is 12, then ``memDiff = [4, 4, ...]``,
     # however, 8GB won't fit a 12GB job, so we have to pick the second match 16GB
     if isinstance(partition, str) and partition == "auto":
-        if not isinstance(mem_per_job, str) and mem_per_job.find("estimate_memuse:") < 0:
+        if not isinstance(mem_per_job, str) or mem_per_job.find("estimate_memuse:") < 0:
             msg = "{preamble:s}automatic partition selector without first invoking `ParallelMap`. "
             raise customIOError(msg.format(preamble=funcName + " Cannot access " if not isSpyModule else ""))
         memEstimate = int(mem_per_job.replace("estimate_memuse:" ,""))
@@ -197,7 +197,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
         memDiff = np.abs(gbQueues - memEstimate)
         queueIdx = np.where(memDiff == memDiff.min())[0][-1]
         partition = "{}GBXS".format(gbQueues[queueIdx])
-        msg = "{preamble:s}Picked partition {p:s} based on estimated memory consumption of {m:s} GB"
+        msg = "{preamble:s}Picked partition {p:s} based on estimated memory consumption of {m:d} GB"
         customPrint(msg.format(preamble=funcName, p=partition, m=memEstimate))
 
     # Extract by-job CPU core count from anonymous keyword args or...
