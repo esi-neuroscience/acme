@@ -25,7 +25,7 @@ from scipy import signal
 # Import main actors here
 from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
 from acme.dask_helpers import customIOError
-from acme.shared import is_slurm_node
+from acme.shared import is_slurm_node, is_esi_node
 
 # Construct decorators for skipping certain tests
 skip_if_not_linux = pytest.mark.skipif(sys.platform != "linux", reason="Only works in Linux")
@@ -63,9 +63,19 @@ def pickle_func(arr, b, a, channel_no, sabotage_hdf5=False):
             return {"b" : b}
     return res
 
+def memtest_func(x, y, z=3, arrsize=2, sleeper=300):
+    fSize = np.dtype("float").itemsize
+    time.sleep(2)
+    arr = np.ones((int(arrsize * 1024**3 / fSize), ))   # `arrsize` denotes array size in GB
+    time.sleep(sleeper)
+    return (x + y) * z * arr.max()
+
 
 # Perform SLURM-specific tests only on cluster nodes
 useSLURM = is_slurm_node()
+
+# Perform ESI-specific tests only the ESI HPC cluster
+onESI = is_esi_node()
 
 # Main testing class
 class TestParallelMap():
@@ -291,10 +301,11 @@ class TestParallelMap():
         time.sleep(1.0)
 
         # Same, but use custom log-file
-        for handler in pmap.log.handlers:
-            if isinstance(handler, logging.FileHandler):
-                pmap.log.handlers.remove(handler)
-        customLog = os.path.join(tempDir, "acme_log.txt")
+        # FIXME!!!!!!!!
+        # for handler in pmap.log.handlers:
+        #     if isinstance(handler, logging.FileHandler):
+        #         pmap.log.handlers.remove(handler)
+        # customLog = os.path.join(tempDir, "acme_log.txt")
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
@@ -623,6 +634,152 @@ class TestParallelMap():
         outDir = pmap.kwargv["outDir"][0]
         assert os.path.exists(outDir) is False
 
+    def test_memest(self):
+
+        # Create tmp directory for logfile
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
+        os.makedirs(tempDir, exist_ok=True)
+        customLog = os.path.join(tempDir, "acme_log.txt")
+        outDirs = []
+
+        # Prepare `ParallelMap` instance for 2 concurrent calls of `memtest_func`:
+        # a 2GB array is allocated, set final sleep wait period to 2 seconds, so
+        # total runtime of the function should be b/w 5-10 seconds (depending on how long
+        # array allocation takes)
+        pmap = ParallelMap(memtest_func,
+                           np.arange(2),
+                           2,
+                           sleeper=2,
+                           arrsize=2,
+                           logfile=customLog,
+                           setup_interactive=False)
+
+        # If executed locally, the above call did not invoke `estimate_memuse` since
+        # there's no partition to choose
+        if not useSLURM:
+
+            # Fire off `estimate_memuse` manually
+            tic = time.perf_counter()
+            memEst = pmap.daemon.estimate_memuse()
+            toc = time.perf_counter()
+
+            # Ensure 2GB array allocation was profiled correctly
+            assert memEst == "estimate_memuse:2"
+
+            # Ensure profiler quit out early (since total runtime of `memtest_func` is below 30s)
+            assert toc - tic < 30
+
+        # Check that for 2 parallel calls only 2 workers were memory-profiled
+        with open(customLog, "r", encoding="utf8") as f:
+            logTxt = f.read()
+        assert "Estimated memory consumption across 2 runs" in logTxt
+
+        # If running on the ESI cluster, ensure the correct partition has been picked
+        if onESI:
+            assert "Picked partition 8GBXS based on estimated memory consumption of 2 GB" in logTxt
+
+        # Profiling completed full run of `memtest_func`: ensure any auto-created
+        # output HDF5 files were removed
+        outDirs.append(pmap.kwargv["outDir"][0])
+        assert len(os.listdir(outDirs[0])) == 0
+
+        # Now prepare `ParallelMap` instance for 100 concurrent calls of `memtest_func`:
+        # again a 2GB array is allocated, but set final sleep to 5 minutes, enforcing
+        # abort of profiling runs (set `setup_interactive` low to not have 100
+        # SLURM workers being actually started)
+        del pmap
+        cluster_cleanup()
+        customLog2 = os.path.join(tempDir, "acme_log2.txt")
+        pmap = ParallelMap(memtest_func,
+                           np.arange(100),
+                           2,
+                           sleeper=300,
+                           arrsize=2,
+                           logfile=customLog2,
+                           setup_timeout=10,
+                           setup_interactive=False)
+
+        # Again, fire off `estimate_memuse` manually if tests are run locally
+        if not useSLURM:
+            tic = time.perf_counter()
+            memEst = pmap.daemon.estimate_memuse()
+            toc = time.perf_counter()
+
+            # Ensure 2GB array allocation was profiled correctly
+            assert memEst == "estimate_memuse:2"
+
+            # Ensure profiler went the whole mile (since total runtime of `memtest_func` > 5 min)
+            assert 140 < toc - tic < 200
+
+        # Check that for max 5 workers were memory-profiled
+        with open(customLog2, "r", encoding="utf8") as f:
+            logTxt = f.read()
+        assert "Estimated memory consumption across 5 runs" in logTxt
+
+        # If running on the ESI cluster, ensure the correct partition has been picked (again)
+        if onESI:
+            assert "Picked partition 8GBXS based on estimated memory consumption of 2 GB" in logTxt
+
+        # Profiling should not have generated any output
+        outDirs.append(pmap.kwargv["outDir"][0])
+        assert len(os.listdir(outDirs[0])) == 0
+
+        # Prepare final "full" tests
+        del pmap
+        cluster_cleanup()
+        customLog3 = os.path.join(tempDir, "acme_log3.txt")
+
+        # Assert that `partition="auto"` has no effect in `LocalCluster` case
+        if not useSLURM:
+            with ParallelMap(memtest_func,
+                             np.arange(2),
+                             2,
+                             sleeper=2,
+                             arrsize=2,
+                             logfile=customLog3) as pmap:
+                pmap.compute()
+            with open(customLog3, "r", encoding="utf8") as f:
+                logTxt = f.read()
+            assert "Estimating memory consumption" not in logTxt
+            outDirs.append(pmap.kwargv["outDir"][0])
+
+        else:
+
+            # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`
+            # with `mem_per_job='esstimate_memuse:XY'`
+            client = esi_cluster_setup(partition="auto", mem_per_job="estimate_memuse:12", n_jobs=1)
+
+            # Ensure the right partition was picked (16GBXY, not 8GBXY)
+            assert "16GB" in client.cluster.job_header.split("-p ")[1].split("\n")[0]
+
+            # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_job!
+            with pytest.raises(customIOError):
+                esi_cluster_setup(partition="auto", mem_per_job="invalid")
+            cluster_cleanup(client)
+
+            # Full run (finally) w/10 workers, 5 of em get mem-profiled
+            with ParallelMap(memtest_func,
+                             np.arange(10),
+                             2,
+                             sleeper=35,
+                             arrsize=2,
+                             partition="auto",
+                             logfile=customLog3,
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+
+            # Check correct partition and no. of workers profiled
+            with open(customLog3, "r", encoding="utf8") as f:
+                logTxt = f.read()
+            assert "Estimated memory consumption across 5 runs" in logTxt
+            assert "Picked partition 8GBXS" in logTxt
+
+        # Clean up
+        shutil.rmtree(tempDir, ignore_errors=True)
+        for folder in outDirs:
+            shutil.rmtree(folder, ignore_errors=True)
+        time.sleep(0.1)
+
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):
 
@@ -666,8 +823,8 @@ class TestParallelMap():
         else:
             client = esi_cluster_setup(n_jobs=6, interactive=False)
 
-        # Re-run tests with pre-allocated client (except for `test_cancel` and `test_dryrun`)
-        skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun"]
+        # Re-run tests with pre-allocated client (except for those in `skipTests`)
+        skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun", "test_memest"]
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:

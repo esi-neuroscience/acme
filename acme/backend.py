@@ -495,7 +495,7 @@ class ACMEdaemon(object):
 
         # Adequately warn about this heuristic gymnastics...
         msg = "Estimating memory consumption of {fname:s} by running {numwrks:d} " +\
-            "random workers for {rtime:d} seconds..."
+            "random workers for max. {rtime:d} seconds..."
         self.log.info(msg.format(fname=self.func.__name__, numwrks=len(dryRunIdx), rtime=runTime))
         wmsg = "Launching worker #{wrknum:d}"
 
@@ -506,7 +506,8 @@ class ACMEdaemon(object):
                                            args=dryRunArgs[i],
                                            kwargs=dryRunKwargs[i])
 
-            # Run user-func for `runTime` seconds, get memory footprint every second
+            # Run user-func for max. `runTime` seconds (or worker finishes),
+            # get memory footprint every second
             proc.start()
             with tqdm.tqdm(desc=wmsg.format(wrknum=idx),
                            total=runTime,
@@ -516,6 +517,9 @@ class ACMEdaemon(object):
                     memPerSec[k] = psutil.Process(proc.pid).memory_info().rss / 1024 ** 3
                     time.sleep(1)
                     pbar.update(1)
+                    if not proc.is_alive():
+                        pbar.n = runTime
+                        break
             proc.kill()
 
             # Compute peak memory consumption across `runTime` seconds
