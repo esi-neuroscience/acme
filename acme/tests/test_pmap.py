@@ -516,7 +516,7 @@ class TestParallelMap():
             "   time.sleep(10)\n" +\
             "   return\n" +\
             "if __name__ == '__main__':\n" +\
-            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False) as pmap: \n" +\
+            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, partition='8GBXS', write_worker_results=False) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
         with open(scriptName, "w") as f:
