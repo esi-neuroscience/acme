@@ -291,14 +291,22 @@ def prepare_log(func, caller=None, logfile=False, verbose=None):
     formatter = logging.Formatter("%(name)s %(levelname)s: %(message)s")
 
     # Output handlers: print log messages to `stderr` via `StreamHandler` as well
-    # as to a provided text file `logfile using a `FileHandler`
+    # as to a provided text file `logfile using a `FileHandler`.
+    # Note: avoid adding the same log-file location as distinct handlers to the logger
+    # in case `ParallelMap` is executed repeatedly; also remove existing non-default
+    # logfile handlers to avoid generating multiple logs (and accidental writes to existing logs)
     if len(log.handlers) == 0:
         stdoutHandler = logging.StreamHandler()
         stdoutHandler.setLevel(loglevel)
         stdoutHandler.setFormatter(formatter)
         log.addHandler(stdoutHandler)
-    if logfile is not None and \
-        all(not isinstance(handler, logging.FileHandler) for handler in log.handlers):
+    if logfile is not None:
+        fHandlers = [h for h in log.handlers if isinstance(h, logging.FileHandler)]
+        for handler in fHandlers:
+            if handler.baseFilename == logfile:
+                break
+            else:
+                log.handlers.remove(handler)
         fileHandler = logging.FileHandler(logfile)
         fileHandler.setLevel(loglevel)
         fileHandler.setFormatter(formatter)

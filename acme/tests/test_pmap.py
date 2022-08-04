@@ -319,6 +319,9 @@ class TestParallelMap():
         with open(customLog, "r") as fl:
             assert len(fl.readlines()) > 1
 
+        # Ensure only single log file `customLog` is used
+        assert len([h for h in pmap.log.handlers if isinstance(h, logging.FileHandler)]) == 1
+
         # Ensure client has been stopped
         if not existingClient:
             with pytest.raises(ValueError):
