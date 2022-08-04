@@ -301,10 +301,6 @@ class TestParallelMap():
         time.sleep(1.0)
 
         # Same, but use custom log-file
-        # FIXME!!!!!!!!
-        # for handler in pmap.log.handlers:
-        #     if isinstance(handler, logging.FileHandler):
-        #         pmap.log.handlers.remove(handler)
         customLog = os.path.join(tempDir, "acme_log.txt")
         with ParallelMap(lowpass_simple,
                          sigName,

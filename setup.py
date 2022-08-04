@@ -3,6 +3,7 @@ import datetime
 from setuptools import setup
 from setuptools.config.setupcfg import read_configuration
 import subprocess
+import toml
 
 # External packages
 import yaml
@@ -11,10 +12,11 @@ from setuptools_scm import get_version
 # Set release version by hand
 releaseVersion = "2022.8"
 
-# Read dependencies from setup.cfg and create conda environment file
+# Read dependencies from setup.cfg + pyproject.toml and create conda environment file
 envFile = "acme.yml"
 setupOpts = read_configuration("setup.cfg")["options"]
-allPkgs = setupOpts["install_requires"] + setupOpts["extras_require"]["dev"]
+tomlPkgs = toml.load("pyproject.toml")["build-system"]["requires"]
+allPkgs = setupOpts["install_requires"] + setupOpts["extras_require"]["dev"] + tomlPkgs
 pipPkgs = ["dask-jobqueue", "sphinx_automodapi"]
 for k in range(len(pipPkgs)):
     pkg = pipPkgs[k]
