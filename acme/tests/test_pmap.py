@@ -305,7 +305,7 @@ class TestParallelMap():
         # for handler in pmap.log.handlers:
         #     if isinstance(handler, logging.FileHandler):
         #         pmap.log.handlers.remove(handler)
-        # customLog = os.path.join(tempDir, "acme_log.txt")
+        customLog = os.path.join(tempDir, "acme_log.txt")
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
@@ -639,6 +639,9 @@ class TestParallelMap():
 
     def test_memest(self):
 
+        # First kill any existing client (otherwise profiling is not happening)
+        cluster_cleanup()
+
         # Create tmp directory for logfile
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
         os.makedirs(tempDir, exist_ok=True)
@@ -776,6 +779,7 @@ class TestParallelMap():
                 logTxt = f.read()
             assert "Estimated memory consumption across 5 runs" in logTxt
             assert "Picked partition 8GBXS" in logTxt
+            outDirs.append(pmap.kwargv["outDir"][0])
 
         # Clean up
         shutil.rmtree(tempDir, ignore_errors=True)
