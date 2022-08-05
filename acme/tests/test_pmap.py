@@ -665,8 +665,9 @@ class TestParallelMap():
             memEst = pmap.daemon.estimate_memuse()
             toc = time.perf_counter()
 
-            # Ensure 2GB array allocation was profiled correctly
-            assert memEst == "estimate_memuse:2"
+            # Ensure 2.12GB array allocation was profiled correctly (2.x GB are rounded
+            # upwards towards the next integer, i.e., 2.13 GB -> estimate_memuse:3)
+            assert memEst == "estimate_memuse:" + str(3 - (sys.platform == "darwin"))
 
             # Ensure profiler quit out early (since total runtime of `memtest_func` is below 30s)
             assert toc - tic < 30
@@ -677,7 +678,7 @@ class TestParallelMap():
         assert "Estimated memory consumption across 2 runs" in logTxt
 
         # If running on the ESI cluster, ensure the correct partition has been picked
-        if onESI:
+        if onESI and useSLURM:
             assert "Picked partition 8GBXS based on estimated memory consumption of 2 GB" in logTxt
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
@@ -707,8 +708,8 @@ class TestParallelMap():
             memEst = pmap.daemon.estimate_memuse()
             toc = time.perf_counter()
 
-            # Ensure 2GB array allocation was profiled correctly
-            assert memEst == "estimate_memuse:2"
+            # Ensure 2.12GB array allocation was profiled correctly
+            assert memEst == "estimate_memuse:" + str(3 - (sys.platform == "darwin"))
 
             # Ensure profiler went the whole mile (since total runtime of `memtest_func` > 5 min)
             assert 140 < toc - tic < 200
@@ -719,7 +720,7 @@ class TestParallelMap():
         assert "Estimated memory consumption across 5 runs" in logTxt
 
         # If running on the ESI cluster, ensure the correct partition has been picked (again)
-        if onESI:
+        if onESI and useSLURM:
             assert "Picked partition 8GBXS based on estimated memory consumption of 2 GB" in logTxt
 
         # Profiling should not have generated any output
