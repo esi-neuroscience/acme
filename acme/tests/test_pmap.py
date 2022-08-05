@@ -6,6 +6,7 @@
 # Builtin/3rd party package imports
 import os
 import sys
+import platform
 import pickle
 import shutil
 import inspect
@@ -510,12 +511,13 @@ class TestParallelMap():
         # Prepare ad-hoc script for execution in new process
         scriptName = os.path.join(tempDir, "dummy.py")
         scriptContents = \
-            "from acme import ParallelMap\n" +\
+            "from acme import ParallelMap, cluster_cleanup()\n" +\
             "import time\n" +\
             "def long_running(dummy):\n" +\
             "   time.sleep(10)\n" +\
             "   return\n" +\
             "if __name__ == '__main__':\n" +\
+            "   cluster_cleanup() \n" +\
             "   with ParallelMap(long_running, [None]*2, setup_interactive=False, partition='8GBXS', write_worker_results=False) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
@@ -644,6 +646,11 @@ class TestParallelMap():
         customLog = os.path.join(tempDir, "acme_log.txt")
         outDirs = []
 
+        # Set `arrsize` depending on available runner hardware
+        arrsize = 2
+        if platform.machine() == "ppc64le":
+            arrsize = 0.5
+
         # Prepare `ParallelMap` instance for 2 concurrent calls of `memtest_func`:
         # a 2GB array is allocated, set final sleep wait period to 2 seconds, so
         # total runtime of the function should be b/w 5-10 seconds (depending on how long
@@ -652,7 +659,7 @@ class TestParallelMap():
                            np.arange(2),
                            2,
                            sleeper=2,
-                           arrsize=2,
+                           arrsize=arrsize,
                            logfile=customLog,
                            setup_interactive=False)
 
@@ -679,7 +686,7 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked
         if onESI and useSLURM:
-            assert "Picked partition 8GBXS based on estimated memory consumption of 2 GB" in logTxt
+            assert "Picked partition 8GBXS based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
         # output HDF5 files were removed
@@ -697,7 +704,7 @@ class TestParallelMap():
                            np.arange(100),
                            2,
                            sleeper=300,
-                           arrsize=2,
+                           arrsize=arrsize,
                            logfile=customLog2,
                            setup_timeout=10,
                            setup_interactive=False)
@@ -721,7 +728,7 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked (again)
         if onESI and useSLURM:
-            assert "Picked partition 8GBXS based on estimated memory consumption of 2 GB" in logTxt
+            assert "Picked partition 8GBXS based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling should not have generated any output
         outDirs.append(pmap.kwargv["outDir"][0])
@@ -738,7 +745,7 @@ class TestParallelMap():
                              np.arange(2),
                              2,
                              sleeper=2,
-                             arrsize=2,
+                             arrsize=arrsize,
                              logfile=customLog3) as pmap:
                 pmap.compute()
             with open(customLog3, "r", encoding="utf8") as f:
@@ -765,7 +772,7 @@ class TestParallelMap():
                              np.arange(10),
                              2,
                              sleeper=35,
-                             arrsize=2,
+                             arrsize=arrsize,
                              partition="auto",
                              logfile=customLog3,
                              setup_interactive=False) as pmap:
