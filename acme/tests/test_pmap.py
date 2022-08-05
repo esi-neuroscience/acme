@@ -511,7 +511,7 @@ class TestParallelMap():
         # Prepare ad-hoc script for execution in new process
         scriptName = os.path.join(tempDir, "dummy.py")
         scriptContents = \
-            "from acme import ParallelMap, cluster_cleanup()\n" +\
+            "from acme import ParallelMap, cluster_cleanup\n" +\
             "import time\n" +\
             "def long_running(dummy):\n" +\
             "   time.sleep(10)\n" +\
