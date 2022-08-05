@@ -646,10 +646,16 @@ class TestParallelMap():
         customLog = os.path.join(tempDir, "acme_log.txt")
         outDirs = []
 
-        # Set `arrsize` depending on available runner hardware
+        # Set `arrsize` depending on available runner hardware and prepare expected
+        # mem estimates accordingly
         arrsize = 2
         if platform.machine() == "ppc64le":
             arrsize = 0.5
+        estMem = 3
+        if sys.platform == "darwin":
+            estMem = 2
+        if platform.machine() == "ppc64le":
+            estMem = 1
 
         # Prepare `ParallelMap` instance for 2 concurrent calls of `memtest_func`:
         # a 2GB array is allocated, set final sleep wait period to 2 seconds, so
@@ -674,7 +680,7 @@ class TestParallelMap():
 
             # Ensure 2.12GB array allocation was profiled correctly (2.x GB are rounded
             # upwards towards the next integer, i.e., 2.13 GB -> estimate_memuse:3)
-            assert memEst == "estimate_memuse:" + str(3 - (sys.platform == "darwin"))
+            assert memEst == "estimate_memuse:" + str(estMem)
 
             # Ensure profiler quit out early (since total runtime of `memtest_func` is below 30s)
             assert toc - tic < 30
@@ -716,7 +722,7 @@ class TestParallelMap():
             toc = time.perf_counter()
 
             # Ensure 2.12GB array allocation was profiled correctly
-            assert memEst == "estimate_memuse:" + str(3 - (sys.platform == "darwin"))
+            assert memEst == "estimate_memuse:" + str(estMem)
 
             # Ensure profiler went the whole mile (since total runtime of `memtest_func` > 5 min)
             assert 140 < toc - tic < 200
