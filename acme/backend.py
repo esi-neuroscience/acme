@@ -265,15 +265,45 @@ class ACMEdaemon(object):
                 msg = "{} automatic creation of output folder {} failed. Original error message below:\n{}"
                 raise OSError(msg.format(self.msgName, outDir, str(exc)))
 
-            # Prepare `outDir` for distribution across workers via `kwargv` and
-            # re-define or allocate key "taskID" to track concurrent processing results
-            self.kwargv["outDir"] = [outDir] * self.n_calls
+            # Prepare `outDir` and re-define or allocate key "taskID" to track concurrent processing results
+            self.kwargv["outDir"] = [outDir]
             self.kwargv["taskID"] = self.task_ids
             self.collect_results = False
-            fExt = "h5"
+
+            # Set up correct file-extension for output files; in case of HDF5
+            # containers, prepare "main" file for collecting/symlinking worker results
             if write_pickle:
                 fExt = "pickle"
-            self.kwargv["outFile"] = ["{}_{}.{}".format(self.func.__name__, taskID, fExt) for taskID in self.task_ids]
+            else:
+                fExt = "h5"
+                # FIXME: We probably don't need this in the user-func kwargs...
+                self.kwargv["outCollectionFile"] = os.path.join(outDir, "{}.h5".format(self.func.__name__))
+
+            # By default, `outCollectionFile` is a collection of links that point to
+            # worker-generated HDF5 containers; if `single_file` is `True`, then
+            # `outCollectionFile` is a "real" container with actual datasets
+            if single_file:
+                self.kwargv["outFile"] = [self.kwargv["outCollectionFile"]]
+                with h5py.File(self.kwargv["outCollectionFile"], "w") as h5f:
+                    for i in self.task_ids:
+                        h5f.create_group("comp_{}".format(i))
+
+                # Initialize distributed lock for shared writing to container
+                self.kwargv["outCollectionFile"] = "{}_sharedwrite"
+                dd.lock.Lock(name=os.path.basename(self.kwargv["outDir"]))
+
+            else:
+                self.kwargv["outPayloadDir"] = "{}_payload".format(self.func.__name__)
+                self.kwargv["outFile"] = [os.path.join(self.kwargv["outDir"],
+                                                       self.kwargv["outPayloadDir"],
+                                                       "{}_{}.{}".format(self.func.__name__,
+                                                                         taskID,
+                                                                         fExt))
+                                                       for taskID in self.task_ids]
+                with h5py.File(self.kwargv["outCollectionFile"], "w") as h5f:
+                    for i, fname in enumerate(self.self.kwargv["outFile"]):
+                        relPath = os.path.join(self.kwargv["outPayloadDir"], os.path.basename(fname))
+                        h5f["comp_{}".format(i)] = h5py.ExternalLink(relPath, "/")
 
             # Include logger name in keywords so that workers can use it
             self.kwargv["logName"] = [self.log.name] * self.n_calls
@@ -759,6 +789,7 @@ class ACMEdaemon(object):
         taskID = kwargs.pop("taskID")
         fname = kwargs.pop("outFile")
         logName = kwargs.pop("logName")
+        singleFile = kwargs.pop("singleFile")
         log = logging.getLogger(logName)
 
         # Call user-provided function
