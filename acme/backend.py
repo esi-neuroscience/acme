@@ -64,6 +64,7 @@ class ACMEdaemon(object):
         n_calls=None,
         n_jobs="auto",
         write_worker_results=True,
+        single_file=True,
         write_pickle=False,
         dryrun=False,
         partition="auto",
@@ -168,7 +169,7 @@ class ACMEdaemon(object):
             self.log = pmap.log
 
         # Set up output handler
-        self.prepare_output(write_worker_results, write_pickle)
+        self.prepare_output(write_worker_results, single_file, write_pickle)
 
         # If requested, perform single-worker dry-run (and quit if desired)
         if dryrun:
@@ -233,7 +234,7 @@ class ACMEdaemon(object):
         # Finally, determine if the code is executed on a SLURM-enabled node
         self.has_slurm = acs.is_slurm_node()
 
-    def prepare_output(self, write_worker_results, write_pickle):
+    def prepare_output(self, write_worker_results, single_file, write_pickle):
         """
         If `write_*` is `True` set up directories for saving output HDF5 containers
         (or pickle files). Warn if results are to be collected in memory
@@ -276,6 +277,7 @@ class ACMEdaemon(object):
                 fExt = "pickle"
             else:
                 fExt = "h5"
+                out
                 # FIXME: We probably don't need this in the user-func kwargs...
                 self.kwargv["outCollectionFile"] = os.path.join(outDir, "{}.h5".format(self.func.__name__))
 
@@ -290,7 +292,7 @@ class ACMEdaemon(object):
 
                 # Initialize distributed lock for shared writing to container
                 self.kwargv["outCollectionFile"] = "{}_sharedwrite"
-                dd.lock.Lock(name=os.path.basename(self.kwargv["outDir"]))
+                dd.lock.Lock(name=os.path.basename(self.kwargv["outFile"]))
 
             else:
                 self.kwargv["outPayloadDir"] = "{}_payload".format(self.func.__name__)
@@ -785,7 +787,6 @@ class ACMEdaemon(object):
 
         # Extract everything from `kwargs` appended by `ACMEdaemon`
         func = kwargs.pop("userFunc")
-        outDir = kwargs.pop("outDir")
         taskID = kwargs.pop("taskID")
         fname = kwargs.pop("outFile")
         logName = kwargs.pop("logName")
@@ -797,23 +798,27 @@ class ACMEdaemon(object):
 
         # Save results: either (try to) use HDF5 or pickle stuff
         if fname.endswith(".h5"):
+            grpName = ""
+            if singleFile:
+                lock = dd.lock.Lock(name='hdf_write')
+                lock.acquire()
+                grpName = "comp_{}/".format(taskID)
             try:
-                h5name = os.path.join(outDir, fname)
-                with h5py.File(h5name, "w") as h5f:
+                with h5py.File(fname, "a") as h5f:
                     if isinstance(result, (list, tuple)):
                         if not all(isinstance(value, (numbers.Number, str)) for value in result):
                             for rk, res in enumerate(result):
-                                h5f.create_dataset("result_{}".format(rk), data=res)
+                                h5f.create_dataset(grpName + "result_{}".format(rk), data=res)
                         else:
-                            h5f.create_dataset("result_0", data=result)
+                            h5f.create_dataset(grpName + "result_0", data=result)
                     else:
-                        h5f.create_dataset("result_0", data=result)
+                        h5f.create_dataset(grpName + "result_0", data=result)
             except TypeError as exc:
-                if "has no native HDF5 equivalent" in str(exc) or "One of data, shape or dtype must be specified" in str(exc):
+                if "has no native HDF5 equivalent" in str(exc) or "One of data, shape or dtype must be specified" in str(exc) and not singleFile:
                     try:
-                        os.unlink(h5name)
+                        os.unlink(fname)
                         pname = fname.rstrip(".h5") + ".pickle"
-                        with open(os.path.join(outDir, pname), "wb") as pkf:
+                        with open(os.path.join(pname), "wb") as pkf:
                             pickle.dump(result, pkf)
                         msg = "Could not write %s results have been pickled instead: %s. Return values are most likely " +\
                             "not suitable for storage in HDF5 containers. Original error message: %s"
@@ -823,11 +828,13 @@ class ACMEdaemon(object):
                         log.error(err, fname, str(pexc))
                 else:
                     err = "Could not access %s. Original error message: %s"
-                    log.error(err, h5name, str(exc))
+                    log.error(err, fname, str(exc))
                     raise exc
+            if singleFile:
+                lock.release()
         else:
             try:
-                with open(os.path.join(outDir, fname), "wb") as pkf:
+                with open(os.path.join(fname), "wb") as pkf:
                     pickle.dump(result, pkf)
             except pickle.PicklingError as pexc:
                 err = "Could not pickle results to file %s. Original error message: %s"
