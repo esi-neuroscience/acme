@@ -43,8 +43,10 @@ __all__ = ["ACMEdaemon"]
 # Main manager for parallel execution of user-defined functions
 class ACMEdaemon(object):
 
+    # Restrict valid class attributes
     __slots__ = "func", "argv", "kwargv", "n_calls", "n_jobs", "acme_func", \
-        "task_ids", "collect_results", "client", "stop_client", "has_slurm", "log"
+        "task_ids", "out_dir", "collect_results", "results_container", \
+        "client", "stop_client", "has_slurm", "log"
 
     # Prepend every stdout/stderr message with the name of this class
     msgName = "<ACMEdaemon>"
@@ -191,6 +193,22 @@ class ACMEdaemon(object):
         properly formatted for concurrently calling `func`
         """
 
+        # Allocate slots
+        self.func = None
+        self.argv = None
+        self.kwargv = None
+        self.n_calls = None
+        self.n_jobs = None
+        self.acme_func = None
+        self.task_ids = None
+        self.out_dir = None
+        self.collect_results = None
+        self.results_container = None
+        self.client = None
+        self.stop_client = None
+        self.has_slurm = None
+        self.log = None
+
         # Ensure `func` is callable
         if not callable(func):
             msg = "{} first input has to be a callable function, not {}"
@@ -244,11 +262,19 @@ class ACMEdaemon(object):
         if not isinstance(write_worker_results, bool):
             msg = "{} `write_worker_results` has to be `True` or `False`, not {}"
             raise TypeError(msg.format(self.msgName, str(write_worker_results)))
+        if not isinstance(single_file, bool):
+            msg = "{} `single_file` has to be `True` or `False`, not {}"
+            raise TypeError(msg.format(self.msgName, str(single_file)))
         if not isinstance(write_pickle, bool):
             msg = "{} `write_pickle` has to be `True` or `False`, not {}"
             raise TypeError(msg.format(self.msgName, str(write_pickle)))
         if not write_worker_results and write_pickle:
             self.log.warning("Pickling of results only possible if `write_worker_results` is `True`. ")
+        if not write_worker_results and single_file:
+            self.log.warning("Generating a single output file only possible if `write_worker_results` is `True`. ")
+        if write_pickle and single_file:
+            self.log.warning("Pickling of results does not support single output file creation. ")
+            single_file = False
 
         # If automatic saving of results is requested, make necessary preparations
         if write_worker_results:
@@ -259,15 +285,23 @@ class ACMEdaemon(object):
             else:
                 outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
             outDir = os.path.join(outDir, "ACME_{date:s}")
-            outDir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
-            try:
-                os.makedirs(outDir)
-            except Exception as exc:
-                msg = "{} automatic creation of output folder {} failed. Original error message below:\n{}"
-                raise OSError(msg.format(self.msgName, outDir, str(exc)))
 
-            # Prepare `outDir` and re-define or allocate key "taskID" to track concurrent processing results
-            self.kwargv["outDir"] = [outDir]
+            # Unless specifically denied by the user, each worker stores results
+            # separately with a common container file pointing to the individual
+            # by-worker files residing in a "payload" directory
+            self.out_dir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
+            if not single_file:
+                payloadName = "{}_payload".format(self.func.__name__)
+                payloadDir = os.path.join(self.out_dir, payloadDir)
+            try:
+                os.makedirs(self.out_dir)
+                if not single_file:
+                    os.makedirs(payloadDir)
+            except Exception as exc:
+                msg = "{} automatic creation of output folders {}/{} failed. Original error message below:\n{}"
+                raise OSError(msg.format(self.msgName, self.out_dir, payloadName, str(exc)))
+
+            # Re-define or allocate key "taskID" to track concurrent processing results
             self.kwargv["taskID"] = self.task_ids
             self.collect_results = False
 
@@ -277,34 +311,29 @@ class ACMEdaemon(object):
                 fExt = "pickle"
             else:
                 fExt = "h5"
-                out
-                # FIXME: We probably don't need this in the user-func kwargs...
-                self.kwargv["outCollectionFile"] = os.path.join(outDir, "{}.h5".format(self.func.__name__))
+                self.results_container = os.path.join(self.out_dir, "{}.h5".format(self.func.__name__))
 
             # By default, `outCollectionFile` is a collection of links that point to
             # worker-generated HDF5 containers; if `single_file` is `True`, then
             # `outCollectionFile` is a "real" container with actual datasets
             if single_file:
-                self.kwargv["outFile"] = [self.kwargv["outCollectionFile"]]
-                with h5py.File(self.kwargv["outCollectionFile"], "w") as h5f:
+                self.kwargv["outFile"] = [self.results_container]
+                self.kwargv["singleFile"] = [True]
+                with h5py.File(self.results_container, "w") as h5f:
                     for i in self.task_ids:
                         h5f.create_group("comp_{}".format(i))
 
-                # Initialize distributed lock for shared writing to container
-                self.kwargv["outCollectionFile"] = "{}_sharedwrite"
-                dd.lock.Lock(name=os.path.basename(self.kwargv["outFile"]))
 
             else:
-                self.kwargv["outPayloadDir"] = "{}_payload".format(self.func.__name__)
-                self.kwargv["outFile"] = [os.path.join(self.kwargv["outDir"],
-                                                       self.kwargv["outPayloadDir"],
+                self.kwargv["outFile"] = [os.path.join(self.out_dir,
+                                                       payloadName,
                                                        "{}_{}.{}".format(self.func.__name__,
                                                                          taskID,
                                                                          fExt))
                                                        for taskID in self.task_ids]
-                with h5py.File(self.kwargv["outCollectionFile"], "w") as h5f:
-                    for i, fname in enumerate(self.self.kwargv["outFile"]):
-                        relPath = os.path.join(self.kwargv["outPayloadDir"], os.path.basename(fname))
+                with h5py.File(self.results_container, "w") as h5f:
+                    for i, fname in enumerate(self.kwargv["outFile"]):
+                        relPath = os.path.join(payloadName, os.path.basename(fname))
                         h5f["comp_{}".format(i)] = h5py.ExternalLink(relPath, "/")
 
             # Include logger name in keywords so that workers can use it
@@ -353,9 +382,8 @@ class ACMEdaemon(object):
         mem1 = psutil.Process().memory_info().rss / 1024 ** 2
 
         # Remove any generated output files
-        if "outDir" in self.kwargv.keys():
-            fname = os.path.join(self.kwargv["outDir"][dryRunIdx], self.kwargv["outFile"][dryRunIdx])
-            os.unlink(fname)
+        if self.out_dir is not None:
+            os.unlink(self.kwargv["outFile"][dryRunIdx])
 
         # Compute elapsed time and memory usage
         elapsedTime = toc - tic
@@ -376,8 +404,8 @@ class ACMEdaemon(object):
         if setup_interactive:
             msg = "Do you want to continue executing {fname:s} with the provided arguments?"
             if not user_yesno(msg.format(fname=self.func.__name__), default="yes"):
-                if "outDir" in self.kwargv.keys():
-                    shutil.rmtree(self.kwargv["outDir"][dryRunIdx], ignore_errors=True)
+                if self.out_dir is not None:
+                    shutil.rmtree(self.out_dir, ignore_errors=True)
                 goOn = False
 
         return goOn
@@ -505,6 +533,11 @@ class ACMEdaemon(object):
         # Set `n_jobs` to no. of active workers in the initialized cluster
         self.n_jobs = len(self.client.cluster.workers)
 
+        # If single output file saving was chosen, initialize distributed
+        # lock for shared writing to container
+        if self.kwargv.get("singleFile") is not None:
+            dd.lock.Lock(name=os.path.basename(self.results_container))
+
     def estimate_memuse(self):
         """
         A brute-force guessing approach to determine memory consumption of provided
@@ -522,7 +555,7 @@ class ACMEdaemon(object):
 
         # Check if auto-generated output files have to be removed
         rmOutDir = False
-        if "outDir" in self.kwargv.keys():
+        if self.out_dir is not None:
             rmOutDir = True
 
         # Adequately warn about this heuristic gymnastics...
@@ -559,8 +592,7 @@ class ACMEdaemon(object):
 
             # Remove auto-generated files (if any were created within `runTime` seconds)
             if rmOutDir:
-                fname = os.path.join(self.kwargv["outDir"][idx], self.kwargv["outFile"][idx])
-                if os.path.isfile(fname):
+                if os.path.isfile(self.kwargv["outFile"][idx]):
                     os.unlink(fname)
 
         # Compute aggregate average memory consumption across all runs
@@ -596,9 +628,14 @@ class ACMEdaemon(object):
             write_worker_results = self.acme_func == self.func_wrapper
             if write_worker_results:
                 write_pickle = self.kwargv["outFile"][0].endswith(".pickle")
+                if not write_pickle and self.kwargv.get("singleFile") is not None:
+                    single_file = True
             else:
                 write_pickle = False
+                single_file = False
+
             self.prepare_output(write_worker_results=write_worker_results,
+                                single_file=single_file,
                                 write_pickle=write_pickle)
             self.prepare_client(n_jobs=self.n_jobs, stop_client=self.stop_client)
 
@@ -740,25 +777,52 @@ class ACMEdaemon(object):
         else:
             values = None
 
-        # Assemble final triumphant output message and get out
-        msg = "SUCCESS! Finished parallel computation. "
-        if "outDir" in self.kwargv.keys():
-            dirname = self.kwargv["outDir"][0]
-            msgRes = "Results have been saved to {}".format(dirname)
-            msg += msgRes
-            # Determine filepaths of results files (query disk to catch emergency pickles)
-            if values is None:
+        # Query disk to catch emergency pickles
+        finalMsg = "{}Finished parallel computation. "
+        successMsg = "SUCCESS! "
+        if self.results_container is not None:
+            if self.kwargv.get("singleFile") is not None:
+                finalMsg += "Results have been saved to {}".format(self.results_container)
+            else:
+                picklesFound = False
                 values = []
                 for fname in self.kwargv["outFile"]:
-                    h5Name = os.path.join(dirname, fname)
-                    pklName = h5Name.rstrip(".h5") + ".pickle"
-                    if os.path.isfile(h5Name):
-                        values.append(h5Name)
+                    pklName = fname.rstrip(".h5") + ".pickle"
+                    if os.path.isfile(fname):
+                        values.append(fname)
                     elif os.path.isfile(pklName):
                         values.append(pklName)
+                        picklesFound = True
                     else:
                         values.append("Missing {}".format(fname.rstrip(".h5")))
-        self.log.info(msg)
+                payloadDir = os.path.dirname(values[0])
+
+                # If pickles are found, remove global `results_container` as it
+                # would contain invalid file-links and move compute results out
+                # of payload dir
+                if picklesFound:
+                    os.unlink(self.results_container)
+                    wrng = "Some compute runs could not be saved as HDF5, " +\
+                        "collection container {} has been removed as it would " +\
+                            "comprise invalid file-links"
+                    self.log.warning(wrng)
+
+                    # Move files out of payload dir
+
+                    target = os.path.abspath(os.path.join(payloadDir, os.pardir))
+                    for fname in values:
+                        shutil.move(fname, target)
+                    shutil.rmtree(payloadDir)
+                    successMsg = ""
+                    finalMsg += "Results have been saved to {}".format(target)
+
+        # All good, no pickle gymnastics was needed
+        else:
+            msg = "Results have been saved to {} with links to data payload located in {}"
+            finalMsg += msg.format(self.results_container, payloadDir)
+
+        # Print final triumphant output message and get out
+        self.log.info(finalMsg.format(successMsg))
 
         # Either return collected by-worker results or the filepaths of results
         return values
@@ -800,7 +864,7 @@ class ACMEdaemon(object):
         if fname.endswith(".h5"):
             grpName = ""
             if singleFile:
-                lock = dd.lock.Lock(name='hdf_write')
+                lock = dd.lock.Lock(name=os.path.basename(fname))
                 lock.acquire()
                 grpName = "comp_{}/".format(taskID)
             try:
@@ -814,7 +878,9 @@ class ACMEdaemon(object):
                     else:
                         h5f.create_dataset(grpName + "result_0", data=result)
             except TypeError as exc:
-                if "has no native HDF5 equivalent" in str(exc) or "One of data, shape or dtype must be specified" in str(exc) and not singleFile:
+                if "has no native HDF5 equivalent" in str(exc) \
+                    or "One of data, shape or dtype must be specified" in str(exc) \
+                        and not singleFile:
                     try:
                         os.unlink(fname)
                         pname = fname.rstrip(".h5") + ".pickle"
