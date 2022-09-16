@@ -66,7 +66,7 @@ class ACMEdaemon(object):
         n_calls=None,
         n_jobs="auto",
         write_worker_results=True,
-        single_file=True,
+        single_file=False,
         write_pickle=False,
         dryrun=False,
         partition="auto",
@@ -290,16 +290,16 @@ class ACMEdaemon(object):
             # separately with a common container file pointing to the individual
             # by-worker files residing in a "payload" directory
             self.out_dir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
-            if not single_file:
+            if not single_file and not write_pickle:
                 payloadName = "{}_payload".format(self.func.__name__)
-                payloadDir = os.path.join(self.out_dir, payloadDir)
+                outputDir = os.path.join(self.out_dir, payloadName)
+            else:
+                outputDir = self.out_dir
             try:
-                os.makedirs(self.out_dir)
-                if not single_file:
-                    os.makedirs(payloadDir)
+                os.makedirs(outputDir)
             except Exception as exc:
-                msg = "{} automatic creation of output folders {}/{} failed. Original error message below:\n{}"
-                raise OSError(msg.format(self.msgName, self.out_dir, payloadName, str(exc)))
+                msg = "{} automatic creation of output folder {} failed. Original error message below:\n{}"
+                raise OSError(msg.format(self.msgName, outputDir, str(exc)))
 
             # Re-define or allocate key "taskID" to track concurrent processing results
             self.kwargv["taskID"] = self.task_ids
@@ -317,24 +317,24 @@ class ACMEdaemon(object):
             # worker-generated HDF5 containers; if `single_file` is `True`, then
             # `outCollectionFile` is a "real" container with actual datasets
             if single_file:
-                self.kwargv["outFile"] = [self.results_container]
                 self.kwargv["singleFile"] = [True]
+                self.kwargv["outFile"] = [self.results_container]
                 with h5py.File(self.results_container, "w") as h5f:
                     for i in self.task_ids:
                         h5f.create_group("comp_{}".format(i))
 
 
             else:
-                self.kwargv["outFile"] = [os.path.join(self.out_dir,
-                                                       payloadName,
+                self.kwargv["outFile"] = [os.path.join(outputDir,
                                                        "{}_{}.{}".format(self.func.__name__,
                                                                          taskID,
                                                                          fExt))
                                                        for taskID in self.task_ids]
-                with h5py.File(self.results_container, "w") as h5f:
-                    for i, fname in enumerate(self.kwargv["outFile"]):
-                        relPath = os.path.join(payloadName, os.path.basename(fname))
-                        h5f["comp_{}".format(i)] = h5py.ExternalLink(relPath, "/")
+                if not write_pickle:
+                    with h5py.File(self.results_container, "w") as h5f:
+                        for i, fname in enumerate(self.kwargv["outFile"]):
+                            relPath = os.path.join(payloadName, os.path.basename(fname))
+                            h5f["comp_{}".format(i)] = h5py.ExternalLink(relPath, "/")
 
             # Include logger name in keywords so that workers can use it
             self.kwargv["logName"] = [self.log.name] * self.n_calls
@@ -609,7 +609,7 @@ class ACMEdaemon(object):
         Perform the actual parallel execution of `func`
 
         If `debug` is `True`, use a single-threaded dask scheduler that does
-        not actually process anythin concurrently but uses the dask framework
+        not actually process anything concurrently but uses the dask framework
         in a sequential setup.
         """
 
@@ -622,18 +622,19 @@ class ACMEdaemon(object):
             msg = "{} `debug` has to be `True` or `False`, not {}"
             raise TypeError(msg.format(self.msgName, str(debug)))
 
+        # Deduce result output information
+        write_worker_results = self.acme_func == self.func_wrapper
+        if write_worker_results:
+            write_pickle = self.results_container is None
+            if not write_pickle and self.kwargv.get("singleFile") is not None:
+                single_file = True
+        else:
+            write_pickle = False
+            single_file = False
+
         # If `client` attribute is not set, the daemon is being re-used: prepare
         # everything for re-entry
         if self.client is None:
-            write_worker_results = self.acme_func == self.func_wrapper
-            if write_worker_results:
-                write_pickle = self.kwargv["outFile"][0].endswith(".pickle")
-                if not write_pickle and self.kwargv.get("singleFile") is not None:
-                    single_file = True
-            else:
-                write_pickle = False
-                single_file = False
-
             self.prepare_output(write_worker_results=write_worker_results,
                                 single_file=single_file,
                                 write_pickle=write_pickle)
@@ -770,6 +771,10 @@ class ACMEdaemon(object):
             raise RuntimeError(msg)
 
         # If wanted (not recommended) collect computed results in local memory
+        # The return `values` is either
+        # `None` : if neither in-memory results collection or auto-writing was requested
+        # list of file-names: if `write_worker_results` is `True`
+        # list of objects: if in-memory results collection was requested
         if self.collect_results:
             if not isSpyModule:
                 self.log.info("Gathering results in local memory")
@@ -777,49 +782,58 @@ class ACMEdaemon(object):
         else:
             values = None
 
-        # Query disk to catch emergency pickles
+        # Prepare final output message
         finalMsg = "{}Finished parallel computation. "
         successMsg = "SUCCESS! "
-        if self.results_container is not None:
-            if self.kwargv.get("singleFile") is not None:
-                finalMsg += "Results have been saved to {}".format(self.results_container)
+
+        # If automatic results writing was requested, query results
+        if write_worker_results:
+            if write_pickle:
+                values = list(self.kwargv["outFile"])
+                finalMsg += "Results have been saved to {}".format(self.out_dir)
             else:
-                picklesFound = False
-                values = []
-                for fname in self.kwargv["outFile"]:
-                    pklName = fname.rstrip(".h5") + ".pickle"
-                    if os.path.isfile(fname):
-                        values.append(fname)
-                    elif os.path.isfile(pklName):
-                        values.append(pklName)
-                        picklesFound = True
+                if self.kwargv.get("singleFile") is not None:
+                    finalMsg += "Results have been saved to {}".format(self.results_container)
+                    if values is None:
+                        values = [self.results_container]
+                else:
+                    picklesFound = False
+                    values = []
+                    for fname in self.kwargv["outFile"]:
+                        pklName = fname.rstrip(".h5") + ".pickle"
+                        if os.path.isfile(fname):
+                            values.append(fname)
+                        elif os.path.isfile(pklName):
+                            values.append(pklName)
+                            picklesFound = True
+                        else:
+                            values.append("Missing {}".format(fname.rstrip(".h5")))
+                    payloadDir = os.path.dirname(values[0])
+
+                    # If pickles are found, remove global `results_container` as it
+                    # would contain invalid file-links and move compute results out
+                    # of payload dir
+                    if picklesFound:
+                        os.unlink(self.results_container)
+                        wrng = "Some compute runs could not be saved as HDF5, " +\
+                            "collection container {} has been removed as it would " +\
+                                "comprise invalid file-links"
+                        self.log.warning(wrng)
+
+                        # Move files out of payload dir and update return `values`
+                        target = os.path.abspath(os.path.join(payloadDir, os.pardir))
+                        for i, fname in enumerate(values):
+                            shutil.move(fname, target)
+                            self.kwargv["outFile"][i] = os.path.join(target, os.path.basename(fname))
+                        values = list(self.kwargv["outFile"])
+                        shutil.rmtree(payloadDir)
+                        successMsg = ""
+                        finalMsg += "Results have been saved to {}".format(target)
+
+                    # All good, no pickle gymnastics was needed
                     else:
-                        values.append("Missing {}".format(fname.rstrip(".h5")))
-                payloadDir = os.path.dirname(values[0])
-
-                # If pickles are found, remove global `results_container` as it
-                # would contain invalid file-links and move compute results out
-                # of payload dir
-                if picklesFound:
-                    os.unlink(self.results_container)
-                    wrng = "Some compute runs could not be saved as HDF5, " +\
-                        "collection container {} has been removed as it would " +\
-                            "comprise invalid file-links"
-                    self.log.warning(wrng)
-
-                    # Move files out of payload dir
-
-                    target = os.path.abspath(os.path.join(payloadDir, os.pardir))
-                    for fname in values:
-                        shutil.move(fname, target)
-                    shutil.rmtree(payloadDir)
-                    successMsg = ""
-                    finalMsg += "Results have been saved to {}".format(target)
-
-        # All good, no pickle gymnastics was needed
-        else:
-            msg = "Results have been saved to {} with links to data payload located in {}"
-            finalMsg += msg.format(self.results_container, payloadDir)
+                        msg = "Results have been saved to {} with links to data payload located in {}"
+                        finalMsg += msg.format(self.results_container, payloadDir)
 
         # Print final triumphant output message and get out
         self.log.info(finalMsg.format(successMsg))
@@ -854,7 +868,7 @@ class ACMEdaemon(object):
         taskID = kwargs.pop("taskID")
         fname = kwargs.pop("outFile")
         logName = kwargs.pop("logName")
-        singleFile = kwargs.pop("singleFile")
+        singleFile = kwargs.pop("singleFile", False)
         log = logging.getLogger(logName)
 
         # Call user-provided function
@@ -878,8 +892,8 @@ class ACMEdaemon(object):
                     else:
                         h5f.create_dataset(grpName + "result_0", data=result)
             except TypeError as exc:
-                if "has no native HDF5 equivalent" in str(exc) \
-                    or "One of data, shape or dtype must be specified" in str(exc) \
+                if ("has no native HDF5 equivalent" in str(exc) \
+                    or "One of data, shape or dtype must be specified" in str(exc)) \
                         and not singleFile:
                     try:
                         os.unlink(fname)

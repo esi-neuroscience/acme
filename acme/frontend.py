@@ -37,7 +37,7 @@ class ParallelMap(object):
         *args,
         n_inputs="auto",
         write_worker_results=True,
-        single_file=True,
+        single_file=False,
         write_pickle=False,
         partition="auto",
         n_jobs="auto",

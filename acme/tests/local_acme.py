@@ -17,7 +17,7 @@ if acme_path not in sys.path:
 from acme import ParallelMap
 
 def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
-    return (sum(x) + y) * z * w.max()
+    return (x + y) * z * w.max()
 
 import time
 
@@ -36,10 +36,13 @@ if __name__ == "__main__":
     # Test stuff within here...
     # pass
 
-    pmap = ParallelMap(g, np.arange(100), 2)
-    pmap.daemon.estimate_memuse()
+    with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
+        results = pmap.compute()
 
-    # with pmap as p:
-    #     p.compute()
+    # pmap = ParallelMap(g, np.arange(100), 2)
+    # pmap.daemon.estimate_memuse()
+
+    # # with pmap as p:
+    # #     p.compute()
 
 
