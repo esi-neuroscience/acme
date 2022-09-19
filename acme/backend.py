@@ -273,8 +273,7 @@ class ACMEdaemon(object):
         if not write_worker_results and single_file:
             self.log.warning("Generating a single output file only possible if `write_worker_results` is `True`. ")
         if write_pickle and single_file:
-            self.log.warning("Pickling of results does not support single output file creation. ")
-            single_file = False
+            raise ValueError("Pickling of results does not support single output file creation. ")
 
         # If automatic saving of results is requested, make necessary preparations
         if write_worker_results:
@@ -881,6 +880,12 @@ class ACMEdaemon(object):
                 lock = dd.lock.Lock(name=os.path.basename(fname))
                 lock.acquire()
                 grpName = "comp_{}/".format(taskID)
+                errName = pname = fname.rstrip(".h5") + ".failed"
+                err = "Could not write to %s. File potentially corrupted. "
+                if os.path.isfile(errName):
+                    log.error(err, fname)
+                    lock.release()
+                    raise IOError(err%fname)
             try:
                 with h5py.File(fname, "a") as h5f:
                     if isinstance(result, (list, tuple)):
@@ -907,7 +912,11 @@ class ACMEdaemon(object):
                         err = "Unable to write %s, successive attempts to pickle results failed too: %s"
                         log.error(err, fname, str(pexc))
                 else:
-                    err = "Could not access %s. Original error message: %s"
+                    if singleFile:
+                        err = "Could not write to %s. File potentially corrupted. Original error message: %s"
+                        lock.release()
+                    else:
+                        err = "Could not access %s. Original error message: %s"
                     log.error(err, fname, str(exc))
                     raise exc
             if singleFile:

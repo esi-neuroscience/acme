@@ -592,6 +592,18 @@ class TestParallelMap():
                 assert np.array_equal(pklRes, h5col[dset.format(chNo)][()])
 
         # Ensure single_file and pickling does not work
+        with pytest.raises(ValueError) as valerr:
+            with ParallelMap(pickle_func,
+                            self.sig,
+                            self.b,
+                            self.a,
+                            range(self.nChannels),
+                            n_inputs=self.nChannels,
+                            write_pickle=True,
+                            single_file=True,
+                            setup_interactive=False) as pmap:
+                pmap.compute()
+            assert "Pickling of results does not support single output file creation" in str(valerr.value)
 
         # Test emergency pickling
         with ParallelMap(pickle_func,
@@ -617,18 +629,19 @@ class TestParallelMap():
                     with h5py.File(hdfResults[chNo], "r") as h5ref:
                         assert np.array_equal(h5f["result_0"][()], h5ref["result_0"][()])
 
-        # ensure emergency pickling and single file does not work
-        with ParallelMap(pickle_func,
-                         self.sig,
-                         self.b,
-                         self.a,
-                         range(self.nChannels),
-                         sabotage_hdf5=True,
-                         n_inputs=self.nChannels,
-                         single_file=True,
-                         setup_interactive=False) as pmap:
-            pmap.compute()
-        import pdb; pdb.set_trace()
+        # Ensure emergency pickling and single file does not work
+        with pytest.raises(RuntimeError):
+            with ParallelMap(pickle_func,
+                            self.sig,
+                            self.b,
+                            self.a,
+                            range(self.nChannels),
+                            sabotage_hdf5=True,
+                            n_inputs=self.nChannels,
+                            single_file=True,
+                            setup_interactive=False) as pmap:
+                pmap.compute()
+
 
         # Test write breakdown (both for HDF5 saving and pickling)
         pmap = ParallelMap(pickle_func,
@@ -639,8 +652,8 @@ class TestParallelMap():
                            sabotage_hdf5=True,
                            n_inputs=self.nChannels,
                            setup_interactive=False)
-        outDirs.append(pmap.out_dir)
-        pmap.kwargv["outDir"][0] = "/path/to/nowhere"
+        outDirs.append(pmap.daemon.out_dir)
+        pmap.kwargv["outFile"][0] = "/path/to/nowhere"
         with pytest.raises(RuntimeError) as runerr:
             pmap.compute()
             assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
@@ -653,8 +666,8 @@ class TestParallelMap():
                            n_inputs=self.nChannels,
                            write_pickle=True,
                            setup_interactive=False)
-        outDirs.append(pmap.out_dir)
-        pmap.kwargv["outDir"][0] = "/path/to/nowhere"
+        outDirs.append(pmap.daemon.out_dir)
+        pmap.kwargv["outFile"][0] = "/path/to/nowhere"
         with pytest.raises(RuntimeError) as runerr:
             pmap.compute()
             assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
