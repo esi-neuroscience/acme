@@ -592,7 +592,7 @@ class ACMEdaemon(object):
             # Remove auto-generated files (if any were created within `runTime` seconds)
             if rmOutDir:
                 if os.path.isfile(self.kwargv["outFile"][idx]):
-                    os.unlink(fname)
+                    os.unlink(self.kwargv["outFile"][idx])
 
         # Compute aggregate average memory consumption across all runs
         memUsage = memPerJob.mean()

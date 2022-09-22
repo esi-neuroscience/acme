@@ -809,7 +809,7 @@ class TestParallelMap():
         pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4, setup_interactive=True, dryrun=True)
 
         # Ensure auto-generated output dir has been successfully removed
-        outDir = pmap.kwargv["outDir"][0]
+        outDir = pmap.daemon.out_dir
         assert os.path.exists(outDir) is False
 
     def test_memest(self):
@@ -871,8 +871,8 @@ class TestParallelMap():
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
         # output HDF5 files were removed
-        outDirs.append(pmap.out_dir)
-        assert len(os.listdir(outDirs[0])) == 0
+        outDirs.append(pmap.daemon.out_dir)
+        assert len(os.listdir(os.path.dirname(pmap.kwargv['outFile'][0]))) == 0
 
         # Now prepare `ParallelMap` instance for 100 concurrent calls of `memtest_func`:
         # again a 2GB array is allocated, but set final sleep to 5 minutes, enforcing
@@ -913,8 +913,8 @@ class TestParallelMap():
             assert "Picked partition 8GBXS based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling should not have generated any output
-        outDirs.append(pmap.out_dir)
-        assert len(os.listdir(outDirs[0])) == 0
+        outDirs.append(pmap.daemon.out_dir)
+        assert len(os.listdir(os.path.dirname(pmap.kwargv['outFile'][0]))) == 0
 
         # Prepare final "full" tests
         del pmap
@@ -1017,7 +1017,7 @@ class TestParallelMap():
             client = esi_cluster_setup(n_jobs=6, interactive=False)
 
         # Re-run tests with pre-allocated client (except for those in `skipTests`)
-        skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun", "test_memest"]
+        skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun", "test_memest", "_prep_data"]
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:
