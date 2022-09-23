@@ -543,6 +543,13 @@ class ACMEdaemon(object):
         workload
         """
 
+        # Be careful with memory estimation if single-file writing is enabled
+        if self.kwargv.get("singleFile") is not None:
+            msg = "Performing memory estimation runs with `single_file = True` " +\
+                "may corrupt output file %s. Please consider using `single_file = False` " +\
+                    "for memory estimation. "
+            self.log.warning(msg, self.results_container)
+
         # Let helper randomly pick some jobs and prepare corresponding args + kwargs
         dryRunIdx, dryRunArgs, dryRunKwargs = self._dryrun_setup()
 
@@ -554,7 +561,7 @@ class ACMEdaemon(object):
 
         # Check if auto-generated output files have to be removed
         rmOutDir = False
-        if self.out_dir is not None:
+        if self.out_dir is not None and self.kwargv.get("singleFile") is None:
             rmOutDir = True
 
         # Adequately warn about this heuristic gymnastics...

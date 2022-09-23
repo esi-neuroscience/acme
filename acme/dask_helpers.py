@@ -187,7 +187,7 @@ def esi_cluster_setup(partition="8GBXS", n_jobs=2, mem_per_job="auto", n_jobs_st
     # however, 8GB won't fit a 12GB job, so we have to pick the second match 16GB
     if isinstance(partition, str) and partition == "auto":
         if not isinstance(mem_per_job, str) or mem_per_job.find("estimate_memuse:") < 0:
-            msg = "{preamble:s}automatic partition selector without first invoking `ParallelMap`. "
+            msg = "{preamble:s}automatic partition selector without first invoking memory estimation in `ParallelMap`. "
             raise customIOError(msg.format(preamble=funcName + " Cannot access " if not isSpyModule else ""))
         memEstimate = int(mem_per_job.replace("estimate_memuse:" ,""))
         mem_per_job = "auto"

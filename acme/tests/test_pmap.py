@@ -831,6 +831,21 @@ class TestParallelMap():
             arrsize = 0.5
             estMem = 1
 
+        # First, trigger a warning by attempting to perform memory estimation
+        # with `single_file = True`
+        pmap = ParallelMap(memtest_func,
+                           np.arange(2),
+                           2,
+                           sleeper=2,
+                           arrsize=arrsize,
+                           logfile=customLog,
+                           single_file=True,
+                           setup_interactive=False)
+        pmap.daemon.estimate_memuse()
+        with open(customLog, "r", encoding="utf8") as f:
+            logTxt = f.read()
+        assert "Performing memory estimation runs with `single_file = True` may corrupt output file" in logTxt
+
         # Prepare `ParallelMap` instance for 2 concurrent calls of `memtest_func`:
         # a 2GB array is allocated, set final sleep wait period to 2 seconds, so
         # total runtime of the function should be b/w 5-10 seconds (depending on how long
