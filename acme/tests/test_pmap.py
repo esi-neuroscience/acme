@@ -229,7 +229,7 @@ class TestParallelMap():
         # Ensure each compute run generated a dedicated HDF5 file
         assert len(pmap.kwargv["outFile"]) == pmap.n_calls
 
-        # Query generated output directory
+        # Query auto-generated output directory
         outDirContents = glob(os.path.join(pmap.out_dir, "*"))
         payloadDir = pmap.results_container.replace(".h5", "_payload")
         assert pmap.results_container in outDirContents
@@ -250,6 +250,7 @@ class TestParallelMap():
 
         # Remember results for later use
         colRes = str(pmap.results_container)
+        colResPayload = str(payloadDir)
 
         # Same with `single_file`
         with ParallelMap(lowpass_simple,
@@ -274,7 +275,33 @@ class TestParallelMap():
                 for chNo in range(self.nChannels):
                     assert np.array_equal(h5single[dset.format(chNo)][()], h5col[dset.format(chNo)][()])
 
-        # Same, but collect results in memory: ensure nothing freaky happens
+        # Now use non-standard output directory
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         output_dir=tempDir,
+                         setup_interactive=False) as pmap:
+            resOnDisk = pmap.compute()
+
+        # Query specified custom output directory
+        assert pmap.out_dir == tempDir
+        outDirContents = glob(os.path.join(pmap.out_dir, "*"))
+        payloadDir = pmap.results_container.replace(".h5", "_payload")
+        assert pmap.results_container in outDirContents
+        assert payloadDir in outDirContents
+        resFiles = glob(os.path.join(payloadDir, "*.h5"))
+        assert len(resFiles) == pmap.n_calls
+        assert all(fle in resFiles for fle in resOnDisk)
+        assert all(os.path.isfile(fle) for fle in resOnDisk)
+
+        # A little overly paranoid, but compare results still...
+        with h5py.File(colRes, "r") as h5col:
+            with h5py.File(pmap.results_container, "r") as h5comp:
+                dset = "comp_{}/result_0"
+                for chNo in range(self.nChannels):
+                    assert np.array_equal(h5comp[dset.format(chNo)][()], h5col[dset.format(chNo)][()])
+
+        # Finally collect results in memory: ensure nothing freaky happens
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
@@ -289,14 +316,24 @@ class TestParallelMap():
                 assert np.array_equal(h5col[dset.format(chNo)][()], resInMem[chNo])
 
         # Comparisons are over, now remove payload and ensure container is broken
-        shutil.rmtree(payloadDir)
+        shutil.rmtree(colResPayload)
         with pytest.raises(KeyError) as keyerr:
             with h5py.File(colRes, "r") as h5col:
                 chNo = np.random.choice(self.nChannels, size=1)[0]
                 h5col["comp_{}".format(chNo)]["result_0"]
             assert "unable to open external file" in str(keyerr.value)
 
-        # Simulate user-defined results-directory
+        # Ensure `output_dir` is properly ignored if `write_worker_results` is `False`
+        pmap = ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         output_dir=tempDir,
+                         write_worker_results=False,
+                         setup_interactive=False)
+        assert pmap.daemon.out_dir is None
+        assert pmap.daemon.collect_results is False
+
+        # Simulate user-defined results-directory not auto-populated by ACME
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
         if useSLURM:
             tempDir2 = "/cs/home/{}/acme_tmp_lowpass_hard".format(getpass.getuser())

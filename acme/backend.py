@@ -66,6 +66,7 @@ class ACMEdaemon(object):
         n_calls=None,
         n_jobs="auto",
         write_worker_results=True,
+        output_dir=None,
         single_file=False,
         write_pickle=False,
         dryrun=False,
@@ -171,7 +172,10 @@ class ACMEdaemon(object):
             self.log = pmap.log
 
         # Set up output handler
-        self.prepare_output(write_worker_results, single_file, write_pickle)
+        self.prepare_output(write_worker_results,
+                            output_dir,
+                            single_file,
+                            write_pickle)
 
         # If requested, perform single-worker dry-run (and quit if desired)
         if dryrun:
@@ -252,7 +256,11 @@ class ACMEdaemon(object):
         # Finally, determine if the code is executed on a SLURM-enabled node
         self.has_slurm = acs.is_slurm_node()
 
-    def prepare_output(self, write_worker_results, single_file, write_pickle):
+    def prepare_output(self,
+                       write_worker_results,
+                       output_dir,
+                       single_file,
+                       write_pickle):
         """
         If `write_*` is `True` set up directories for saving output HDF5 containers
         (or pickle files). Warn if results are to be collected in memory
@@ -260,35 +268,51 @@ class ACMEdaemon(object):
 
         # Basal sanity check for Boolean flags
         if not isinstance(write_worker_results, bool):
-            msg = "{} `write_worker_results` has to be `True` or `False`, not {}"
-            raise TypeError(msg.format(self.msgName, str(write_worker_results)))
+            msg = "%s `write_worker_results` has to be `True` or `False`, not %s"
+            raise TypeError(msg%(self.msgName, str(write_worker_results)))
         if not isinstance(single_file, bool):
-            msg = "{} `single_file` has to be `True` or `False`, not {}"
-            raise TypeError(msg.format(self.msgName, str(single_file)))
+            msg = "%s `single_file` has to be `True` or `False`, not %s"
+            raise TypeError(msg%(self.msgName, str(single_file)))
         if not isinstance(write_pickle, bool):
-            msg = "{} `write_pickle` has to be `True` or `False`, not {}"
-            raise TypeError(msg.format(self.msgName, str(write_pickle)))
+            msg = "%s `write_pickle` has to be `True` or `False`, not %s"
+            raise TypeError(msg%(self.msgName, str(write_pickle)))
+
+        # Check compatibility of provided optional args
         if not write_worker_results and write_pickle:
             self.log.warning("Pickling of results only possible if `write_worker_results` is `True`. ")
+        if not write_worker_results and output_dir:
+            self.log.warning("Output directory specification has no effect if `write_worker_results` is `False`.")
         if not write_worker_results and single_file:
             self.log.warning("Generating a single output file only possible if `write_worker_results` is `True`. ")
         if write_pickle and single_file:
-            raise ValueError("Pickling of results does not support single output file creation. ")
+            msg = "%s Pickling of results does not support single output file creation. "
+            raise ValueError(msg%self.msgName)
 
         # If automatic saving of results is requested, make necessary preparations
         if write_worker_results:
 
-            # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
-            if self.has_slurm:
-                outDir = "/cs/home/{usr:s}/".format(usr=getpass.getuser())
+            # Check validity of output dir specification
+            if not isinstance(output_dir, (type(None), str)):
+                msg = "%s `output_dir` has to be either `None` or str, not %s"
+                raise TypeError(msg%(self.msgName, str(type(output_dir))))
+
+            # If provided, standardize output dir spec, otherwise use default locations
+            if output_dir is not None:
+                outDir = os.path.abspath(os.path.expanduser(output_dir))
+
             else:
-                outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
-            outDir = os.path.join(outDir, "ACME_{date:s}")
+                # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
+                if self.has_slurm:
+                    outDir = "/cs/home/{usr:s}/".format(usr=getpass.getuser())
+                else:
+                    outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
+                outDir = os.path.join(outDir, "ACME_{date:s}")
+                outDir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
 
             # Unless specifically denied by the user, each worker stores results
             # separately with a common container file pointing to the individual
             # by-worker files residing in a "payload" directory
-            self.out_dir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
+            self.out_dir = str(outDir)
             if not single_file and not write_pickle:
                 payloadName = "{}_payload".format(self.func.__name__)
                 outputDir = os.path.join(self.out_dir, payloadName)
