@@ -331,7 +331,7 @@ class TestParallelMap():
                          write_worker_results=False,
                          setup_interactive=False)
         assert pmap.daemon.out_dir is None
-        assert pmap.daemon.collect_results is False
+        assert pmap.daemon.collect_results is True
 
         # Simulate user-defined results-directory not auto-populated by ACME
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
@@ -588,6 +588,71 @@ class TestParallelMap():
         # Wait a second (literally) so that no new parallel jobs started by
         # `test_existing_cluster` erroneously use existing HDF files
         time.sleep(1.0)
+
+    # Even more functionality tests: ensure output array stacking works
+    def test_outshape(self):
+
+        # Prepare data containers
+        tempDir, sigName = self._prep_data("acme_tmp_outshape")
+
+        # Collect auto-generated output directories in list for later cleanup
+        outDirs = []
+
+        # Compute result length needed to determine final shape
+        nSamples = self.fs * self.nTrials
+
+        # Parallelize across channels, write results to disk
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         result_shape=(None, nSamples),
+                         setup_interactive=False) as pmap:
+            resOnDisk = pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        # Remember results for later use
+        colRes = str(pmap.results_container)
+
+        # Compare computed single-channel results to expected low-freq signal
+        # and ensure collection container was assembled correctly
+        with h5py.File(pmap.results_container, "r") as h5col:
+            assert len(h5col.keys()) == 1
+            assert h5col["result_0"].is_virtual
+            for chNo, h5name in enumerate(resOnDisk):
+                with h5py.File(h5name, "r") as h5f:
+                    assert np.mean(np.abs(h5f["result_0"][()] - self.orig[:, chNo])) < self.tol
+                    assert np.array_equal(h5col["result_0"][chNo, :], h5f["result_0"][()])
+
+        # Same but don't use a virtual dataset and transpose the final array
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         result_shape=(nSamples, None),
+                         single_file=True,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        # Ensure only one file was generated
+        assert glob(os.path.join(pmap.out_dir, "*")) == [pmap.results_container]
+
+        # Compare single file to virtual dataset
+        with h5py.File(colRes, "r") as h5col:
+            with h5py.File(pmap.results_container, "r") as h5single:
+                assert len(h5single.keys()) == 1
+                assert h5single["result_0"].is_virtual is False
+                assert np.array_equal(h5single["result_0"][()].T, h5col["result_0"][()])
+
+        # Todo:
+        # * test if dtype is respected (use float16)
+        # * invalid dtype
+        # * invalid result_shape
+        # * what happens w/emergency pickling?
+        # * what happens w/write_pickle = True
+        # * ensure multiple return vals are handled correctly
+
+        import pdb; pdb.set_trace()
+
 
     # Test if pickling/emergency pickling and I/O in general works as intended
     def test_pickling(self):

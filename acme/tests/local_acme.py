@@ -29,6 +29,8 @@ def g(x, y, z=3):
     time.sleep(300)
     return (sum(x) + y) * z * arr.max()
 
+def arr_test(x, y):
+    return x + y
 
 # Prepare code to be executed using, e.g., iPython's `%run` magic command
 if __name__ == "__main__":
@@ -36,7 +38,7 @@ if __name__ == "__main__":
     # Test stuff within here...
     # pass
 
-    with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
+    with ParallelMap(arr_test, [np.ones((20,)), 2 * np.ones((20,)), 3 * np.ones((20,))], 4, result_shape=(None, 20)) as pmap:
         results = pmap.compute()
 
     # pmap = ParallelMap(g, np.arange(100), 2)

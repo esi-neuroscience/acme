@@ -67,6 +67,8 @@ class ACMEdaemon(object):
         n_jobs="auto",
         write_worker_results=True,
         output_dir=None,
+        result_shape=None,
+        result_dtype="float",
         single_file=False,
         write_pickle=False,
         dryrun=False,
@@ -174,6 +176,8 @@ class ACMEdaemon(object):
         # Set up output handler
         self.prepare_output(write_worker_results,
                             output_dir,
+                            result_shape,
+                            result_dtype,
                             single_file,
                             write_pickle)
 
@@ -259,6 +263,8 @@ class ACMEdaemon(object):
     def prepare_output(self,
                        write_worker_results,
                        output_dir,
+                       result_shape,
+                       result_dtype,
                        single_file,
                        write_pickle):
         """
@@ -282,6 +288,10 @@ class ACMEdaemon(object):
             self.log.warning("Pickling of results only possible if `write_worker_results` is `True`. ")
         if not write_worker_results and output_dir:
             self.log.warning("Output directory specification has no effect if `write_worker_results` is `False`.")
+        if not write_worker_results and result_shape:
+            self.log.warning("Output array shape specification has no effect if `write_worker_results` is `False`.")
+        if write_pickle and result_shape:
+            self.log.warning("Pickling of results does not support output array shape specification. ")
         if not write_worker_results and single_file:
             self.log.warning("Generating a single output file only possible if `write_worker_results` is `True`. ")
         if write_pickle and single_file:
@@ -295,6 +305,43 @@ class ACMEdaemon(object):
             if not isinstance(output_dir, (type(None), str)):
                 msg = "%s `output_dir` has to be either `None` or str, not %s"
                 raise TypeError(msg%(self.msgName, str(type(output_dir))))
+
+            # Check validity of output shape/dtype specifications
+            if result_shape is not None:
+                if not isinstance(result_shape, (list, tuple)):
+                    msg = "%s `result_shape` has to be either `None` or tuple, not %s"
+                    raise TypeError(msg%(self.msgName, str(type(result_shape))))
+
+                if not isinstance(result_dtype, str):
+                    msg = "%s `result_dtype` has to be a string, not %s"
+                    raise TypeError(msg%(self.msgName, str(type(result_shape))))
+
+                if sum(spec is None for spec in result_shape) != 1:
+                    msg = "%s `result_shape` must contain exactly one `None` entry"
+                    raise ValueError(msg%self.msgName)
+
+                rShape = list(result_shape)
+                stackingDim = result_shape.index(None)
+                rShape[stackingDim] = self.n_calls
+
+                if not all(isinstance(spec, numbers.Number) for spec in rShape):
+                    msg = "%s `result_shape` must only contain numerical values"
+                    raise ValueError(msg%self.msgName)
+                if any(spec < 0 or int(spec) != spec for spec in rShape):
+                    msg = "%s `result_shape` must only contain non-negative integers"
+                    raise ValueError(msg%self.msgName)
+
+                ShapeLayout = tuple(rShape)
+                ShapeSource = list(rShape)
+                ShapeSource.pop(stackingDim)
+                ShapeSource = tuple(ShapeSource)
+
+                try:
+                    dType = np.dtype(result_dtype)
+                except Exception as exc:
+                    msg = "%s `result_dtype` has to be a valid NumPy datatype specification. "
+                    msg += "Original error message below:\n%s"
+                    raise TypeError(msg%(self.msgName, str(exc)))
 
             # If provided, standardize output dir spec, otherwise use default locations
             if output_dir is not None:
@@ -336,16 +383,23 @@ class ACMEdaemon(object):
                 fExt = "h5"
                 self.results_container = os.path.join(self.out_dir, "{}.h5".format(self.func.__name__))
 
-            # By default, `outCollectionFile` is a collection of links that point to
+            # By default, `results_container` is a collection of links that point to
             # worker-generated HDF5 containers; if `single_file` is `True`, then
-            # `outCollectionFile` is a "real" container with actual datasets
+            # `results_container` is a "real" container with actual dataset(s)
             if single_file:
                 self.kwargv["singleFile"] = [True]
                 self.kwargv["outFile"] = [self.results_container]
-                with h5py.File(self.results_container, "w") as h5f:
-                    for i in self.task_ids:
-                        h5f.create_group("comp_{}".format(i))
 
+                # If no output shape provided, prepare groups for storing datasets;
+                # otherwise allocate a single dataset w/specified dimension
+                if result_shape is None:
+                    with h5py.File(self.results_container, "w") as h5f:
+                        for i in self.task_ids:
+                            h5f.create_group("comp_{}".format(i))
+                else:
+                    self.kwargv["stackingDim"] = [stackingDim]
+                    with h5py.File(self.results_container, "w") as h5f:
+                        h5f.create_dataset("result_0", shape=ShapeLayout, dtype=dType)
 
             else:
                 self.kwargv["outFile"] = [os.path.join(outputDir,
@@ -354,10 +408,26 @@ class ACMEdaemon(object):
                                                                          fExt))
                                                        for taskID in self.task_ids]
                 if not write_pickle:
-                    with h5py.File(self.results_container, "w") as h5f:
+
+                    # If no output shape provided, generate links to external datasets;
+                    # otherwise allocate a virtual dataset w/specified dimension
+                    if result_shape is None:
+                        with h5py.File(self.results_container, "w") as h5f:
+                            for i, fname in enumerate(self.kwargv["outFile"]):
+                                relPath = os.path.join(payloadName, os.path.basename(fname))
+                                h5f["comp_{}".format(i)] = h5py.ExternalLink(relPath, "/")
+                    else:
+
+                        # Assemble virtual dataset
+                        layout = h5py.VirtualLayout(shape=ShapeLayout, dtype=dType)
+                        idx = [slice(None)] * len(ShapeLayout)
                         for i, fname in enumerate(self.kwargv["outFile"]):
+                            idx[stackingDim] = i
                             relPath = os.path.join(payloadName, os.path.basename(fname))
-                            h5f["comp_{}".format(i)] = h5py.ExternalLink(relPath, "/")
+                            vsource = h5py.VirtualSource(fname, "result_0", shape=ShapeSource)
+                            layout[tuple(idx)] = vsource
+                        with h5py.File(self.results_container, "w", libver="latest") as h5f:
+                            h5f.create_virtual_dataset("result_0", layout)
 
             # Include logger name in keywords so that workers can use it
             self.kwargv["logName"] = [self.log.name] * self.n_calls
@@ -899,6 +969,7 @@ class ACMEdaemon(object):
         fname = kwargs.pop("outFile")
         logName = kwargs.pop("logName")
         singleFile = kwargs.pop("singleFile", False)
+        stackingDim = kwargs.pop("stackingDim", None)
         log = logging.getLogger(logName)
 
         # Call user-provided function
@@ -906,6 +977,7 @@ class ACMEdaemon(object):
 
         # Save results: either (try to) use HDF5 or pickle stuff
         if fname.endswith(".h5"):
+
             grpName = ""
             if singleFile:
                 lock = dd.lock.Lock(name=os.path.basename(fname))
@@ -917,17 +989,32 @@ class ACMEdaemon(object):
                     log.error(err, fname)
                     lock.release()
                     raise IOError(err%fname)
+
+            if not isinstance(result, (list, tuple)):
+                result = [result]
+
             try:
+
                 with h5py.File(fname, "a") as h5f:
-                    if isinstance(result, (list, tuple)):
+                    if stackingDim is None:
                         if not all(isinstance(value, (numbers.Number, str)) for value in result):
                             for rk, res in enumerate(result):
                                 h5f.create_dataset(grpName + "result_{}".format(rk), data=res)
                         else:
                             h5f.create_dataset(grpName + "result_0", data=result)
                     else:
-                        h5f.create_dataset(grpName + "result_0", data=result)
+                        res0 = result[0]
+                        idx = [slice(None)] * len(h5f["result_0"].shape)
+                        idx[stackingDim] = taskID
+                        h5f["result_0"][tuple(idx)] = res0
+                        for rk, res in enumerate(result[1:]):
+                            h5f.create_dataset("result_{}".format(rk + 1), data=res)
+
+                if singleFile:
+                    lock.release()
+
             except TypeError as exc:
+
                 if ("has no native HDF5 equivalent" in str(exc) \
                     or "One of data, shape or dtype must be specified" in str(exc)) \
                         and not singleFile:
@@ -950,9 +1037,14 @@ class ACMEdaemon(object):
                         err = "Could not access %s. Original error message: %s"
                     log.error(err, fname, str(exc))
                     raise exc
-            if singleFile:
-                lock.release()
+
+            except:
+
+                if singleFile:
+                    lock.release()
+
         else:
+
             try:
                 with open(os.path.join(fname), "wb") as pkf:
                     pickle.dump(result, pkf)
