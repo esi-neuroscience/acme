@@ -523,7 +523,7 @@ class TestParallelMap():
              pmap.compute()
         outDirs.append(pmap.out_dir)
 
-        # Ensure output container were created correctly
+        # Ensure output container was created correctly
         payloadDir = pmap.results_container.replace(".h5", "_payload")
         assert len(glob(os.path.join(payloadDir, "*.h5"))) == pmap.n_calls
 
@@ -593,7 +593,7 @@ class TestParallelMap():
     def test_outshape(self):
 
         # Prepare data containers
-        tempDir, sigName = self._prep_data("acme_tmp_outshape")
+        _, sigName = self._prep_data("acme_tmp_outshape")
 
         # Collect auto-generated output directories in list for later cleanup
         outDirs = []
@@ -643,16 +643,185 @@ class TestParallelMap():
                 assert h5single["result_0"].is_virtual is False
                 assert np.array_equal(h5single["result_0"][()].T, h5col["result_0"][()])
 
-        # Todo:
-        # * test if dtype is respected (use float16)
-        # * invalid dtype
-        # * invalid result_shape
-        # * what happens w/emergency pickling?
-        # * what happens w/write_pickle = True
-        # * ensure multiple return vals are handled correctly
+        # Ensure dtype is respected
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         result_shape=(None, nSamples),
+                         result_dtype="float16",
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+        with h5py.File(pmap.results_container, "r") as h5f:
+            assert h5f["result_0"].dtype.name == "float16"
 
-        import pdb; pdb.set_trace()
+        # Ensure invalid dtypes don't pass through
+        with pytest.raises(TypeError) as tperr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=(None, nSamples),
+                             result_dtype=np.ones((3,)),
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+            assert "`result_dtype` has to be a string" in str(tperr)
+        with pytest.raises(TypeError) as tperr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=(None, nSamples),
+                             result_dtype="invalid",
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+            assert "`result_dtype` has to be a valid NumPy datatype" in str(tperr)
 
+        # Ensure borked shapes are caught
+        with pytest.raises(TypeError) as tperr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=3,
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+            assert "`result_shape` has to be either `None` or tuple" in str(tperr)
+        with pytest.raises(ValueError) as valerr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=(None, None, nSamples),
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+            assert "`result_shape` must contain exactly one `None`" in str(valerr)
+        with pytest.raises(ValueError) as valerr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=(3, nSamples),
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+            assert "`result_shape` must contain exactly one `None`" in str(valerr)
+        with pytest.raises(ValueError) as valerr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=("invalid", None, nSamples),
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+            assert "`result_shape` must only contain numerical values" in str(valerr)
+        with pytest.raises(ValueError) as valerr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=(-3, None, nSamples),
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+            assert "`result_shape` must only contain non-negative integers" in str(valerr)
+        with pytest.raises(ValueError) as valerr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=(np.pi, None, nSamples),
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+            assert "`result_shape` must only contain non-negative integers" in str(valerr)
+
+        # Emergency pickling
+        with ParallelMap(pickle_func,
+                         self.sig,
+                         self.b,
+                         self.a,
+                         range(self.nChannels),
+                         sabotage_hdf5=True,
+                         n_inputs=self.nChannels,
+                         result_shape=(nSamples, None),
+                         setup_interactive=False) as pmap:
+            mixedResults = pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        # Ensure pickles and hdf5's live together happily
+        resultsContainer = os.path.basename(mixedResults[0])
+        resultsContainer = os.path.join(os.path.dirname(mixedResults[0]),
+                                        resultsContainer[:resultsContainer.rfind("_0")] + ".h5")
+        payloadDir = resultsContainer.replace(".h5", "_payload")
+        assert pmap.results_container is None
+        assert not os.path.isfile(resultsContainer)
+        assert not os.path.isdir(payloadDir)
+        assert all(os.path.isfile(fle) for fle in mixedResults)
+        assert len(mixedResults) == pmap.n_calls
+
+        # Ensure deliberate pickling doesn't clash w/(erroneous) shape spec
+        with ParallelMap(pickle_func,
+                         self.sig,
+                         self.b,
+                         self.a,
+                         range(self.nChannels),
+                         sabotage_hdf5=False,
+                         n_inputs=self.nChannels,
+                         result_shape=(nSamples, None),
+                         write_pickle=True,
+                         setup_interactive=False) as pmap:
+            pickles = pmap.compute()
+        outDirs.append(pmap.out_dir)
+        assert all(os.path.isfile(fle) for fle in pickles)
+        assert len(pickles) == pmap.n_calls
+
+        # Ensure multiple return values are handled correctly
+        with ParallelMap(lowpass_medium,
+                         sigName,
+                         range(self.nChannels),
+                         result_shape=(None, nSamples),
+                         single_file=False,
+                         setup_interactive=False) as pmap:
+             onDiskVals = pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        # Save results for later
+        multiRet = str(pmap.results_container)
+
+        # Compare computed results to stored "reference"
+        with h5py.File(colRes, "r") as h5col:
+            with h5py.File(pmap.results_container, "r") as h5f:
+                assert len(h5f.keys()) == pmap.n_calls + 1
+                assert h5f["result_0"].is_virtual is True
+                assert np.array_equal(h5f["result_0"][()].T, h5col["result_0"][()])
+                for k in range(pmap.n_calls):
+                    assert len(h5f["comp_{}".format(k)].keys()) == 3
+                with h5py.File(onDiskVals[0], "r") as htmp:
+                    retVals = list(set(htmp.keys()).difference(h5f.keys()))
+                    retVals.sort()
+                for k, fname in enumerate(onDiskVals):
+                    for rval in retVals[1:]:
+                        htmp["comp_{}/{}".format(k, "return_1")][()] == k
+                        with h5py.File(fname, "r") as htmp:
+                            assert np.array_equal(htmp["comp_{}/{}".format(k, rval)][()], self.b)
+                            assert np.array_equal(htmp["comp_{}/{}".format(k, rval)][()], self.a)
+
+        # Same w/single output container
+        with ParallelMap(lowpass_medium,
+                         sigName,
+                         range(self.nChannels),
+                         result_shape=(None, nSamples),
+                         single_file=True,
+                         setup_interactive=False) as pmap:
+             pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        # Compare results
+        with h5py.File(multiRet, "r") as h5ref:
+            with h5py.File(pmap.results_container, "r") as h5f:
+                assert len(h5f.keys()) == pmap.n_calls + 1
+                for k in range(pmap.n_calls):
+                    for rk in range(1,4):
+                        dset = "comp_{}/result_{}".format(k, rk)
+                        assert np.array_equal(h5f[dset], h5ref[dset])
+
+        # Clean up created results directories
+        for folder in outDirs:
+            shutil.rmtree(folder, ignore_errors=True)
+
+        # Wait a second (literally) so that no new parallel jobs started by
+        # `test_existing_cluster` erroneously use existing HDF files
+        time.sleep(1.0)
 
     # Test if pickling/emergency pickling and I/O in general works as intended
     def test_pickling(self):
@@ -718,6 +887,15 @@ class TestParallelMap():
                          setup_interactive=False) as pmap:
             mixedResults = pmap.compute()
         outDirs.append(pmap.out_dir)
+
+        # Collection container should have been auto-removed
+        resultsContainer = os.path.basename(mixedResults[0])
+        resultsContainer = os.path.join(os.path.dirname(mixedResults[0]),
+                                        resultsContainer[:resultsContainer.rfind("_0")] + ".h5")
+        payloadDir = resultsContainer.replace(".h5", "_payload")
+        assert pmap.results_container is None
+        assert not os.path.isfile(resultsContainer)
+        assert not os.path.isdir(payloadDir)
 
         # Ensure non-compliant dicts were pickled, rest is in HDF5
         for chNo, fname in enumerate(mixedResults):

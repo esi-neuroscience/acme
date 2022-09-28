@@ -419,6 +419,7 @@ class ACMEdaemon(object):
                     else:
 
                         # Assemble virtual dataset
+                        self.kwargv["stackingDim"] = [stackingDim]
                         layout = h5py.VirtualLayout(shape=ShapeLayout, dtype=dType)
                         idx = [slice(None)] * len(ShapeLayout)
                         for i, fname in enumerate(self.kwargv["outFile"]):
@@ -916,9 +917,10 @@ class ACMEdaemon(object):
                     if picklesFound:
                         os.unlink(self.results_container)
                         wrng = "Some compute runs could not be saved as HDF5, " +\
-                            "collection container {} has been removed as it would " +\
+                            "collection container %s has been removed as it would " +\
                                 "comprise invalid file-links"
-                        self.log.warning(wrng)
+                        self.log.warning(wrng, self.results_container)
+                        self.results_container = None
 
                         # Move files out of payload dir and update return `values`
                         target = os.path.abspath(os.path.join(payloadDir, os.pardir))
@@ -932,8 +934,25 @@ class ACMEdaemon(object):
 
                     # All good, no pickle gymnastics was needed
                     else:
+
+                        # In case of multiple return values present in by-worker
+                        # containers but missing in collection container (happens
+                        # if virtual data-sets have to be pre-allocated), create
+                        # "symlinks" to corresponding missing returns
+                        with h5py.File(self.results_container, "r") as h5r:
+                            with h5py.File(values[0], "r") as h5Tmp:
+                                missingReturns = set(h5Tmp.keys()).difference(h5r.keys())
+                        if len(missingReturns) > 0:
+                            with h5py.File(self.results_container, "a") as h5r:
+                                for retVal in missingReturns:
+                                    for i, fname in enumerate(values):
+                                        relPath = os.path.join(os.path.basename(payloadDir), os.path.basename(fname))
+                                        h5r["comp_{}/{}".format(i, retVal)] = h5py.ExternalLink(relPath, retVal)
+
                         msg = "Results have been saved to {} with links to data payload located in {}"
                         finalMsg += msg.format(self.results_container, payloadDir)
+
+        import pdb; pdb.set_trace()
 
         # Print final triumphant output message and get out
         self.log.info(finalMsg.format(successMsg))
@@ -1003,12 +1022,15 @@ class ACMEdaemon(object):
                         else:
                             h5f.create_dataset(grpName + "result_0", data=result)
                     else:
-                        res0 = result[0]
-                        idx = [slice(None)] * len(h5f["result_0"].shape)
-                        idx[stackingDim] = taskID
-                        h5f["result_0"][tuple(idx)] = res0
-                        for rk, res in enumerate(result[1:]):
-                            h5f.create_dataset("result_{}".format(rk + 1), data=res)
+                        if singleFile:
+                            idx = [slice(None)] * len(h5f["result_0"].shape)
+                            idx[stackingDim] = taskID
+                            h5f["result_0"][tuple(idx)] = result[0]
+                            for rk, res in enumerate(result[1:]):
+                                h5f.create_dataset(grpName + "result_{}".format(rk + 1), data=res)
+                        else:
+                            for rk, res in enumerate(result):
+                                h5f.create_dataset(grpName + "result_{}".format(rk), data=res)
 
                 if singleFile:
                     lock.release()
@@ -1038,10 +1060,11 @@ class ACMEdaemon(object):
                     log.error(err, fname, str(exc))
                     raise exc
 
-            except:
+            except Exception as exc:
 
                 if singleFile:
                     lock.release()
+                raise exc
 
         else:
 
