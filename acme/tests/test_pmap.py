@@ -276,15 +276,16 @@ class TestParallelMap():
                     assert np.array_equal(h5single[dset.format(chNo)][()], h5col[dset.format(chNo)][()])
 
         # Now use non-standard output directory
+        outDir = os.path.join(tempDir, "somewhere")
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
-                         output_dir=tempDir,
+                         output_dir=outDir,
                          setup_interactive=False) as pmap:
             resOnDisk = pmap.compute()
 
         # Query specified custom output directory
-        assert pmap.out_dir == tempDir
+        assert pmap.out_dir == outDir
         outDirContents = glob(os.path.join(pmap.out_dir, "*"))
         payloadDir = pmap.results_container.replace(".h5", "_payload")
         assert pmap.results_container in outDirContents
@@ -772,7 +773,7 @@ class TestParallelMap():
                          result_shape=(None, nSamples),
                          single_file=False,
                          setup_interactive=False) as pmap:
-             onDiskVals = pmap.compute()
+             pmap.compute()
         outDirs.append(pmap.out_dir)
 
         # Save results for later
@@ -783,18 +784,12 @@ class TestParallelMap():
             with h5py.File(pmap.results_container, "r") as h5f:
                 assert len(h5f.keys()) == pmap.n_calls + 1
                 assert h5f["result_0"].is_virtual is True
-                assert np.array_equal(h5f["result_0"][()].T, h5col["result_0"][()])
+                assert np.array_equal(h5f["result_0"][()], h5col["result_0"][()])
                 for k in range(pmap.n_calls):
                     assert len(h5f["comp_{}".format(k)].keys()) == 3
-                with h5py.File(onDiskVals[0], "r") as htmp:
-                    retVals = list(set(htmp.keys()).difference(h5f.keys()))
-                    retVals.sort()
-                for k, fname in enumerate(onDiskVals):
-                    for rval in retVals[1:]:
-                        htmp["comp_{}/{}".format(k, "return_1")][()] == k
-                        with h5py.File(fname, "r") as htmp:
-                            assert np.array_equal(htmp["comp_{}/{}".format(k, rval)][()], self.b)
-                            assert np.array_equal(htmp["comp_{}/{}".format(k, rval)][()], self.a)
+                    assert h5f["comp_{}/{}".format(k, "result_1")][()] == k
+                    assert np.array_equal(h5f["comp_{}/{}".format(k, "result_2")][()], self.b)
+                    assert np.array_equal(h5f["comp_{}/{}".format(k, "result_3")][()], self.a)
 
         # Same w/single output container
         with ParallelMap(lowpass_medium,
@@ -902,7 +897,7 @@ class TestParallelMap():
             if chNo % 2 == 0:
                 assert fname.endswith(".pickle")
                 with open(fname, "rb") as pkf:
-                    assert np.array_equal(self.b, pickle.load(pkf)["b"])
+                    assert np.array_equal(self.b, pickle.load(pkf)[0]["b"])
             else:
                 assert fname.endswith(".h5")
                 with h5py.File(fname, "r") as h5f:

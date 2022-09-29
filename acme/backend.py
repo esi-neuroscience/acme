@@ -887,7 +887,7 @@ class ACMEdaemon(object):
         finalMsg = "{}Finished parallel computation. "
         successMsg = "SUCCESS! "
 
-        # If automatic results writing was requested, query results
+        # If automatic results writing was requested, perform some housekeeping
         if write_worker_results:
             if write_pickle:
                 values = list(self.kwargv["outFile"])
@@ -937,22 +937,22 @@ class ACMEdaemon(object):
 
                         # In case of multiple return values present in by-worker
                         # containers but missing in collection container (happens
-                        # if virtual data-sets have to be pre-allocated), create
-                        # "symlinks" to corresponding missing returns
-                        with h5py.File(self.results_container, "r") as h5r:
-                            with h5py.File(values[0], "r") as h5Tmp:
-                                missingReturns = set(h5Tmp.keys()).difference(h5r.keys())
-                        if len(missingReturns) > 0:
-                            with h5py.File(self.results_container, "a") as h5r:
-                                for retVal in missingReturns:
-                                    for i, fname in enumerate(values):
-                                        relPath = os.path.join(os.path.basename(payloadDir), os.path.basename(fname))
-                                        h5r["comp_{}/{}".format(i, retVal)] = h5py.ExternalLink(relPath, retVal)
+                        # if `result_shape` is not `None` and data-sets have to
+                        # be pre-allocated), create "symlinks" to corresponding
+                        # missing returns
+                        if self.kwargv.get("stackingDim") is not None:
+                            with h5py.File(self.results_container, "r") as h5r:
+                                with h5py.File(values[0], "r") as h5Tmp:
+                                    missingReturns = set(h5Tmp.keys()).difference(h5r.keys())
+                            if len(missingReturns) > 0:
+                                with h5py.File(self.results_container, "a") as h5r:
+                                    for retVal in missingReturns:
+                                        for i, fname in enumerate(values):
+                                            relPath = os.path.join(os.path.basename(payloadDir), os.path.basename(fname))
+                                            h5r["comp_{}/{}".format(i, retVal)] = h5py.ExternalLink(relPath, retVal)
 
                         msg = "Results have been saved to {} with links to data payload located in {}"
                         finalMsg += msg.format(self.results_container, payloadDir)
-
-        import pdb; pdb.set_trace()
 
         # Print final triumphant output message and get out
         self.log.info(finalMsg.format(successMsg))
