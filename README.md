@@ -2,11 +2,14 @@
 
 # ACME: Asynchronous Computing Made ESI
 
-main: [![tests+codecov](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml/badge.svg?branch=main)](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml)
+[![conda](https://img.shields.io/conda/vn/conda-forge/esi-acme.svg)](https://anaconda.org/conda-forge/esi-acme)
+[![pypi](https://badge.fury.io/py/esi-acme.svg)](https://badge.fury.io/py/esi-acme)
+[![license](https://img.shields.io/github/license/esi-neuroscience/acme)](https://github.com/esi-neuroscience/acme/blob/main/LICENSE)
+
+main: [![tests](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml/badge.svg?branch=main)](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml)
 [![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/main/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
 
-
-dev: [![tests+codecov](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml/badge.svg?branch=dev)](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml)
+dev: [![tests](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml/badge.svg?branch=dev)](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml)
 [![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/dev/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
 
 ## Summary
