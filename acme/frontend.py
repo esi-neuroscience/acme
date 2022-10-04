@@ -79,13 +79,42 @@ class ParallelMap(object):
             triggering a `ValueError`. Only then is it required to set `n_input`
             manually. See Examples for details.
         write_worker_results : bool
-            If `True`, the return value(s) of `func` is/are saved on disk (one
-            HDF5 file per parallel worker). If `False`, the output of all parallel calls
-            of `func` is collected in memory. See Examples and Notes for details.
+            If `True`, the return value(s) of `func` is/are saved on disk.
+            If `False`, the output of all parallel calls of `func` is collected
+            in memory. See Examples and Notes for details.
+        output_dir : str or None
+            Only relevant if `write_worker_results` is `True`. If `output_dir` is `None`
+            (default) and `write_worker_results` is `True`, all files auto-generated
+            by `ParallelMap` are stored in a directory `'ACME_YYYYMMDD-hhmmss-ffffff'`
+            (encoding the current time as YearMonthDay-HourMinuteSecond-Microsecond).
+            The path to a custom output directory can be specified via providing
+            `output_dir`.
+        result_shape : tuple or None
+            Only relevant if `write_worker_results` is `True` and `write_pickle`
+            is `False`. If provided, return values of `func` are slotted into
+            a (virtual) dataset of shape `result_shape`, where a single
+            `None` entry designates the stacking dimension. For instance,
+            ``result_shape = (None, 100)`` implies that `func` returns a
+            100-element array which is to be stacked along the first dimension
+            for each concurrent call of `func` resulting in a ``(n_inputs, 100)``
+            dataset. See Notes and Examples for details.
+        result_dtype : str or None
+            Only relevant if `result_shape` is not `None`. If provided, determines
+            the numerical datatype of the dataset laid out by `result_shape`.
+            By default, results are stored in `float64` format.
+        single_file : bool
+            Only relevant if `write_worker_results` is `True` and `write_pickle`
+            is `False`. If `single_file` is `False` (default), the results of each parallel
+            call of `func` are stored in dedicated HDF5 files, such that the auto-
+            generated HDF5 results-container is a collection of symbolic links
+            pointing to these files.
+            Conversely, if `single_file` is `True`, all parallel workers
+            write to the same results container (using a distributed file-locking
+            mechanism). See Notes for more information.
         write_pickle : bool
-            If `True`, the return value(s) of `func` is/are pickled to disk (one
-            `'.pickle'`-file per parallel worker). Only effective if `write_worker_results`
-            is `True`.
+            Only relevant if `write_worker_results` is `True`. If `True`,
+            the return value(s) of `func` is/are pickled to disk (one
+            `'.pickle'`-file per parallel worker).
         partition : str
             Name of SLURM partition to use. If `"auto"` (default), the memory footprint
             of `func` is estimated using dry-run stubs based on randomly sampling
@@ -177,6 +206,11 @@ class ParallelMap(object):
 
         More examples and tutorials are available in the
         `ACME online documentation <https://esi-acme.readthedocs.io>`_.
+
+        Notes
+        -----
+        Please consult the `ACME User Guide <https://esi-acme.readthedocs.io/en/latest/userguide.html>`_
+        for detailed usage information.
 
         See also
         --------

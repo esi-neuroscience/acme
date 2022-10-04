@@ -111,6 +111,18 @@ class ACMEdaemon(object):
         write_worker_results : bool
             If `True`, the return value(s) of `func` is/are saved on disk. See
             :class:~`acme.ParallelMap` for details.
+        output_dir : str or None
+            If provided, auto-generated results are stored in the given path. See
+            :class:~`acme.ParallelMap` for details.
+        result_shape : tuple or None
+            If provided, results are slotted into a dataset with layout `result_shape`. See
+            :class:~`acme.ParallelMap` for details.
+        result_dtype : str or None
+            If provided, determines numerical datatype of dataset laid out
+            by `result_shape`. See :class:~`acme.ParallelMap` for details.
+        single_file : bool
+            If `True`, parallel workers write to the same results container. See
+            :class:~`acme.ParallelMap` for details.
         write_pickle : bool
             If `True`, the return value(s) of `func` is/are pickled to disk. See
             :class:~`acme.ParallelMap` for details.
