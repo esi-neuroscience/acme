@@ -86,6 +86,13 @@ useSLURM = is_slurm_node()
 # Perform ESI-specific tests only the ESI HPC cluster
 onESI = is_esi_node()
 
+# Use a default partition if running on the ESI cluster
+if onESI:
+    defaultQ ="8GBXS"
+else:
+    defaultQ ="auto"
+
+
 # Main testing class
 class TestParallelMap():
 
@@ -140,35 +147,35 @@ class TestParallelMap():
         outDirs = []
 
         # Basic functionality w/simplest conceivable user-func
-        pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4, setup_interactive=False)
+        pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(simple_func, [2, 4, 6, 8], y=4, setup_interactive=False)  # pos arg referenced via kwarg, cfg #2
+        pmap = ParallelMap(simple_func, [2, 4, 6, 8], y=4, partition=defaultQ, setup_interactive=False)  # pos arg referenced via kwarg, cfg #2
         outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(simple_func, 0, 4, z=[3, 4, 5, 6], setup_interactive=False)
+        pmap = ParallelMap(simple_func, 0, 4, z=[3, 4, 5, 6], partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=2, setup_interactive=False)
+        pmap = ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=2, partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
 
         # User func has `np.ndarray` as keyword
-        pmap = ParallelMap(medium_func, [2, 4, 6, 8], y=[2, 2], n_inputs=2, setup_interactive=False)
+        pmap = ParallelMap(medium_func, [2, 4, 6, 8], y=[2, 2], n_inputs=2, partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(medium_func, None, None, w=[np.ones((3, 3)), 2 * np.ones((3,3))], setup_interactive=False)
+        pmap = ParallelMap(medium_func, None, None, w=[np.ones((3, 3)), 2 * np.ones((3,3))], partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(medium_func, None, None, z=np.zeros((3,)), setup_interactive=False)
+        pmap = ParallelMap(medium_func, None, None, z=np.zeros((3,)), partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(medium_func, None, None, z=np.zeros((3, 1)), setup_interactive=False)
+        pmap = ParallelMap(medium_func, None, None, z=np.zeros((3, 1)), partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
 
         # Lots of ways for this to go wrong...
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], 2, w=np.ones((3,)), setup_interactive=False)
+        pmap = ParallelMap(hard_func, [2, 4, 6, 8], 2, w=np.ones((3,)), partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], y=22, w=np.ones((7, 1)), setup_interactive=False)
+        pmap = ParallelMap(hard_func, [2, 4, 6, 8], y=22, w=np.ones((7, 1)), partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(hard_func, np.ones((3,)), 1, w=np.ones((7, 1)), setup_interactive=False)
+        pmap = ParallelMap(hard_func, np.ones((3,)), 1, w=np.ones((7, 1)), partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2, setup_interactive=False)
+        pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2, partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=4, setup_interactive=False)
+        pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=4, partition=defaultQ, setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
 
         # Ensure erroneous/ambiguous setups trigger the appropriate errors:
@@ -222,6 +229,7 @@ class TestParallelMap():
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             resOnDisk = pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -256,6 +264,7 @@ class TestParallelMap():
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
+                         partition=defaultQ,
                          setup_interactive=False,
                          single_file=True) as pmap:
             singleResOnDisk = pmap.compute()
@@ -281,6 +290,7 @@ class TestParallelMap():
                          sigName,
                          range(self.nChannels),
                          output_dir=outDir,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             resOnDisk = pmap.compute()
 
@@ -307,6 +317,7 @@ class TestParallelMap():
                          sigName,
                          range(self.nChannels),
                          write_worker_results=False,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             resInMem = pmap.compute()
 
@@ -330,6 +341,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          output_dir=tempDir,
                          write_worker_results=False,
+                         partition=defaultQ,
                          setup_interactive=False)
         assert pmap.daemon.out_dir is None
         assert pmap.daemon.collect_results is True
@@ -354,6 +366,7 @@ class TestParallelMap():
                          padlen=[200] * self.nChannels,
                          n_inputs=self.nChannels,
                          write_worker_results=False,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             pmap.compute()
         resFiles = glob(os.path.join(tempDir2, res_base + "*"))
@@ -377,6 +390,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          logfile=True,
                          stop_client=False,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -391,8 +405,8 @@ class TestParallelMap():
         assert dd.get_client()
         client = dd.get_client()
         if useSLURM and not existingClient:
-            assert pmap.n_calls == pmap.n_jobs
-            assert len(client.cluster.workers) == pmap.n_jobs
+            assert pmap.n_calls == pmap.n_workers
+            assert len(client.cluster.workers) == pmap.n_workers
             partition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
             assert "8GB" in partition
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
@@ -411,6 +425,7 @@ class TestParallelMap():
                          logfile=customLog,
                          verbose=True,
                          stop_client=not existingClient,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -429,16 +444,16 @@ class TestParallelMap():
         # Wait a sec (literally) to give dask enough time to close the client
         time.sleep(1.0)
 
-        # Underbook SLURM (more calls than jobs)
+        # Underbook SLURM (more calls than workers)
         partition = "8GBXS"
-        n_jobs = int(self.nChannels / 2)
-        mem_per_job = "2GB"
+        n_workers = int(self.nChannels / 2)
+        mem_per_worker = "2GB"
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
                          partition=partition,
-                         n_jobs=n_jobs,
-                         mem_per_job=mem_per_job,
+                         n_workers=n_workers,
+                         mem_per_worker=mem_per_worker,
                          stop_client=False,
                          setup_interactive=False) as pmap:
             pmap.compute()
@@ -448,13 +463,13 @@ class TestParallelMap():
         client = pmap.client
         assert pmap.n_calls == self.nChannels
         if useSLURM:
-            assert pmap.n_jobs == n_jobs
-            assert len(client.cluster.workers) == pmap.n_jobs
+            assert pmap.n_workers == n_workers
+            assert len(client.cluster.workers) == pmap.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
             assert actualPartition == partition
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
-            assert round(memory[0] / 1000**3) == int(mem_per_job.replace("GB", ""))
+            assert round(memory[0] / 1000**3) == int(mem_per_worker.replace("GB", ""))
 
         # Let `cluster_cleanup` murder the custom setup and ensure it did its job
         if not existingClient:
@@ -462,16 +477,16 @@ class TestParallelMap():
             with pytest.raises(ValueError):
                 dd.get_client()
 
-        # Overbook SLURM (more jobs than calls)
+        # Overbook SLURM (more workers than calls)
         partition = "8GBXS"
-        n_jobs = self.nChannels + 2
-        mem_per_job = "3000MB"
+        n_workers = self.nChannels + 2
+        mem_per_worker = "3000MB"
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
                          partition=partition,
-                         n_jobs=n_jobs,
-                         mem_per_job=mem_per_job,
+                         n_workers=n_workers,
+                         mem_per_worker=mem_per_worker,
                          stop_client=False,
                          setup_interactive=False) as pmap:
             pmap.compute()
@@ -481,13 +496,13 @@ class TestParallelMap():
         client = pmap.client
         assert pmap.n_calls == self.nChannels
         if useSLURM:
-            assert pmap.n_jobs == n_jobs
-            assert len(client.cluster.workers) == pmap.n_jobs
+            assert pmap.n_workers == n_workers
+            assert len(client.cluster.workers) == pmap.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
             assert actualPartition == partition
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
-            assert round(memory[0] / 1000**3) * 1000 == int(mem_per_job.replace("MB", ""))
+            assert round(memory[0] / 1000**3) * 1000 == int(mem_per_worker.replace("MB", ""))
         if not existingClient:
             cluster_cleanup(pmap.client)
 
@@ -503,7 +518,7 @@ class TestParallelMap():
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
 
-        # Wait a second (literally) so that no new parallel jobs started by
+        # Wait a second (literally) so that no new parallel workers started by
         # `test_existing_cluster` erroneously use existing HDF files
         time.sleep(1.0)
 
@@ -520,6 +535,7 @@ class TestParallelMap():
         with ParallelMap(lowpass_medium,
                          sigName,
                          range(self.nChannels),
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
              pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -545,6 +561,7 @@ class TestParallelMap():
         with ParallelMap(lowpass_medium,
                          sigName,
                          range(self.nChannels),
+                         partition=defaultQ,
                          setup_interactive=False,
                          single_file=True) as pmap:
             pmap.compute()
@@ -569,6 +586,7 @@ class TestParallelMap():
                          sigName,
                          range(self.nChannels),
                          write_worker_results=False,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             resInMem = pmap.compute()
 
@@ -586,7 +604,7 @@ class TestParallelMap():
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
 
-        # Wait a second (literally) so that no new parallel jobs started by
+        # Wait a second (literally) so that no new parallel workers started by
         # `test_existing_cluster` erroneously use existing HDF files
         time.sleep(1.0)
 
@@ -607,6 +625,7 @@ class TestParallelMap():
                          sigName,
                          range(self.nChannels),
                          result_shape=(None, nSamples),
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             resOnDisk = pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -630,6 +649,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          result_shape=(nSamples, None),
                          single_file=True,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -650,6 +670,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          result_shape=(None, nSamples),
                          result_dtype="float16",
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -663,6 +684,7 @@ class TestParallelMap():
                              range(self.nChannels),
                              result_shape=(None, nSamples),
                              result_dtype=np.ones((3,)),
+                             partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
             assert "`result_dtype` has to be a string" in str(tperr)
@@ -672,6 +694,7 @@ class TestParallelMap():
                              range(self.nChannels),
                              result_shape=(None, nSamples),
                              result_dtype="invalid",
+                             partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
             assert "`result_dtype` has to be a valid NumPy datatype" in str(tperr)
@@ -682,6 +705,7 @@ class TestParallelMap():
                              sigName,
                              range(self.nChannels),
                              result_shape=3,
+                             partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
             assert "`result_shape` has to be either `None` or tuple" in str(tperr)
@@ -690,6 +714,7 @@ class TestParallelMap():
                              sigName,
                              range(self.nChannels),
                              result_shape=(None, None, nSamples),
+                             partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
             assert "`result_shape` must contain exactly one `None`" in str(valerr)
@@ -698,6 +723,7 @@ class TestParallelMap():
                              sigName,
                              range(self.nChannels),
                              result_shape=(3, nSamples),
+                             partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
             assert "`result_shape` must contain exactly one `None`" in str(valerr)
@@ -706,6 +732,7 @@ class TestParallelMap():
                              sigName,
                              range(self.nChannels),
                              result_shape=("invalid", None, nSamples),
+                             partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
             assert "`result_shape` must only contain numerical values" in str(valerr)
@@ -714,6 +741,7 @@ class TestParallelMap():
                              sigName,
                              range(self.nChannels),
                              result_shape=(-3, None, nSamples),
+                             partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
             assert "`result_shape` must only contain non-negative integers" in str(valerr)
@@ -722,6 +750,7 @@ class TestParallelMap():
                              sigName,
                              range(self.nChannels),
                              result_shape=(np.pi, None, nSamples),
+                             partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
             assert "`result_shape` must only contain non-negative integers" in str(valerr)
@@ -735,6 +764,7 @@ class TestParallelMap():
                          sabotage_hdf5=True,
                          n_inputs=self.nChannels,
                          result_shape=(nSamples, None),
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             mixedResults = pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -760,6 +790,7 @@ class TestParallelMap():
                          n_inputs=self.nChannels,
                          result_shape=(nSamples, None),
                          write_pickle=True,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             pickles = pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -772,6 +803,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          result_shape=(None, nSamples),
                          single_file=False,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
              pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -797,6 +829,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          result_shape=(None, nSamples),
                          single_file=True,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
              pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -814,7 +847,7 @@ class TestParallelMap():
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
 
-        # Wait a second (literally) so that no new parallel jobs started by
+        # Wait a second (literally) so that no new parallel workers started by
         # `test_existing_cluster` erroneously use existing HDF files
         time.sleep(1.0)
 
@@ -832,6 +865,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          sabotage_hdf5=False,
                          n_inputs=self.nChannels,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             hdfResults = pmap.compute()
         colRes = str(pmap.results_container)
@@ -845,6 +879,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          n_inputs=self.nChannels,
                          write_pickle=True,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             pklResults = pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -867,6 +902,7 @@ class TestParallelMap():
                             n_inputs=self.nChannels,
                             write_pickle=True,
                             single_file=True,
+                            partition=defaultQ,
                             setup_interactive=False) as pmap:
                 pmap.compute()
             assert "Pickling of results does not support single output file creation" in str(valerr.value)
@@ -879,6 +915,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          sabotage_hdf5=True,
                          n_inputs=self.nChannels,
+                         partition=defaultQ,
                          setup_interactive=False) as pmap:
             mixedResults = pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -914,6 +951,7 @@ class TestParallelMap():
                             sabotage_hdf5=True,
                             n_inputs=self.nChannels,
                             single_file=True,
+                            partition=defaultQ,
                             setup_interactive=False) as pmap:
                 pmap.compute()
 
@@ -926,6 +964,7 @@ class TestParallelMap():
                            range(self.nChannels),
                            sabotage_hdf5=True,
                            n_inputs=self.nChannels,
+                           partition=defaultQ,
                            setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
@@ -940,6 +979,7 @@ class TestParallelMap():
                            sabotage_hdf5=True,
                            n_inputs=self.nChannels,
                            write_pickle=True,
+                           partition=defaultQ,
                            setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
@@ -1015,7 +1055,7 @@ class TestParallelMap():
             "   time.sleep(10)\n" +\
             "   return\n" +\
             "if __name__ == '__main__':\n" +\
-            "   client = esi_cluster_setup(partition='8GBDEV',n_jobs=1, interactive=False)\n" +\
+            "   client = esi_cluster_setup(partition='8GBDEV',n_workers=1, interactive=False)\n" +\
             "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
@@ -1049,7 +1089,7 @@ class TestParallelMap():
             "from acme import esi_cluster_setup\n" +\
             "import time\n" +\
             "if __name__ == '__main__':\n" +\
-            "   esi_cluster_setup(partition='8GBDEV',n_jobs=1, interactive=False)\n" +\
+            "   esi_cluster_setup(partition='8GBDEV',n_workers=1, interactive=False)\n" +\
             "   time.sleep(60)\n"
         with open(scriptName, "w") as f:
             f.write(scriptContents)
@@ -1228,15 +1268,15 @@ class TestParallelMap():
         else:
 
             # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`
-            # with `mem_per_job='esstimate_memuse:XY'`
-            client = esi_cluster_setup(partition="auto", mem_per_job="estimate_memuse:12", n_jobs=1)
+            # with `mem_per_worker='esstimate_memuse:XY'`
+            client = esi_cluster_setup(partition="auto", mem_per_worker="estimate_memuse:12", n_workers=1)
 
             # Ensure the right partition was picked (16GBXY, not 8GBXY)
             assert "16GB" in client.cluster.job_header.split("-p ")[1].split("\n")[0]
 
-            # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_job!
+            # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_worker!
             with pytest.raises(customIOError):
-                esi_cluster_setup(partition="auto", mem_per_job="invalid")
+                esi_cluster_setup(partition="auto", mem_per_worker="invalid")
             cluster_cleanup(client)
 
             # Full run (finally) w/10 workers, 5 of em get mem-profiled
@@ -1274,14 +1314,14 @@ class TestParallelMap():
                 esi_cluster_setup(partition="invalid", interactive=False)
             cluster_cleanup()
             with pytest.raises(ValueError):
-                esi_cluster_setup(mem_per_job="invalidGB", interactive=False)
+                esi_cluster_setup(mem_per_worker="invalidGB", interactive=False)
             cluster_cleanup()
             with pytest.raises(ValueError):
-                esi_cluster_setup(mem_per_job="-20MB", interactive=False)
+                esi_cluster_setup(mem_per_worker="-20MB", interactive=False)
             cluster_cleanup()
 
             # Over-allocation of memory should default to partition max
-            client = esi_cluster_setup(partition="8GBDEV", n_jobs=1, mem_per_job="9000MB", interactive=False)
+            client = esi_cluster_setup(partition="8GBDEV", n_workers=1, mem_per_worker="9000MB", interactive=False)
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
             assert np.round(memory / 1000**3)[0] == 8
@@ -1300,11 +1340,11 @@ class TestParallelMap():
             cluster_cleanup()
 
             # Supply extra args to start client for actual tests
-            client = esi_cluster_setup(partition="8GBXS", job_extra=["--output={}".format(slurmOut)], interactive=False)
+            client = esi_cluster_setup(partition=defaultQ, job_extra=["--output={}".format(slurmOut)], interactive=False)
             assert "--output={}".format(slurmOut) in client.cluster.job_header
 
         else:
-            client = esi_cluster_setup(n_jobs=6, interactive=False)
+            client = esi_cluster_setup(n_workers=6, interactive=False)
 
         # Re-run tests with pre-allocated client (except for those in `skipTests`)
         skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun", "test_memest", "_prep_data"]

@@ -43,8 +43,8 @@ class ParallelMap(object):
         single_file=False,
         write_pickle=False,
         partition="auto",
-        n_jobs="auto",
-        mem_per_job="auto",
+        n_workers="auto",
+        mem_per_worker="auto",
         setup_timeout=60,
         setup_interactive=True,
         stop_client="auto",
@@ -125,13 +125,13 @@ class ParallelMap(object):
             but sufficient memory and shortest runtime).
             To override auto-selection, provide name of SLURM queue explicitly. See, e.g.,
             :func:`~acme.esi_cluster_setup` for details.
-        n_jobs : int or "auto"
-            Number of SLURM jobs (=workers) to spawn. If `"auto"` (default), then
-            ``n_jobs = n_inputs``, i.e., every SLURM worker performs a single
+        n_workers : int or "auto"
+            Number of SLURM workers (=jobs) to spawn. If `"auto"` (default), then
+            ``n_workers = n_inputs``, i.e., every SLURM worker performs a single
             call of `func`.
             If `n_inputs` is large and executing `func` is fast, setting
-            ``n_jobs = int(n_inputs / 2)`` might be beneficial. See Notes for details.
-        mem_per_job : str
+            ``n_workers = int(n_inputs / 2)`` might be beneficial. See Notes for details.
+        mem_per_worker : str
             Memory booking for each SLURM worker. If `"auto"` (default), the standard
             value is inferred from the used partition (if possible). See, e.g.,
             :func:`~acme.esi_cluster_setup` for details.
@@ -142,7 +142,7 @@ class ParallelMap(object):
             If `True` (default), user input is queried in case not enough SLURM
             workers could be started within `setup_timeout` seconds. If no input
             is provided, the current number of spawned workers is used (even if
-            smaller than the amount requested by `n_jobs`). If `False`, no user
+            smaller than the amount requested by `n_workers`). If `False`, no user
             choice is requested.
         stop_client : bool or "auto"
             If `"auto"` (default), automatically started distributed computing clients
@@ -228,7 +228,7 @@ class ParallelMap(object):
 
         # Create an instance of `ACMEdaemon` that does the actual parallel computing work
         self.daemon = ACMEdaemon(self,
-                                 n_jobs=n_jobs,
+                                 n_workers=n_workers,
                                  write_worker_results=write_worker_results,
                                  output_dir=output_dir,
                                  result_shape=result_shape,
@@ -237,7 +237,7 @@ class ParallelMap(object):
                                  write_pickle=write_pickle,
                                  dryrun=dryrun,
                                  partition=partition,
-                                 mem_per_job=mem_per_job,
+                                 mem_per_worker=mem_per_worker,
                                  setup_timeout=setup_timeout,
                                  setup_interactive=setup_interactive,
                                  stop_client=stop_client)

@@ -44,7 +44,7 @@ __all__ = ["ACMEdaemon"]
 class ACMEdaemon(object):
 
     # Restrict valid class attributes
-    __slots__ = "func", "argv", "kwargv", "n_calls", "n_jobs", "acme_func", \
+    __slots__ = "func", "argv", "kwargv", "n_calls", "n_workers", "acme_func", \
         "task_ids", "out_dir", "collect_results", "results_container", \
         "client", "stop_client", "has_slurm", "log"
 
@@ -64,7 +64,7 @@ class ACMEdaemon(object):
         argv=None,
         kwargv=None,
         n_calls=None,
-        n_jobs="auto",
+        n_workers="auto",
         write_worker_results=True,
         output_dir=None,
         result_shape=None,
@@ -73,7 +73,7 @@ class ACMEdaemon(object):
         write_pickle=False,
         dryrun=False,
         partition="auto",
-        mem_per_job="auto",
+        mem_per_worker="auto",
         setup_timeout=60,
         setup_interactive=True,
         stop_client="auto",
@@ -105,8 +105,8 @@ class ACMEdaemon(object):
         n_calls : int
             Number of concurrent calls of `func` to perform. If `pmap` is not `None`,
             then ``n_calls = pmap.n_inputs``
-        n_jobs : int or "auto"
-            Number of SLURM jobs (=workers) to spawn. See :class:~`acme.ParallelMap`
+        n_workers : int or "auto"
+            Number of SLURM workers (=jobs) to spawn. See :class:~`acme.ParallelMap`
             for details.
         write_worker_results : bool
             If `True`, the return value(s) of `func` is/are saved on disk. See
@@ -131,7 +131,7 @@ class ACMEdaemon(object):
             `args`, `kwargs` tuple. See :class:~`acme.ParallelMap` for details.
         partition : str
             Name of SLURM partition to use. See :class:~`acme.ParallelMap` for details.
-        mem_per_job : str
+        mem_per_worker : str
             Memory booking for each SLURM worker. See :class:~`acme.ParallelMap` for details.
         setup_timeout : int
             Timeout period (in seconds) for SLURM workers to come online. See
@@ -200,9 +200,9 @@ class ACMEdaemon(object):
                 return
 
         # Either use existing dask client or start a fresh instance
-        self.prepare_client(n_jobs=n_jobs,
+        self.prepare_client(n_workers=n_workers,
                             partition=partition,
-                            mem_per_job=mem_per_job,
+                            mem_per_worker=mem_per_worker,
                             setup_timeout=setup_timeout,
                             setup_interactive=setup_interactive,
                             stop_client=stop_client)
@@ -218,7 +218,7 @@ class ACMEdaemon(object):
         self.argv = None
         self.kwargv = None
         self.n_calls = None
-        self.n_jobs = None
+        self.n_workers = None
         self.acme_func = None
         self.task_ids = None
         self.out_dir = None
@@ -537,9 +537,9 @@ class ACMEdaemon(object):
 
     def prepare_client(
         self,
-        n_jobs="auto",
+        n_workers="auto",
         partition="auto",
-        mem_per_job="auto",
+        mem_per_worker="auto",
         setup_timeout=180,
         setup_interactive=True,
         stop_client="auto"):
@@ -568,7 +568,7 @@ class ACMEdaemon(object):
             self.client = dd.get_client()
             if stop_client == "auto":
                 self.stop_client = False
-            self.n_jobs = len(self.client.cluster.workers)
+            self.n_workers = len(self.client.cluster.workers)
             msg = "Attaching to global parallel computing client {}"
             self.log.info(msg.format(str(self.client)))
             return
@@ -577,7 +577,7 @@ class ACMEdaemon(object):
                 self.stop_client = True
 
         # If things are running locally, simply fire up a dask-distributed client,
-        # otherwise go through the motions of preparing a full cluster job swarm
+        # otherwise go through the motions of preparing a full worker cluster
         if not self.has_slurm:
             self.client = local_cluster_setup(interactive=False)
 
@@ -592,38 +592,38 @@ class ACMEdaemon(object):
                 if is_esi_node():
                     msg = "Automatic SLURM partition selection is experimental"
                     self.log.warning(msg)
-                    mem_per_job = self.estimate_memuse()
+                    mem_per_worker = self.estimate_memuse()
                 else:
                     err = "Automatic SLURM partition selection currently only available " +\
                         "on the ESI HPC cluster. "
                     self.log.error(err)
 
-            # If `n_jobs` is `"auto`, set `n_jobs = n_calls` (default)
-            msg = "{} `n_jobs` has to be 'auto' or an integer >= 2, not {}"
-            if isinstance(n_jobs, str):
-                if n_jobs != "auto":
-                    raise ValueError(msg.format(self.msgName, n_jobs))
-                n_jobs = self.n_calls
+            # If `n_workers` is `"auto`, set `n_workers = n_calls` (default)
+            msg = "{} `n_workers` has to be 'auto' or an integer >= 2, not {}"
+            if isinstance(n_workers, str):
+                if n_workers != "auto":
+                    raise ValueError(msg.format(self.msgName, n_workers))
+                n_workers = self.n_calls
 
             # All set, remaining input processing is done by respective `*_cluster_setup` routines
             if is_esi_node():
-                self.client = esi_cluster_setup(partition=partition, n_jobs=n_jobs,
-                                                mem_per_job=mem_per_job, timeout=setup_timeout,
+                self.client = esi_cluster_setup(partition=partition, n_workers=n_workers,
+                                                mem_per_worker=mem_per_worker, timeout=setup_timeout,
                                                 interactive=setup_interactive, start_client=True)
 
             # Unknown cluster node, use vanilla config
             else:
                 wrng = "Cluster node {} not recognized. Falling back to vanilla " +\
-                    "SLURM setup allocating one worker and one core per job"
+                    "SLURM setup allocating one worker and one core per worker"
                 self.log.warning(wrng.format(socket.getfqdn()))
-                workers_per_job = 1
+                processes_per_worker = 1
                 n_cores = 1
                 self.client = slurm_cluster_setup(partition=partition,
                                                   n_cores=n_cores,
-                                                  n_jobs=n_jobs,
-                                                  workers_per_job=workers_per_job,
-                                                  mem_per_job=mem_per_job,
-                                                  n_jobs_startup=100,
+                                                  n_workers=n_workers,
+                                                  processes_per_worker=processes_per_worker,
+                                                  mem_per_worker=mem_per_worker,
+                                                  n_workers_startup=100,
                                                   timeout=setup_timeout,
                                                   interactive=setup_interactive,
                                                   interactive_wait=120,
@@ -636,8 +636,8 @@ class ACMEdaemon(object):
                 msg = "{} Could not start distributed computing client. "
                 raise ConnectionAbortedError(msg.format(self.msgName))
 
-        # Set `n_jobs` to no. of active workers in the initialized cluster
-        self.n_jobs = len(self.client.cluster.workers)
+        # Set `n_workers` to no. of active workers in the initialized cluster
+        self.n_workers = len(self.client.cluster.workers)
 
         # If single output file saving was chosen, initialize distributed
         # lock for shared writing to container
@@ -751,7 +751,7 @@ class ACMEdaemon(object):
             self.prepare_output(write_worker_results=write_worker_results,
                                 single_file=single_file,
                                 write_pickle=write_pickle)
-            self.prepare_client(n_jobs=self.n_jobs, stop_client=self.stop_client)
+            self.prepare_client(n_workers=self.n_workers, stop_client=self.stop_client)
 
         # Check if the underlying parallel computing cluster hosts actually usable workers
         if len([w["memory_limit"] for w in self.client.cluster.scheduler_info["workers"].values()]) == 0:
@@ -812,7 +812,7 @@ class ACMEdaemon(object):
             logFiles = []
             logDir = os.path.dirname(self.client.cluster.dashboard_link) + "/info/main/workers.html"
         msg = "Preparing {} parallel calls of `{}` using {} workers"
-        self.log.info(msg.format(self.n_calls, self.func.__name__, self.n_jobs))
+        self.log.info(msg.format(self.n_calls, self.func.__name__, self.n_workers))
         msg = "Log information available at {}"
         self.log.info(msg.format(logDir))
 
