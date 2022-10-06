@@ -1338,6 +1338,10 @@ class TestParallelMap():
                                        interactive=False)
             assert "--output={}".format(slurmOut) in client.cluster.job_header
 
+            # Invoking `esi_cluster_setup` with existing client must not start a new one
+            clnt = esi_cluster_setup(partition="16GBXS", n_workers=2, interactive=False)
+            assert clnt == client
+
         else:
             client = esi_cluster_setup(n_workers=6, interactive=False)
 
