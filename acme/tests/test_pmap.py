@@ -141,7 +141,7 @@ class TestParallelMap():
         return tempDir, sigName
 
     # Test setup of `ParallelMap` w/different functions args/kwargs
-    def test_init(self):
+    def test_init(self, testclient=None):
 
         # Collected auto-generated output directories in list for later cleanup
         outDirs = []
@@ -205,19 +205,15 @@ class TestParallelMap():
             assert "No object has required length of 8 matching `n_inputs`" in str(valerr.value)
 
         # Clean up testing folder and any running clients
-        cluster_cleanup()
+        if testclient is None:
+            cluster_cleanup()
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
 
-    # Functionality tests: perform channel-concurrent low-pass filtering
-    def test_simple_filter(self):
+        return testclient
 
-        # If called by `test_existing_cluster` use pre-allocated client for all computations
-        try:
-            dd.get_client()
-            existingClient = True
-        except ValueError:
-            existingClient = False
+    # Functionality tests: perform channel-concurrent low-pass filtering
+    def test_simple_filter(self, testclient=None):
 
         # Prepare data containers
         tempDir, sigName = self._prep_data("acme_tmp")
@@ -380,7 +376,7 @@ class TestParallelMap():
 
         # Ensure log-file generation produces a non-empty log-file at the expected location
         # Bonus: leave computing client alive and vet default SLURM settings
-        if not existingClient:
+        if testclient is None:
             cluster_cleanup(pmap.client)
         for handler in pmap.log.handlers:
             if isinstance(handler, logging.FileHandler):
@@ -404,7 +400,7 @@ class TestParallelMap():
         # Ensure client has not been killed; perform post-hoc check of default SLURM settings
         assert dd.get_client()
         client = dd.get_client()
-        if useSLURM and not existingClient:
+        if useSLURM is True and testclient is None:
             assert pmap.n_calls == pmap.n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             partition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
@@ -424,7 +420,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          logfile=customLog,
                          verbose=True,
-                         stop_client=not existingClient,
+                         stop_client=testclient is None,
                          partition=defaultQ,
                          setup_interactive=False) as pmap:
             pmap.compute()
@@ -437,7 +433,7 @@ class TestParallelMap():
         assert len([h for h in pmap.log.handlers if isinstance(h, logging.FileHandler)]) == 1
 
         # Ensure client has been stopped
-        if not existingClient:
+        if testclient is None:
             with pytest.raises(ValueError):
                 dd.get_client()
 
@@ -462,7 +458,7 @@ class TestParallelMap():
         # Post-hoc check of client to ensure custom settings were respected
         client = pmap.client
         assert pmap.n_calls == self.nChannels
-        if useSLURM:
+        if useSLURM is True and testclient is None:
             assert pmap.n_workers == n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
@@ -472,7 +468,7 @@ class TestParallelMap():
             assert round(memory[0] / 1000**3) == int(mem_per_worker.replace("GB", ""))
 
         # Let `cluster_cleanup` murder the custom setup and ensure it did its job
-        if not existingClient:
+        if testclient is None:
             cluster_cleanup(pmap.client)
             with pytest.raises(ValueError):
                 dd.get_client()
@@ -495,7 +491,7 @@ class TestParallelMap():
         # Post-hoc check of client to ensure custom settings were respected
         client = pmap.client
         assert pmap.n_calls == self.nChannels
-        if useSLURM:
+        if useSLURM and testclient is None:
             assert pmap.n_workers == n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
@@ -503,7 +499,7 @@ class TestParallelMap():
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
             assert round(memory[0] / 1000**3) * 1000 == int(mem_per_worker.replace("MB", ""))
-        if not existingClient:
+        if testclient is None:
             cluster_cleanup(pmap.client)
 
         # Close any open HDF5 files to not trigger any `OSError`s, close running clusters
@@ -522,8 +518,10 @@ class TestParallelMap():
         # `test_existing_cluster` erroneously use existing HDF files
         time.sleep(1.0)
 
+        return testclient
+
     # More functionality tests: ensure user-funcs w/multiple outputs are processed correctly
-    def test_medium_filter(self):
+    def test_medium_filter(self, testclient=None):
 
         # Prepare data containers
         _, sigName = self._prep_data("acme_tmp2")
@@ -608,8 +606,10 @@ class TestParallelMap():
         # `test_existing_cluster` erroneously use existing HDF files
         time.sleep(1.0)
 
+        return testclient
+
     # Even more functionality tests: ensure output array stacking works
-    def test_outshape(self):
+    def test_outshape(self, testclient=None):
 
         # Prepare data containers
         _, sigName = self._prep_data("acme_tmp_outshape")
@@ -851,8 +851,10 @@ class TestParallelMap():
         # `test_existing_cluster` erroneously use existing HDF files
         time.sleep(1.0)
 
+        return testclient
+
     # Test if pickling/emergency pickling and I/O in general works as intended
-    def test_pickling(self):
+    def test_pickling(self, testclient=None):
 
         # Collected auto-generated output directories in list for later cleanup
         outDirs = []
@@ -991,6 +993,8 @@ class TestParallelMap():
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
 
+        return testclient
+
     # test if KeyboardInterrupts are handled correctly
     @skip_if_not_linux
     def test_cancel(self):
@@ -1069,7 +1073,7 @@ class TestParallelMap():
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
             logStr = "<ParallelMap> INFO: Log information available at"
             buffer = bytearray()
-            timeout = 30
+            timeout = 60
             t0 = time.time()
             for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
                 buffer.extend(line)
@@ -1145,21 +1149,6 @@ class TestParallelMap():
         if platform.machine() == "ppc64le":
             arrsize = 0.5
             estMem = 1
-
-        # First, trigger a warning by attempting to perform memory estimation
-        # with `single_file = True`
-        pmap = ParallelMap(memtest_func,
-                           np.arange(2),
-                           2,
-                           sleeper=2,
-                           arrsize=arrsize,
-                           logfile=customLog,
-                           single_file=True,
-                           setup_interactive=False)
-        pmap.daemon.estimate_memuse()
-        with open(customLog, "r", encoding="utf8") as f:
-            logTxt = f.read()
-        assert "Performing memory estimation runs with `single_file = True` may corrupt output file" in logTxt
 
         # Prepare `ParallelMap` instance for 2 concurrent calls of `memtest_func`:
         # a 2GB array is allocated, set final sleep wait period to 2 seconds, so
@@ -1267,16 +1256,19 @@ class TestParallelMap():
 
         else:
 
-            # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`
-            # with `mem_per_worker='esstimate_memuse:XY'`
-            client = esi_cluster_setup(partition="auto", mem_per_worker="estimate_memuse:12", n_workers=1)
-
-            # Ensure the right partition was picked (16GBXY, not 8GBXY)
-            assert "16GB" in client.cluster.job_header.split("-p ")[1].split("\n")[0]
-
             # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_worker!
             with pytest.raises(customIOError):
                 esi_cluster_setup(partition="auto", mem_per_worker="invalid")
+
+            # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`
+            # with `mem_per_worker='esstimate_memuse:XY'`
+            client = esi_cluster_setup(partition="auto",
+                                       mem_per_worker="estimate_memuse:12",
+                                       n_workers=1,
+                                       interactive=False)
+
+            # Ensure the right partition was picked (16GBXY, not 8GBXY)
+            assert "16GB" in client.cluster.job_header.split("-p ")[1].split("\n")[0]
             cluster_cleanup(client)
 
             # Full run (finally) w/10 workers, 5 of em get mem-profiled
@@ -1340,18 +1332,23 @@ class TestParallelMap():
             cluster_cleanup()
 
             # Supply extra args to start client for actual tests
-            client = esi_cluster_setup(partition=defaultQ, job_extra=["--output={}".format(slurmOut)], interactive=False)
+            client = esi_cluster_setup(partition=defaultQ,
+                                       n_workers=10,
+                                       job_extra=["--output={}".format(slurmOut)],
+                                       interactive=False)
             assert "--output={}".format(slurmOut) in client.cluster.job_header
 
         else:
             client = esi_cluster_setup(n_workers=6, interactive=False)
 
-        # Re-run tests with pre-allocated client (except for those in `skipTests`)
+        # Re-run tests with pre-allocated client (except for those in `skipTests`); ensure
+        # client "survives" multiple independent test runs and is not accidentally closed
         skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun", "test_memest", "_prep_data"]
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:
-            getattr(self, test)()
+            clnt = getattr(self, test)(testclient=client)
+            assert clnt == client
         client.close()
         client.cluster.close()
         if useSLURM:

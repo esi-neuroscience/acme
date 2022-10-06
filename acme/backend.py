@@ -650,15 +650,12 @@ class ACMEdaemon(object):
         workload
         """
 
-        # Be careful with memory estimation if single-file writing is enabled
-        if self.kwargv.get("singleFile") is not None:
-            msg = "Performing memory estimation runs with `single_file = True` " +\
-                "may corrupt output file %s. Please consider using `single_file = False` " +\
-                    "for memory estimation. "
-            self.log.warning(msg, self.results_container)
-
         # Let helper randomly pick some jobs and prepare corresponding args + kwargs
         dryRunIdx, dryRunArgs, dryRunKwargs = self._dryrun_setup()
+
+        # Append new dummy keyword to return before any disk-writes happen
+        for k in range(len(dryRunKwargs)):
+            dryRunKwargs[k]["memEstRun"] = True
 
         # Set run-time for each job (in seconds) and allocate arrays for memory
         # consumption estimates (in GB)
@@ -666,10 +663,10 @@ class ACMEdaemon(object):
         memPerSec = np.zeros((runTime,))
         memPerJob = np.zeros((len(dryRunIdx),))
 
-        # Check if auto-generated output files have to be removed
-        rmOutDir = False
-        if self.out_dir is not None and self.kwargv.get("singleFile") is None:
-            rmOutDir = True
+        # # Check if auto-generated output files have to be removed
+        # rmOutDir = False
+        # if self.out_dir is not None and self.kwargv.get("singleFile") is None:
+        #     rmOutDir = True
 
         # Adequately warn about this heuristic gymnastics...
         msg = "Estimating memory consumption of {fname:s} by running {numwrks:d} " +\
@@ -703,10 +700,10 @@ class ACMEdaemon(object):
             # Compute peak memory consumption across `runTime` seconds
             memPerJob[i] = memPerSec.max()
 
-            # Remove auto-generated files (if any were created within `runTime` seconds)
-            if rmOutDir:
-                if os.path.isfile(self.kwargv["outFile"][idx]):
-                    os.unlink(self.kwargv["outFile"][idx])
+            # # Remove auto-generated files (if any were created within `runTime` seconds)
+            # if rmOutDir:
+            #     if os.path.isfile(self.kwargv["outFile"][idx]):
+            #         os.unlink(self.kwargv["outFile"][idx])
 
         # Compute aggregate average memory consumption across all runs
         memUsage = memPerJob.mean()
@@ -1001,10 +998,15 @@ class ACMEdaemon(object):
         logName = kwargs.pop("logName")
         singleFile = kwargs.pop("singleFile", False)
         stackingDim = kwargs.pop("stackingDim", None)
+        memEstRun = kwargs.pop("memEstRun", False)
         log = logging.getLogger(logName)
 
         # Call user-provided function
         result = func(*args, **kwargs)
+
+        # For memory estimation runs, don't start saving stuff
+        if memEstRun:
+            return
 
         # Save results: either (try to) use HDF5 or pickle stuff
         if fname.endswith(".h5"):

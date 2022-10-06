@@ -143,7 +143,7 @@ def esi_cluster_setup(partition="8GBXS", n_workers=2, mem_per_worker="auto", n_w
     customPrint, _ = _logging_setup()
 
     # For later reference: dynamically fetch name of current function
-    funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
+    funcName = "{pre:s}<{pkg:s}{name:s}> ".format(pre="Syncopy " if isSpyModule else "",
                                                  pkg="ACME: " if isSpyModule else "",
                                                  name=inspect.currentframe().f_code.co_name)
 
