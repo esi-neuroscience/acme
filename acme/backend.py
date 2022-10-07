@@ -724,7 +724,7 @@ class ACMEdaemon(object):
         """
 
         # If `prepare_client` has not been called yet, don't attempt to compute anything
-        if not hasattr(self, "client"):
+        if self.client is None:
             return
 
         # Ensure `debug` is a simple Boolean flag
@@ -734,21 +734,13 @@ class ACMEdaemon(object):
 
         # Deduce result output information
         write_worker_results = self.acme_func == self.func_wrapper
+        single_file = False
         if write_worker_results:
             write_pickle = self.results_container is None
             if not write_pickle and self.kwargv.get("singleFile") is not None:
                 single_file = True
         else:
             write_pickle = False
-            single_file = False
-
-        # If `client` attribute is not set, the daemon is being re-used: prepare
-        # everything for re-entry
-        if self.client is None:
-            self.prepare_output(write_worker_results=write_worker_results,
-                                single_file=single_file,
-                                write_pickle=write_pickle)
-            self.prepare_client(n_workers=self.n_workers, stop_client=self.stop_client)
 
         # Check if the underlying parallel computing cluster hosts actually usable workers
         if len([w["memory_limit"] for w in self.client.cluster.scheduler_info["workers"].values()]) == 0:
