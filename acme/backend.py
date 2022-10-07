@@ -894,7 +894,7 @@ class ACMEdaemon(object):
                 values = list(self.kwargv["outFile"])
                 finalMsg += "Results have been saved to {}".format(self.out_dir)
             else:
-                if self.kwargv.get("singleFile") is not None:
+                if single_file:
                     finalMsg += "Results have been saved to {}".format(self.results_container)
                     if values is None:
                         values = [self.results_container]
