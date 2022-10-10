@@ -54,4 +54,5 @@ Navigation
    userguide
    best_practices
    troubleshooting_faq
+   advanced_usage
    api
