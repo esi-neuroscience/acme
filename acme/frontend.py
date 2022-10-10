@@ -90,14 +90,15 @@ class ParallelMap(object):
             The path to a custom output directory can be specified via providing
             `output_dir`.
         result_shape : tuple or None
-            Only relevant if `write_worker_results` is `True` and `write_pickle`
-            is `False`. If provided, return values of `func` are slotted into
-            a (virtual) dataset of shape `result_shape`, where a single
-            `None` entry designates the stacking dimension. For instance,
-            ``result_shape = (None, 100)`` implies that `func` returns a
-            100-element array which is to be stacked along the first dimension
-            for each concurrent call of `func` resulting in a ``(n_inputs, 100)``
-            dataset. See Notes and Examples for details.
+            Only relevant if `write_pickle` is `False`. If provided, return
+            values of `func` are slotted into a (virtual) dataset (if
+            `write_worker_results` is True) or array (otherwise) of shape
+            `result_shape`, where a single `None` entry designates the stacking
+            dimension. For instance, ``result_shape = (None, 100)`` implies
+            that `func` returns a 100-element array which is to be stacked
+            along the first dimension for each concurrent call of `func`
+            resulting in a ``(n_inputs, 100)`` dataset or array. See Notes
+            and Examples for details.
         result_dtype : str or None
             Only relevant if `result_shape` is not `None`. If provided, determines
             the numerical datatype of the dataset laid out by `result_shape`.

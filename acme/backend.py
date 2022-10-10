@@ -115,7 +115,7 @@ class ACMEdaemon(object):
             If provided, auto-generated results are stored in the given path. See
             :class:~`acme.ParallelMap` for details.
         result_shape : tuple or None
-            If provided, results are slotted into a dataset with layout `result_shape`. See
+            If provided, results are slotted into a dataset/array with layout `result_shape`. See
             :class:~`acme.ParallelMap` for details.
         result_dtype : str or None
             If provided, determines numerical datatype of dataset laid out
