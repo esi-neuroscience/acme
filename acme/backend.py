@@ -45,8 +45,8 @@ class ACMEdaemon(object):
 
     # Restrict valid class attributes
     __slots__ = "func", "argv", "kwargv", "n_calls", "n_workers", "acme_func", \
-        "task_ids", "out_dir", "collect_results", "results_container", \
-        "client", "stop_client", "has_slurm", "log"
+        "task_ids", "out_dir", "collect_results", "results_container", "result_shape", \
+        "result_dtype", "stacking_dim", "client", "stop_client", "has_slurm", "log"
 
     # Prepend every stdout/stderr message with the name of this class
     msgName = "<ACMEdaemon>"
@@ -224,6 +224,9 @@ class ACMEdaemon(object):
         self.out_dir = None
         self.collect_results = None
         self.results_container = None
+        self.result_shape = None
+        self.result_dtype = None
+        self.stacking_dim = None
         self.client = None
         self.stop_client = None
         self.has_slurm = None
@@ -300,8 +303,6 @@ class ACMEdaemon(object):
             self.log.warning("Pickling of results only possible if `write_worker_results` is `True`. ")
         if not write_worker_results and output_dir:
             self.log.warning("Output directory specification has no effect if `write_worker_results` is `False`.")
-        if not write_worker_results and result_shape:
-            self.log.warning("Output array shape specification has no effect if `write_worker_results` is `False`.")
         if write_pickle and result_shape:
             self.log.warning("Pickling of results does not support output array shape specification. ")
         if not write_worker_results and single_file:
@@ -310,6 +311,45 @@ class ACMEdaemon(object):
             msg = "%s Pickling of results does not support single output file creation. "
             raise ValueError(msg%self.msgName)
 
+        # Check validity of output shape/dtype specifications
+        if result_shape is not None:
+            if not isinstance(result_shape, (list, tuple)):
+                msg = "%s `result_shape` has to be either `None` or tuple, not %s"
+                raise TypeError(msg%(self.msgName, str(type(result_shape))))
+
+            if not isinstance(result_dtype, str):
+                msg = "%s `result_dtype` has to be a string, not %s"
+                raise TypeError(msg%(self.msgName, str(type(result_shape))))
+
+            if sum(spec is None for spec in result_shape) != 1:
+                msg = "%s `result_shape` must contain exactly one `None` entry"
+                raise ValueError(msg%self.msgName)
+
+            rShape = list(result_shape)
+            self.stacking_dim = result_shape.index(None)
+            rShape[self.stacking_dim] = self.n_calls
+            if write_worker_results:
+                self.kwargv["stackingDim"] = [self.stacking_dim]
+
+            if not all(isinstance(spec, numbers.Number) for spec in rShape):
+                msg = "%s `result_shape` must only contain numerical values"
+                raise ValueError(msg%self.msgName)
+            if any(spec < 0 or int(spec) != spec for spec in rShape):
+                msg = "%s `result_shape` must only contain non-negative integers"
+                raise ValueError(msg%self.msgName)
+
+            self.result_shape = tuple(rShape)
+            ShapeSource = list(rShape)
+            ShapeSource.pop(self.stacking_dim)
+            ShapeSource = tuple(ShapeSource)
+
+            try:
+                self.result_dtype = np.dtype(result_dtype)
+            except Exception as exc:
+                msg = "%s `result_dtype` has to be a valid NumPy datatype specification. "
+                msg += "Original error message below:\n%s"
+                raise TypeError(msg%(self.msgName, str(exc)))
+
         # If automatic saving of results is requested, make necessary preparations
         if write_worker_results:
 
@@ -317,43 +357,6 @@ class ACMEdaemon(object):
             if not isinstance(output_dir, (type(None), str)):
                 msg = "%s `output_dir` has to be either `None` or str, not %s"
                 raise TypeError(msg%(self.msgName, str(type(output_dir))))
-
-            # Check validity of output shape/dtype specifications
-            if result_shape is not None:
-                if not isinstance(result_shape, (list, tuple)):
-                    msg = "%s `result_shape` has to be either `None` or tuple, not %s"
-                    raise TypeError(msg%(self.msgName, str(type(result_shape))))
-
-                if not isinstance(result_dtype, str):
-                    msg = "%s `result_dtype` has to be a string, not %s"
-                    raise TypeError(msg%(self.msgName, str(type(result_shape))))
-
-                if sum(spec is None for spec in result_shape) != 1:
-                    msg = "%s `result_shape` must contain exactly one `None` entry"
-                    raise ValueError(msg%self.msgName)
-
-                rShape = list(result_shape)
-                stackingDim = result_shape.index(None)
-                rShape[stackingDim] = self.n_calls
-
-                if not all(isinstance(spec, numbers.Number) for spec in rShape):
-                    msg = "%s `result_shape` must only contain numerical values"
-                    raise ValueError(msg%self.msgName)
-                if any(spec < 0 or int(spec) != spec for spec in rShape):
-                    msg = "%s `result_shape` must only contain non-negative integers"
-                    raise ValueError(msg%self.msgName)
-
-                ShapeLayout = tuple(rShape)
-                ShapeSource = list(rShape)
-                ShapeSource.pop(stackingDim)
-                ShapeSource = tuple(ShapeSource)
-
-                try:
-                    dType = np.dtype(result_dtype)
-                except Exception as exc:
-                    msg = "%s `result_dtype` has to be a valid NumPy datatype specification. "
-                    msg += "Original error message below:\n%s"
-                    raise TypeError(msg%(self.msgName, str(exc)))
 
             # If provided, standardize output dir spec, otherwise use default locations
             if output_dir is not None:
@@ -409,9 +412,8 @@ class ACMEdaemon(object):
                         for i in self.task_ids:
                             h5f.create_group("comp_{}".format(i))
                 else:
-                    self.kwargv["stackingDim"] = [stackingDim]
                     with h5py.File(self.results_container, "w") as h5f:
-                        h5f.create_dataset("result_0", shape=ShapeLayout, dtype=dType)
+                        h5f.create_dataset("result_0", shape=self.result_shape, dtype=self.result_dtype)
 
             else:
                 self.kwargv["outFile"] = [os.path.join(outputDir,
@@ -431,11 +433,10 @@ class ACMEdaemon(object):
                     else:
 
                         # Assemble virtual dataset
-                        self.kwargv["stackingDim"] = [stackingDim]
-                        layout = h5py.VirtualLayout(shape=ShapeLayout, dtype=dType)
-                        idx = [slice(None)] * len(ShapeLayout)
+                        layout = h5py.VirtualLayout(shape=self.result_shape, dtype=self.result_dtype)
+                        idx = [slice(None)] * len(self.result_shape)
                         for i, fname in enumerate(self.kwargv["outFile"]):
-                            idx[stackingDim] = i
+                            idx[self.stacking_dim] = i
                             relPath = os.path.join(payloadName, os.path.basename(fname))
                             vsource = h5py.VirtualSource(fname, "result_0", shape=ShapeSource)
                             layout[tuple(idx)] = vsource
@@ -880,7 +881,21 @@ class ACMEdaemon(object):
         if self.collect_results:
             if not isSpyModule:
                 self.log.info("Gathering results in local memory")
-            values = self.client.gather(futures)
+            collected = self.client.gather(futures)
+            if self.result_shape is not None:
+                values = []
+                arrVal = np.empty(shape=self.result_shape, dtype=self.result_dtype)
+                idx = [slice(None)] * len(self.result_shape)
+                for i, res in enumerate(collected):
+                    if not isinstance(res, (list, tuple)):
+                        res = [res]
+                    idx[self.stacking_dim] = i
+                    arrVal[tuple(idx)] = res[0]
+                    for r in res[1:]:
+                        values.append(r)
+                values.insert(0, arrVal)
+            else:
+                values = collected
         else:
             values = None
 
@@ -941,7 +956,7 @@ class ACMEdaemon(object):
                         # if `result_shape` is not `None` and data-sets have to
                         # be pre-allocated), create "symlinks" to corresponding
                         # missing returns
-                        if self.kwargv.get("stackingDim") is not None:
+                        if self.stacking_dim is not None:
                             with h5py.File(self.results_container, "r") as h5r:
                                 with h5py.File(values[0], "r") as h5Tmp:
                                     missingReturns = set(h5Tmp.keys()).difference(h5r.keys())

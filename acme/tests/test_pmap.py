@@ -664,6 +664,18 @@ class TestParallelMap():
                 assert h5single["result_0"].is_virtual is False
                 assert np.array_equal(h5single["result_0"][()].T, h5col["result_0"][()])
 
+        # Finally, ensure in-memory results-collection works as expected
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         result_shape=(None, nSamples),
+                         write_worker_results=False,
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            resInMem = pmap.compute()
+        with h5py.File(colRes, "r") as h5col:
+            assert np.array_equal(h5col["result_0"][()], resInMem[0])
+
         # Ensure dtype is respected
         with ParallelMap(lowpass_simple,
                          sigName,
@@ -842,6 +854,26 @@ class TestParallelMap():
                     for rk in range(1,4):
                         dset = "comp_{}/result_{}".format(k, rk)
                         assert np.array_equal(h5f[dset], h5ref[dset])
+
+        # Finally, ensure in-memory results-collection works w/multiple returns
+        with ParallelMap(lowpass_medium,
+                         sigName,
+                         range(self.nChannels),
+                         result_shape=(None, nSamples),
+                         write_worker_results=False,
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            resInMem = pmap.compute()
+        with h5py.File(multiRet, "r") as h5ref:
+            assert np.array_equal(h5ref["result_0"][()], resInMem[0])
+            rCount = 1
+            for k in range(pmap.n_calls):
+                assert h5ref["comp_{}/{}".format(k, "result_1")][()] == resInMem[rCount]
+                rCount +=1
+                assert np.array_equal(h5ref["comp_{}/{}".format(k, "result_2")][()], resInMem[rCount])
+                rCount +=1
+                assert np.array_equal(h5ref["comp_{}/{}".format(k, "result_3")][()], resInMem[rCount])
+                rCount +=1
 
         # Clean up created results directories
         for folder in outDirs:
