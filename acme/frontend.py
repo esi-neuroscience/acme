@@ -60,16 +60,15 @@ class ParallelMap(object):
         func : callable
             User-defined function to be executed concurrently. Input arguments
             and return values should be "simple" (i.e., regular Python objects or
-            NumPy arrays). See Notes for more information and Examples for
-            details.
+            NumPy arrays). See Examples and [1]_ for more information.
         args : arguments
             Positional arguments of `func`. Should be regular Python objects
-            (lists, tuples, scalars, strings etc.) or NumPy arrays. See Notes
-            for more information and Examples for details.
+            (lists, tuples, scalars, strings etc.) or NumPy arrays. See
+            Examples and [1]_ for more information.
         kwargs : keyword arguments
             Keyword arguments of `func` (if any). Should be regular Python objects
-            (lists, tuples, scalars, strings etc.) or NumPy arrays. See Notes
-            for more information and Examples for details.
+            (lists, tuples, scalars, strings etc.) or NumPy arrays. See Examples
+            and [1]_ for more information.
         n_inputs : int or "auto"
             Number of times `func` is supposed to be called in parallel. Usually,
             `n_inputs` does not have to be provided explicitly. If `n_inputs` is
@@ -77,18 +76,18 @@ class ParallelMap(object):
             `kwargs`. This estimation may fail due to ambiguous input arguments
             (e.g., `args` and/or `kwargs` contain lists of differing lengths)
             triggering a `ValueError`. Only then is it required to set `n_input`
-            manually. See Examples for details.
+            manually. See Examples and [1]_ for more information.
         write_worker_results : bool
             If `True`, the return value(s) of `func` is/are saved on disk.
             If `False`, the output of all parallel calls of `func` is collected
-            in memory. See Examples and Notes for details.
+            in memory. See Examples as well as [1]_ and [2]_ for more information.
         output_dir : str or None
             Only relevant if `write_worker_results` is `True`. If `output_dir` is `None`
             (default) and `write_worker_results` is `True`, all files auto-generated
             by `ParallelMap` are stored in a directory `'ACME_YYYYMMDD-hhmmss-ffffff'`
             (encoding the current time as YearMonthDay-HourMinuteSecond-Microsecond).
             The path to a custom output directory can be specified via providing
-            `output_dir`.
+            `output_dir`. See Examples and [1]_ for more information.
         result_shape : tuple or None
             Only relevant if `write_pickle` is `False`. If provided, return
             values of `func` are slotted into a (virtual) dataset (if
@@ -98,11 +97,13 @@ class ParallelMap(object):
             that `func` returns a 100-element array which is to be stacked
             along the first dimension for each concurrent call of `func`
             resulting in a ``(n_inputs, 100)`` dataset or array. See Notes
-            and Examples for details.
+            and Examples for details. See Examples as well as [1]_ and [2]_
+            for more information.
         result_dtype : str or None
             Only relevant if `result_shape` is not `None`. If provided, determines
             the numerical datatype of the dataset laid out by `result_shape`.
-            By default, results are stored in `float64` format.
+            By default, results are stored in `float64` format. See [2]_ for
+            more details.
         single_file : bool
             Only relevant if `write_worker_results` is `True` and `write_pickle`
             is `False`. If `single_file` is `False` (default), the results of each parallel
@@ -111,11 +112,12 @@ class ParallelMap(object):
             pointing to these files.
             Conversely, if `single_file` is `True`, all parallel workers
             write to the same results container (using a distributed file-locking
-            mechanism). See Notes for more information.
+            mechanism). See [2]_ for more details.
         write_pickle : bool
             Only relevant if `write_worker_results` is `True`. If `True`,
             the return value(s) of `func` is/are pickled to disk (one
-            `'.pickle'`-file per parallel worker).
+            `'.pickle'`-file per parallel worker). See Examples as well as
+            [1]_ and [2]_ for more information.
         partition : str
             Name of SLURM partition to use. If `"auto"` (default), the memory footprint
             of `func` is estimated using dry-run stubs based on randomly sampling
@@ -131,7 +133,8 @@ class ParallelMap(object):
             ``n_workers = n_inputs``, i.e., every SLURM worker performs a single
             call of `func`.
             If `n_inputs` is large and executing `func` is fast, setting
-            ``n_workers = int(n_inputs / 2)`` might be beneficial. See Notes for details.
+            ``n_workers = int(n_inputs / 2)`` might be beneficial. See Examples
+            as well as [1]_ and [2]_ for more information.
         mem_per_worker : str
             Memory booking for each SLURM worker. If `"auto"` (default), the standard
             value is inferred from the used partition (if possible). See, e.g.,
@@ -151,11 +154,13 @@ class ParallelMap(object):
             are left untouched. If `False`, automatically started clients are
             left running after completion, user-provided clients are left untouched.
             If `True`, auto-generated clients *and* user-provided clients are
-            shut down at the end of the computation.
+            shut down at the end of the computation. See Examples as well
+            as [1]_ and [2]_ for more information.
         verbose : None or bool
             If `None` (default), general run-time information as well as warnings
             and errors are shown. If `True`, additionally debug information is
             shown. If `False`, only warnings and errors are propagated.
+            See [2]_ for more details.
         dryrun : bool
             If `True` the user-provided function `func` is executed once using
             one of the input argument tuples prepared for the parallel workers (picked
@@ -163,13 +168,14 @@ class ParallelMap(object):
             actual parallel execution of `func` is supposed to be launched after the
             dry-run. The `dryrun` keyword is intended to to estimate memory consumption
             as well as runtime of worker jobs prior to the actual concurrent
-            computation.
+            computation. See [1]_ and [2]_ for more information.
         logfile : None or bool or str
             If `None` (default) or `False`, all run-time information as well as errors and
             warnings are printed to the command line only. If `True`, an auto-generated
             log-file is set up that records run-time progress. Alternatively, the
             name of a custom log-file can be provided (must not exist). The verbosity
             of recorded information can be controlled via setting `verbose`.
+            See [1]_ and [2]_ for more information.
 
         Returns
         -------
@@ -210,14 +216,18 @@ class ParallelMap(object):
 
         Notes
         -----
-        Please consult the `ACME User Guide <https://esi-acme.readthedocs.io/en/latest/userguide.html>`_
-        for detailed usage information.
+        Please consult [1]_ for detailed usage information.
 
         See also
         --------
         esi_cluster_setup : spawn custom SLURM worker clients on the ESI HPC cluster
         local_cluster_setup : start a local Dask multi-processing cluster on the host machine
         ACMEdaemon : Manager class performing the actual concurrent processing
+
+        References
+        ----------
+        .. [1] https://esi-acme.readthedocs.io/en/latest/userguide.html
+        .. [2] https://esi-acme.readthedocs.io/en/latest/advanced_usage.html
         """
 
         # First and foremost, set up logging system (unless logger is already present)

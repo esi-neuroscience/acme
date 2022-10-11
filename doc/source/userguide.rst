@@ -48,7 +48,7 @@ of the corresponding filenames:
      '/my/current/workdir/ACME_20221007-100302-976973/f_payload/f_3.h5']
 
 Note that ACME auto-generates a directory named ``ACME_YYYYMMDD-hhmmss-ffffff``
-(encoding the current time as `YearMonthDay-HourMinuteSecond-Microsecond``).
+(encoding the current time as ``YearMonthDay-HourMinuteSecond-Microsecond``).
 Each evaluation of ``f`` is stored in a dedicated HDF5 file, that in turn is
 referenced in an aggregate results container ``pmap.results_container``
 (comprised of external links):
@@ -93,8 +93,7 @@ The contents of the containers can be accessed using `h5py <https://docs.h5py.or
 The dataset name `"result_0"` stores the *first* return value of the
 user-provided function ``f``. If ``f`` returns multiple quantities, analogously named
 datasets `'result_0'`, `"result_1"`, `"result_2"`, ... are automatically created
-in the constructed HDF5 containers. See `Auto-Generated HDF5-Files`_
-for more details.
+in the constructed HDF5 containers. See :ref:`hdf5files` for more details.
 
 .. note::
 
