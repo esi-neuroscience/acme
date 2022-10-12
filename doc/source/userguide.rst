@@ -183,6 +183,25 @@ yielding
      array([30., 30., 30.]),
      array([36., 36., 36.])]
 
+Note that setting ``n_inputs`` manually can also be used to execute a function
+``n_inputs`` times with the same arguments (again ``write_worker_results``
+is set to ``False`` for illustration purposes only):
+
+.. code-block:: python
+
+    with ParallelMap(f, 2, 3, n_inputs=4, write_worker_results=False) as pmap:
+        results = pmap.compute()
+
+Then
+
+.. code-block:: python
+
+    >>> results
+    [15, 15, 15, 15]
+
+This functionality is sometimes useful for routines that randomize their
+in- and/or outputs. An example and more information is provided in :ref:`taskIDex`
+
 Collect Results in Single Dataset
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 When evaluating functions that return a NumPy array (like in the example above),
