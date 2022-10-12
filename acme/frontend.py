@@ -364,8 +364,8 @@ class ParallelMap(object):
         # If `n_input` is `"auto"`, make an educated guess as to how many parallel
         # executions of `func` are intended; if input args contained multiple
         # 1D-array-likes, pump the brakes. If `n_input` was explicitly provided,
-        # ensure at least one input argument actually contains `n_input` elements
-        # for distribution across parallel workers
+        # either all input arguments must have unit length (or are nd-arrays)
+        # or at at least one input argument actually contains `n_input` elements
         if guessInputs:
             if len(set(argLens)) > 1:
                 msg = "{} automatic input distribution failed: found {} objects " +\
@@ -373,7 +373,7 @@ class ParallelMap(object):
                 raise ValueError(msg.format(self.msgName, len(argLens), min(argLens), max(argLens)))
             n_inputs = argLens[0]
         else:
-            if n_inputs not in set(argLens):
+            if n_inputs not in set(argLens) and not all(arglen == 1 for arglen in argLens):
                 msg = "{} No object has required length of {} matching `n_inputs`. "
                 raise ValueError(msg.format(self.msgName, n_inputs))
         self.n_inputs = int(n_inputs)
