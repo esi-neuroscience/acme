@@ -132,10 +132,26 @@ html_show_copyright = False
 
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
-    'python': ('https://docs.python.org/3', None),
-    'numpy': ('https://docs.scipy.org/doc/numpy/', None),
-    'scipy': ('https://docs.scipy.org/doc/scipy/reference', None),
-    'matplotlib': ('https://matplotlib.org', None),
-    'h5py': ('http://docs.h5py.org/en/latest/', None),
-    'dask': ('https://docs.dask.org/en/latest/', None)
+    "python": ("https://docs.python.org/3",
+               "https://docs.python.org/3/objects.inv"
+    ),
+    "numpy": (
+        "https://docs.scipy.org/doc/numpy/",
+        "https://docs.scipy.org/doc/numpy/objects.inv",
+    ),
+    "dask": (
+        "https://docs.dask.org/en/latest",
+        "https://docs.dask.org/en/latest/objects.inv",
+
+    ),
+    "distributed": (
+        "https://distributed.dask.org/en/stable/",
+        "https://distributed.dask.org/en/stable/objects.inv",
+    ),
+    "scipy": ("https://docs.scipy.org/doc/scipy/reference",
+              "https://docs.scipy.org/doc/scipy/reference/objects.inv"
+    ),
+    "h5py": ("http://docs.h5py.org/en/latest/",
+             "http://docs.h5py.org/en/latest/objects.inv"
+    )
 }

@@ -128,6 +128,17 @@ and
     >>> pmap.results_container
     '/path/to/folder/f.h5'
 
+.. note::
+
+    While ACME's default storage format is HDF5, user-functions that return
+    non-HDF compatible objects can be processed as well as long as the returned
+    quantities are serializable. The keyword ``write_pickle`` tells ACME to
+    pickle results of computational runs. See :ref:`pickling` for an example and more
+    information. In addition, ACME uses an "emergency pickling" strategy to
+    save results if at all possible: if the output of some computational runs
+    cannot be stored in HDF5, ACME switches to on-demand pickling regardless
+    of ``write_pickle``'s value.
+
 Alternatively, results may be collected directly in memory by setting
 ``write_worker_results`` to ``False``. This is **not** recommended, since
 values have to be gathered from compute nodes via ethernet (slow) and
@@ -303,83 +314,6 @@ Note the info message:
 
     >>> <ParallelMap> INFO: Attaching to global parallel computing client <Client: 'tcp://10.100.32.5:39747' processes=50 threads=50, memory=400.00 GB>
 
-Non-Interactive Logging
-^^^^^^^^^^^^^^^^^^^^^^^
-Finally, suppose ``f`` has to be called for 20000 different values of ``z``.
-Under the assumption that this computation takes a while, any run-time
-messages are to be written to a an auto-generated log-file:
-
-.. code-block:: python
-
-    z = rng.integers(low=1, high=10, size=20000, endpoint=True)
-    with ParallelMap(f, x, y, z=z, logfile=True) as pmap:
-        results = pmap.compute()
-
-Alternatively, logging information may be written to a file `"my_log.txt"`` instead
-
-.. code-block:: python
-
-    z = rng.integers(low=1, high=10, size=20000, endpoint=True)
-    with ParallelMap(f, x, y, z=z, logfile="my_log.txt") as pmap:
-        results = pmap.compute()
-
-Alternative Storage Format: Pickle
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-In some cases it might be necessary to work with objects that are not
-HDF5 compatible, e.g., sparse matrices created by `scipy.sparse`. Consider
-
-.. code-block:: python
-
-    from scipy.sparse import spdiags
-    ndim = 4
-    x = spdiags(np.ones((ndim,)), 0, ndim, ndim)
-    y = spdiags(3 * np.ones((ndim,)), 0, ndim, ndim)
-
-Then
-
-.. code-block:: python
-
-    >>> x
-    <4x4 sparse matrix of type '<class 'numpy.float64'>'
-        with 4 stored elements (1 diagonals) in DIAgonal format>
-    >>> y
-    <4x4 sparse matrix of type '<class 'numpy.float64'>'
-        with 4 stored elements (1 diagonals) in DIAgonal format>
-    >>> x.toarray()
-    array([[1., 0., 0., 0.],
-        [0., 1., 0., 0.],
-        [0., 0., 1., 0.],
-        [0., 0., 0., 1.]])
-    >>> y.toarray()
-    array([[3., 0., 0., 0.],
-        [0., 3., 0., 0.],
-        [0., 0., 3., 0.],
-        [0., 0., 0., 3.]])
-    >>> f(x, y)
-    <4x4 sparse matrix of type '<class 'numpy.float64'>'
-        with 4 stored elements (1 diagonals) in DIAgonal format>
-
-In this case, the default HDF5 storage format can be overridden using the
-keyword ``write_pickle``
-
-.. code-block:: python
-
-    with ParallelMap(f, [x, x, x, x], y, write_pickle=True) as pmap:
-        results = pmap.compute()
-
-which yields
-
-.. code-block:: python
-
-    >>> results
-    ['/my/current/workdir/ACME_20221007-100302-976973/f_0.pickle',
-     '/my/current/workdir/ACME_20221007-100302-976973/f_1.pickle',
-     '/my/current/workdir/ACME_20221007-100302-976973/f_2.pickle',
-     '/my/current/workdir/ACME_20221007-100302-976973/f_3.pickle']
-
-Note that ``pmap.results_container`` is ``None`` in this case, as no aggregate
-HDF5 container is generated.
-
 Debugging And Estimating Resource Consumption
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Debugging programs running in parallel can be quite tricky.
@@ -449,6 +383,22 @@ prior to the actual concurrent computation. For instance,
 In general it is strongly recommended to make sure any function supplied
 to :class:`~acme.ParallelMap` works as intended in a sequential setting prior to running
 it in parallel.
+
+Interactive Monitoring
+^^^^^^^^^^^^^^^^^^^^^^
+When starting a distributed computing client, ACME shows a link for connecting
+to its dashboard. For instance, when working on a local machine:
+
+.. code-block:: python
+
+    <local_cluster_setup> Cluster dashboard accessible at http://127.0.0.1:8787/status
+
+Clicking on the link (or copy-pasting it to your browser) opens dask's diagnostic
+dashboard. This web interface offers various ways to monitor the current
+state, memory and CPU usage of parallel workers and also provides an overview
+of the global status of the concurrent processing task started by :class:`~acme.ParallelMap`:
+
+>>> INCLUDE GIF HERE
 
 Wait, There's More...
 ---------------------

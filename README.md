@@ -21,7 +21,7 @@ ACME is developed at the
 [Ernst Strüngmann Institute (ESI) gGmbH for Neuroscience in Cooperation with Max Planck Society](https://www.esi-frankfurt.de/>)
 and released free of charge under the
 [BSD 3-Clause "New" or "Revised" License](https://en.wikipedia.org/wiki/BSD_licenses#3-clause_license_(%22BSD_License_2.0%22,_%22Revised_BSD_License%22,_%22New_BSD_License%22,_or_%22Modified_BSD_License%22)).
-ACME relies on the concurrent processing library [Dask](https://docs.dask.org/en/latest/>)
+ACME relies heavily on the concurrent processing library [dask](https://docs.dask.org/en/latest/>)
 and was primarily designed to facilitate the use of [SLURM](https://slurm.schedmd.com/documentation.html)
 on the ESI HPC cluster (although other HPC infrastructure running SLURM can be
 leveraged as well). Local multi-processing hardware (i.e., multi-core CPUs)
