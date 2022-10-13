@@ -444,10 +444,10 @@ class ACMEdaemon(object):
                             h5f.create_virtual_dataset("result_0", layout)
 
             # Include logger name in keywords so that workers can use it
-            self.kwargv["logName"] = [self.log.name] * self.n_calls
+            self.kwargv["logName"] = [self.log.name]
 
             # Wrap the user-provided func and distribute it across workers
-            self.kwargv["userFunc"] = [self.func] * self.n_calls
+            self.kwargv["userFunc"] = [self.func]
             self.acme_func = self.func_wrapper
 
         else:

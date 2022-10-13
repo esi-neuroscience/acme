@@ -367,10 +367,13 @@ class ParallelMap(object):
         # either all input arguments must have unit length (or are nd-arrays)
         # or at at least one input argument actually contains `n_input` elements
         if guessInputs:
-            if len(set(argLens)) > 1:
+            if len(set(argLens)) > 1 or len(argLens) == 0:
                 msg = "{} automatic input distribution failed: found {} objects " +\
                     "containing {} to {} elements. Please specify `n_inputs` manually. "
-                raise ValueError(msg.format(self.msgName, len(argLens), min(argLens), max(argLens)))
+                raise ValueError(msg.format(self.msgName,
+                                            len(argLens),
+                                            min(argLens, default=0),
+                                            max(argLens, default=0)))
             n_inputs = argLens[0]
         else:
             if n_inputs not in set(argLens) and not all(arglen == 1 for arglen in argLens):
