@@ -22,7 +22,7 @@ from tqdm import tqdm
 from . import dask_helpers as dh
 
 callCount = 0
-callMax = 50000
+callMax = 1000000
 
 __all__ = []
 

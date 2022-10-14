@@ -37,10 +37,14 @@ class ParallelMap(object):
         *args,
         n_inputs="auto",
         write_worker_results=True,
+        output_dir=None,
+        result_shape=None,
+        result_dtype="float",
+        single_file=False,
         write_pickle=False,
         partition="auto",
-        n_jobs="auto",
-        mem_per_job="auto",
+        n_workers="auto",
+        mem_per_worker="auto",
         setup_timeout=60,
         setup_interactive=True,
         stop_client="auto",
@@ -56,16 +60,15 @@ class ParallelMap(object):
         func : callable
             User-defined function to be executed concurrently. Input arguments
             and return values should be "simple" (i.e., regular Python objects or
-            NumPy arrays). See Notes for more information and Examples for
-            details.
+            NumPy arrays). See Examples and [1]_ for more information.
         args : arguments
             Positional arguments of `func`. Should be regular Python objects
-            (lists, tuples, scalars, strings etc.) or NumPy arrays. See Notes
-            for more information and Examples for details.
+            (lists, tuples, scalars, strings etc.) or NumPy arrays. See
+            Examples and [1]_ for more information.
         kwargs : keyword arguments
             Keyword arguments of `func` (if any). Should be regular Python objects
-            (lists, tuples, scalars, strings etc.) or NumPy arrays. See Notes
-            for more information and Examples for details.
+            (lists, tuples, scalars, strings etc.) or NumPy arrays. See Examples
+            and [1]_ for more information.
         n_inputs : int or "auto"
             Number of times `func` is supposed to be called in parallel. Usually,
             `n_inputs` does not have to be provided explicitly. If `n_inputs` is
@@ -73,15 +76,48 @@ class ParallelMap(object):
             `kwargs`. This estimation may fail due to ambiguous input arguments
             (e.g., `args` and/or `kwargs` contain lists of differing lengths)
             triggering a `ValueError`. Only then is it required to set `n_input`
-            manually. See Examples for details.
+            manually. See Examples and [1]_ for more information.
         write_worker_results : bool
-            If `True`, the return value(s) of `func` is/are saved on disk (one
-            HDF5 file per parallel worker). If `False`, the output of all parallel calls
-            of `func` is collected in memory. See Examples and Notes for details.
+            If `True`, the return value(s) of `func` is/are saved on disk.
+            If `False`, the output of all parallel calls of `func` is collected
+            in memory. See Examples as well as [1]_ and [2]_ for more information.
+        output_dir : str or None
+            Only relevant if `write_worker_results` is `True`. If `output_dir` is `None`
+            (default) and `write_worker_results` is `True`, all files auto-generated
+            by `ParallelMap` are stored in a directory `'ACME_YYYYMMDD-hhmmss-ffffff'`
+            (encoding the current time as YearMonthDay-HourMinuteSecond-Microsecond).
+            The path to a custom output directory can be specified via providing
+            `output_dir`. See Examples and [1]_ for more information.
+        result_shape : tuple or None
+            Only relevant if `write_pickle` is `False`. If provided, return
+            values of `func` are slotted into a (virtual) dataset (if
+            `write_worker_results` is True) or array (otherwise) of shape
+            `result_shape`, where a single `None` entry designates the stacking
+            dimension. For instance, ``result_shape = (None, 100)`` implies
+            that `func` returns a 100-element array which is to be stacked
+            along the first dimension for each concurrent call of `func`
+            resulting in a ``(n_inputs, 100)`` dataset or array. See Notes
+            and Examples for details. See Examples as well as [1]_ and [2]_
+            for more information.
+        result_dtype : str or None
+            Only relevant if `result_shape` is not `None`. If provided, determines
+            the numerical datatype of the dataset laid out by `result_shape`.
+            By default, results are stored in `float64` format. See [2]_ for
+            more details.
+        single_file : bool
+            Only relevant if `write_worker_results` is `True` and `write_pickle`
+            is `False`. If `single_file` is `False` (default), the results of each parallel
+            call of `func` are stored in dedicated HDF5 files, such that the auto-
+            generated HDF5 results-container is a collection of symbolic links
+            pointing to these files.
+            Conversely, if `single_file` is `True`, all parallel workers
+            write to the same results container (using a distributed file-locking
+            mechanism). See [2]_ for more details.
         write_pickle : bool
-            If `True`, the return value(s) of `func` is/are pickled to disk (one
-            `'.pickle'`-file per parallel worker). Only effective if `write_worker_results`
-            is `True`.
+            Only relevant if `write_worker_results` is `True`. If `True`,
+            the return value(s) of `func` is/are pickled to disk (one
+            `'.pickle'`-file per parallel worker). See Examples as well as
+            [1]_ and [2]_ for more information.
         partition : str
             Name of SLURM partition to use. If `"auto"` (default), the memory footprint
             of `func` is estimated using dry-run stubs based on randomly sampling
@@ -92,36 +128,39 @@ class ParallelMap(object):
             but sufficient memory and shortest runtime).
             To override auto-selection, provide name of SLURM queue explicitly. See, e.g.,
             :func:`~acme.esi_cluster_setup` for details.
-        n_jobs : int or "auto"
-            Number of SLURM jobs (=workers) to spawn. If `"auto"` (default), then
-            ``n_jobs = n_inputs``, i.e., every SLURM worker performs a single
+        n_workers : int or "auto"
+            Number of SLURM workers (=jobs) to spawn. If `"auto"` (default), then
+            ``n_workers = n_inputs``, i.e., every SLURM worker performs a single
             call of `func`.
             If `n_inputs` is large and executing `func` is fast, setting
-            ``n_jobs = int(n_inputs / 2)`` might be beneficial. See Notes for details.
-        mem_per_job : str
+            ``n_workers = int(n_inputs / 2)`` might be beneficial. See Examples
+            as well as [1]_ and [2]_ for more information.
+        mem_per_worker : str
             Memory booking for each SLURM worker. If `"auto"` (default), the standard
-            value is inferred from the used partition (if possible). See, e.g.,
-            :func:`~acme.esi_cluster_setup` for details.
+            value is inferred from the used partition (if possible). See
+            :func:`~acme.slurm_cluster_setup` for details.
         setup_timeout : int
-            Timeout period (in seconds) for SLURM workers to come online. See, e.g.,
-            :func:`~acme.esi_cluster_setup` for details.
+            Timeout period (in seconds) for SLURM workers to come online. Refer to
+            keyword `timeout` in :func:`~acme.slurm_cluster_setup` for details.
         setup_interactive : bool
             If `True` (default), user input is queried in case not enough SLURM
             workers could be started within `setup_timeout` seconds. If no input
             is provided, the current number of spawned workers is used (even if
-            smaller than the amount requested by `n_jobs`). If `False`, no user
-            choice is requested.
+            smaller than the amount requested by `n_workers`). If `False`, no user
+            choice is requested. Refer to keyword `interactive` in :func:`~acme.slurm_cluster_setup`
         stop_client : bool or "auto"
             If `"auto"` (default), automatically started distributed computing clients
             are shut down at the end of computation, while user-provided clients
             are left untouched. If `False`, automatically started clients are
             left running after completion, user-provided clients are left untouched.
             If `True`, auto-generated clients *and* user-provided clients are
-            shut down at the end of the computation.
+            shut down at the end of the computation. See Examples as well
+            as [1]_ and [2]_ for more information.
         verbose : None or bool
             If `None` (default), general run-time information as well as warnings
             and errors are shown. If `True`, additionally debug information is
             shown. If `False`, only warnings and errors are propagated.
+            See [2]_ for more details.
         dryrun : bool
             If `True` the user-provided function `func` is executed once using
             one of the input argument tuples prepared for the parallel workers (picked
@@ -129,13 +168,14 @@ class ParallelMap(object):
             actual parallel execution of `func` is supposed to be launched after the
             dry-run. The `dryrun` keyword is intended to to estimate memory consumption
             as well as runtime of worker jobs prior to the actual concurrent
-            computation.
+            computation. See [1]_ and [2]_ for more information.
         logfile : None or bool or str
             If `None` (default) or `False`, all run-time information as well as errors and
             warnings are printed to the command line only. If `True`, an auto-generated
             log-file is set up that records run-time progress. Alternatively, the
             name of a custom log-file can be provided (must not exist). The verbosity
             of recorded information can be controlled via setting `verbose`.
+            See [2]_ for more details.
 
         Returns
         -------
@@ -174,11 +214,20 @@ class ParallelMap(object):
         More examples and tutorials are available in the
         `ACME online documentation <https://esi-acme.readthedocs.io>`_.
 
+        Notes
+        -----
+        Please consult [1]_ for detailed usage information.
+
         See also
         --------
         esi_cluster_setup : spawn custom SLURM worker clients on the ESI HPC cluster
         local_cluster_setup : start a local Dask multi-processing cluster on the host machine
         ACMEdaemon : Manager class performing the actual concurrent processing
+
+        References
+        ----------
+        .. [1] https://esi-acme.readthedocs.io/en/latest/userguide.html
+        .. [2] https://esi-acme.readthedocs.io/en/latest/advanced_usage.html
         """
 
         # First and foremost, set up logging system (unless logger is already present)
@@ -190,12 +239,16 @@ class ParallelMap(object):
 
         # Create an instance of `ACMEdaemon` that does the actual parallel computing work
         self.daemon = ACMEdaemon(self,
-                                 n_jobs=n_jobs,
+                                 n_workers=n_workers,
                                  write_worker_results=write_worker_results,
+                                 output_dir=output_dir,
+                                 result_shape=result_shape,
+                                 result_dtype=result_dtype,
+                                 single_file=single_file,
                                  write_pickle=write_pickle,
                                  dryrun=dryrun,
                                  partition=partition,
-                                 mem_per_job=mem_per_job,
+                                 mem_per_worker=mem_per_worker,
                                  setup_timeout=setup_timeout,
                                  setup_interactive=setup_interactive,
                                  stop_client=stop_client)
@@ -311,16 +364,19 @@ class ParallelMap(object):
         # If `n_input` is `"auto"`, make an educated guess as to how many parallel
         # executions of `func` are intended; if input args contained multiple
         # 1D-array-likes, pump the brakes. If `n_input` was explicitly provided,
-        # ensure at least one input argument actually contains `n_input` elements
-        # for distribution across parallel workers
+        # either all input arguments must have unit length (or are nd-arrays)
+        # or at at least one input argument actually contains `n_input` elements
         if guessInputs:
-            if len(set(argLens)) > 1:
+            if len(set(argLens)) > 1 or len(argLens) == 0:
                 msg = "{} automatic input distribution failed: found {} objects " +\
                     "containing {} to {} elements. Please specify `n_inputs` manually. "
-                raise ValueError(msg.format(self.msgName, len(argLens), min(argLens), max(argLens)))
+                raise ValueError(msg.format(self.msgName,
+                                            len(argLens),
+                                            min(argLens, default=0),
+                                            max(argLens, default=0)))
             n_inputs = argLens[0]
         else:
-            if n_inputs not in set(argLens):
+            if n_inputs not in set(argLens) and not all(arglen == 1 for arglen in argLens):
                 msg = "{} No object has required length of {} matching `n_inputs`. "
                 raise ValueError(msg.format(self.msgName, n_inputs))
         self.n_inputs = int(n_inputs)

@@ -2,11 +2,15 @@
 
 # ACME: Asynchronous Computing Made ESI
 
-main: [![tests+codecov](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml/badge.svg?branch=main)](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml)
+[![conda](https://img.shields.io/conda/vn/conda-forge/esi-acme.svg)](https://anaconda.org/conda-forge/esi-acme)
+[![pypi](https://badge.fury.io/py/esi-acme.svg)](https://badge.fury.io/py/esi-acme)
+[![license](https://img.shields.io/github/license/esi-neuroscience/acme)](https://github.com/esi-neuroscience/acme/blob/main/LICENSE)
+[![Open in Visual Studio Code](https://img.shields.io/badge/-Open_in_VS_Code-007ACC?logo=visual%20studio%20code&logoColor=ffffff)](https://github.dev/esi-neuroscience/acme)
+
+main: [![tests](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml/badge.svg?branch=main)](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml)
 [![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/main/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
 
-
-dev: [![tests+codecov](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml/badge.svg?branch=dev)](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml)
+dev: [![tests](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml/badge.svg?branch=dev)](https://github.com/esi-neuroscience/acme/actions/workflows/test_cov_workflow.yml)
 [![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/dev/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
 
 ## Summary
@@ -17,7 +21,7 @@ ACME is developed at the
 [Ernst Strüngmann Institute (ESI) gGmbH for Neuroscience in Cooperation with Max Planck Society](https://www.esi-frankfurt.de/>)
 and released free of charge under the
 [BSD 3-Clause "New" or "Revised" License](https://en.wikipedia.org/wiki/BSD_licenses#3-clause_license_(%22BSD_License_2.0%22,_%22Revised_BSD_License%22,_%22New_BSD_License%22,_or_%22Modified_BSD_License%22)).
-ACME relies on the concurrent processing library [Dask](https://docs.dask.org/en/latest/>)
+ACME relies heavily on the concurrent processing library [dask](https://docs.dask.org/en/latest/>)
 and was primarily designed to facilitate the use of [SLURM](https://slurm.schedmd.com/documentation.html)
 on the ESI HPC cluster (although other HPC infrastructure running SLURM can be
 leveraged as well). Local multi-processing hardware (i.e., multi-core CPUs)
@@ -116,7 +120,8 @@ with pmap as p:
 
 ### Load results from files
 
-The results are saved to disk in HDF5 format and the filenames are returned as a list of strings.
+By default, results are saved to disk in HDF5 format and can be accessed using
+the `results_container` attribute of `ParallelMap`:
 
 ```python
 with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
@@ -126,11 +131,13 @@ with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
 Example loading code:
 
 ```python
-out = np.zeros((4))
 import h5py
-for ii, fname in enumerate(filenames):
-    with h5py.File(fname, 'r') as f:
-        out[ii] = np.array(f['result_0'])
+import numpy as np
+out = np.zeros((4))
+
+with h5py.File(pmap.results_container, "r") as h5f:
+  for k, key in enumerate(h5f.keys()):
+    out[k] = h5f[key]["result_0"]
 ```
 
 ### Collect results in local memory
