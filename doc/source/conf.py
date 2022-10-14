@@ -151,7 +151,7 @@ intersphinx_mapping = {
     "scipy": ("https://docs.scipy.org/doc/scipy/reference",
               "https://docs.scipy.org/doc/scipy/reference/objects.inv"
     ),
-    "h5py": ("http://docs.h5py.org/en/latest/",
-             "http://docs.h5py.org/en/latest/objects.inv"
+    "h5py": ("https://docs.h5py.org/en/latest/",
+             "https://docs.h5py.org/en/latest/objects.inv"
     )
 }

@@ -120,7 +120,8 @@ with pmap as p:
 
 ### Load results from files
 
-The results are saved to disk in HDF5 format and the filenames are returned as a list of strings.
+By default, results are saved to disk in HDF5 format and can be accessed using
+the `results_container` attribute of `ParallelMap`:
 
 ```python
 with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
@@ -130,11 +131,13 @@ with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
 Example loading code:
 
 ```python
-out = np.zeros((4))
 import h5py
-for ii, fname in enumerate(filenames):
-    with h5py.File(fname, 'r') as f:
-        out[ii] = np.array(f['result_0'])
+import numpy as np
+out = np.zeros((4))
+
+with h5py.File(pmap.results_container, "r") as h5f:
+  for k, key in enumerate(h5f.keys()):
+    out[k] = h5f[key]["result_0"]
 ```
 
 ### Collect results in local memory

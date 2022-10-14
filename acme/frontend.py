@@ -137,17 +137,17 @@ class ParallelMap(object):
             as well as [1]_ and [2]_ for more information.
         mem_per_worker : str
             Memory booking for each SLURM worker. If `"auto"` (default), the standard
-            value is inferred from the used partition (if possible). See, e.g.,
-            :func:`~acme.esi_cluster_setup` for details.
+            value is inferred from the used partition (if possible). See
+            :func:`~acme.slurm_cluster_setup` for details.
         setup_timeout : int
-            Timeout period (in seconds) for SLURM workers to come online. See, e.g.,
-            :func:`~acme.esi_cluster_setup` for details.
+            Timeout period (in seconds) for SLURM workers to come online. Refer to
+            keyword `timeout` in :func:`~acme.slurm_cluster_setup` for details.
         setup_interactive : bool
             If `True` (default), user input is queried in case not enough SLURM
             workers could be started within `setup_timeout` seconds. If no input
             is provided, the current number of spawned workers is used (even if
             smaller than the amount requested by `n_workers`). If `False`, no user
-            choice is requested.
+            choice is requested. Refer to keyword `interactive` in :func:`~acme.slurm_cluster_setup`
         stop_client : bool or "auto"
             If `"auto"` (default), automatically started distributed computing clients
             are shut down at the end of computation, while user-provided clients
@@ -175,7 +175,7 @@ class ParallelMap(object):
             log-file is set up that records run-time progress. Alternatively, the
             name of a custom log-file can be provided (must not exist). The verbosity
             of recorded information can be controlled via setting `verbose`.
-            See [1]_ and [2]_ for more information.
+            See [2]_ for more details.
 
         Returns
         -------

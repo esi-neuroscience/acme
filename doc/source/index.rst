@@ -13,8 +13,8 @@ Welcome to the Documentation of ACME
 ACME (**A**\synchronous **C**\omputing **M**\ade **E**\asy, pronounced *"ak-mee"*)
 is a framework for calling Python functions in parallel, primarily intended for
 using SLURM on the ESI HPC cluster (local multi-processor hardware is supported as well).
-ACME is based on the parallelization engine used in `SyNCoPy <http://www.syncopy.org/>`_ and
-is itself part of SyNCoPy.
+ACME is built on top of the parallel computing library `dask <https://www.dask.org/>`_
+and is used by `SyNCoPy <http://www.syncopy.org/>`_.
 
 Getting Started
 ---------------
@@ -22,7 +22,7 @@ Please have a look at the :doc:`Quickstart Guide <quickstart>`.
 
 Examples
 --------
-Simple to advanced Usage examples our collected on our `GitHub Page <https://github.com/esi-neuroscience/acme#usage>`_.
+Simple to advanced usage examples our collected on our `GitHub Page <https://github.com/esi-neuroscience/acme#usage>`_.
 
 User Guide
 ----------

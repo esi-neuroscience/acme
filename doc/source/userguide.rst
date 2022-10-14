@@ -1,8 +1,8 @@
 ACME User Guide
 ===============
 Learn how to get the most out of ACME for your own work by running through a
-quick (but hopefully) illustrative example that starts simple and subsequently
-turns on all of ACME's bells and whistles.
+quick but (hopefully) illustrative example that starts simple and subsequently
+turns on ACME's bells and whistles.
 
 .. contents:: Quick Links
     :depth: 3
@@ -26,8 +26,10 @@ sets ``y`` to 4 (for all calls) and similarly leaves ``z`` at its default value 
     with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
         results = pmap.compute()
 
-What's going on here? ACME starts four parallel workers that call ``f`` with
-the provided input values and perform the following calculations concurrently:
+What's going on here? ACME starts a dask :class:`distributed.Client` containing
+four parallel workers (or fewer depending on available resources) that
+call ``f`` with the provided input values to perform the following calculations
+concurrently:
 
 * **Computation #0**: 18 = (2 + 4) * 3 (``x = 2``, ``y = 4``, ``z = 3``)
 * **Computation #1**: 24 = (4 + 4) * 3 (``x = 4``, ``y = 4``, ``z = 3``)
@@ -60,10 +62,10 @@ referenced in an aggregate results container ``pmap.results_container``
 
 In the above example, four HDF5 files are generated: ``f_0.h5``, ``f_1.h5``,
 ``f_2.h5``, ``f_3.h5``, each comprising the result of calling ``f`` with the provided
-input values (i.e., ``f_0.h5`` stores 18 = (2 + 4) * 3, ``f_1.h5`` holds
-`24 = (4 + 4) * 3` and so on). The collective results of all calls of ``f``
-are gathered in a single HDF5 container ``f.h5`` whose group-/data-set structure
-follows the format shown below:
+input values (i.e., ``f_0.h5`` stores the result of **Computation #0**: 18 = (2 + 4) * 3,
+``f_1.h5`` holds the result of **Computation #1**: `24 = (4 + 4) * 3` and so on).
+The collective results of all calls of ``f`` are gathered in a single HDF5
+container ``f.h5`` whose group-/data-set structure follows the format shown below:
 
 ::
 
@@ -131,13 +133,14 @@ and
 .. note::
 
     While ACME's default storage format is HDF5, user-functions that return
-    non-HDF compatible objects can be processed as well as long as the returned
-    quantities are serializable. The keyword ``write_pickle`` tells ACME to
-    pickle results of computational runs. See :ref:`pickling` for an example and more
+    non-HDF compatible objects can be processed too as long as the returned
+    quantities are serializable. By setting ``write_pickle`` to ``True``
+    when calling :class:`~acme.ParallelMap`, ACME pickles results instead
+    of creating HDF5 containers. See :ref:`pickling` for an example and more
     information. In addition, ACME uses an "emergency pickling" strategy to
     save results if at all possible: if the output of some computational runs
     cannot be stored in HDF5, ACME switches to on-demand pickling regardless
-    of ``write_pickle``'s value.
+    of the provided ``write_pickle`` setting.
 
 Alternatively, results may be collected directly in memory by setting
 ``write_worker_results`` to ``False``. This is **not** recommended, since
@@ -174,7 +177,7 @@ across workers for parallel execution:
 
 .. code-block:: python
 
-    >>> ValueError: <ParallelMap> automatic input distribution failed: found 2 objects containing 3 to 4 elements. Please specify `n_inputs` manually.
+    ValueError: <ParallelMap> automatic input distribution failed: found 2 objects containing 3 to 4 elements. Please specify n_inputs manually.
 
 In this case, ``n_inputs`` has to be provided explicitly (``write_worker_results``
 is set to ``False`` for illustration purposes only)
@@ -217,7 +220,7 @@ Collect Results in Single Dataset
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 When evaluating functions that return a NumPy array (like in the example above),
 it is sometimes beneficial to aggregate results in a single dataset. Assume
-the resulting arrays of the above parallel evaluation of ``f`` are to be
+the four 1d-arrays of the above parallel evaluation of ``f`` are to be
 collected in a single 2d-array. This can be achieved by specifying the keyword
 ``result_shape`` where a (single!) ``None`` entry delineates the "stacking dimension"
 along which computed results are to be put together
@@ -247,10 +250,10 @@ Instead of four HDF5 groups (`"comp_0"`, ..., `"comp_3"`) each containing one
 dataset (`"result_0"`), only a single dataset `"result_0"` is generated, whose
 dimension is set a-priori via ``result_shape = (None, 3)``: this
 tells ACME that incoming results are 3-component vectors, that are to be stacked
-along the first dimension of a 2d-dataset.
+along the first dimension (position of ``None``) of a 2d-dataset.
 
-Similarly, collecting results in memory (not recommended) by setting
-``write_worker_results`` to ``False``
+Similarly, results may be collected in memory by setting ``write_worker_results``
+to ``False`` (not recommended):
 
 .. code-block:: python
 
@@ -258,7 +261,7 @@ Similarly, collecting results in memory (not recommended) by setting
     with ParallelMap(f, [2, 4, 6, 8], y, n_inputs=4, result_shape=(None, 3), write_worker_results=False) as pmap:
         results = pmap.compute()
 
-yields:
+This yields:
 
 .. code-block:: python
 
@@ -275,8 +278,8 @@ control options are discussed in :doc:`Advanced Usage and Customization <advance
 
 Reuse Worker Clients
 ^^^^^^^^^^^^^^^^^^^^^
-Now suppose ``f`` needs to be evaluated for fixed values of ``x`` and ``y``
-with ``z`` varying randomly 500 times between 1 and 10. Since ``f`` is a
+Assume ACME is used on a HPC cluster managed by SLURM and suppose ``f``
+needs to be evaluated for fixed values of ``x`` and ``y`` with ``z`` varying randomly 500 times between 1 and 10. Since ``f`` is a
 very simple function, it is not necessary to spawn 500 SLURM workers (=jobs) for this.
 Instead, allocate only 50 workers in the "smallest" available queue on your
 cluster ("8GBXS" on the ESI HPC cluster), i.e., each worker has to perform
@@ -300,7 +303,8 @@ This yields
 
 In a subsequent computation ``f`` needs to be evaluated for 1000 samples of
 ``z``. In the previous call, ``stop_client`` was ``False``, thus the next
-invocation of :class:`~acme.ParallelMap` re-uses the existing SLURM worker client:
+invocation of :class:`~acme.ParallelMap` re-uses the allocated :class:`distributed.Client`
+object containing 50 SLURM workers:
 
 .. code-block:: python
 
@@ -312,7 +316,7 @@ Note the info message:
 
 .. code-block:: python
 
-    >>> <ParallelMap> INFO: Attaching to global parallel computing client <Client: 'tcp://10.100.32.5:39747' processes=50 threads=50, memory=400.00 GB>
+    <ParallelMap> INFO: Attaching to global parallel computing client <Client: 'tcp://10.100.32.5:39747' processes=50 threads=50, memory=400.00 GB>
 
 Debugging And Estimating Resource Consumption
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -367,7 +371,7 @@ which results in
     TypeError: unsupported operand type(s) for *: 'int' and 'NoneType'
 
 In addition, ACME can be used to estimate memory consumption as well as runtime
-of worker jobs *before* actually launching a full concurrent compute run. This
+of compute jobs *before* actually launching a full concurrent processing run. This
 functionality permits to get a (rough) estimate of resource requirements for queuing
 systems and it allows to test-drive ACME's automatically generated argument lists
 prior to the actual concurrent computation. For instance,
@@ -386,23 +390,30 @@ it in parallel.
 
 Interactive Monitoring
 ^^^^^^^^^^^^^^^^^^^^^^
-When starting a distributed computing client, ACME shows a link for connecting
-to its dashboard. For instance, when working on a local machine:
+When ACME starts a :class:`distributed.Client`, dask automatically sets up
+a `diagnostic dashboard <https://docs.dask.org/en/stable/dashboard.html>`_
+for the client. The dashboard is a web interface that allows live monitoring
+of workers and their respective computations. ACME displays the link
+for connecting to the dashboard as soon as it successfully launched a new
+distributed computing client. For instance, invoking :class:`~acme.ParallelMap`
+on a local machine prints:
 
 .. code-block:: python
 
     <local_cluster_setup> Cluster dashboard accessible at http://127.0.0.1:8787/status
 
-Clicking on the link (or copy-pasting it to your browser) opens dask's diagnostic
+Clicking on the link (or copy-pasting it to your browser) opens the client's diagnostic
 dashboard. This web interface offers various ways to monitor the current
 state, memory and CPU usage of parallel workers and also provides an overview
 of the global status of the concurrent processing task started by :class:`~acme.ParallelMap`:
 
->>> INCLUDE GIF HERE
+.. image:: _static/dashboard.gif
+   :alt: dask-dashboard
+
 
 Wait, There's More...
 ---------------------
-ACME attempts to be as agnostic of the functions it is wrapping as possible. However,
+ACME attempts to be as agnostic of user-provided functions as possible. However,
 there are some technical limitations that impose medium to hard boundaries as to
 what a user-provided function ``func`` can and should do. Most important, input
 arguments of ``func`` must be regular Python objects (lists, tuples, scalars,
