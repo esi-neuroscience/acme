@@ -38,6 +38,7 @@ A full list of changes is provided below
   `write_pickle = False`).
 - Added a new section "Advanced Usage and Customization" in the online documentation
   that discusses settings and associated technical details
+- Added support for Python 3.10 and updated dask dependencies
 
 ### CHANGED
 - Modified employed terminology throughout the package: to clearly delineate
@@ -92,6 +93,11 @@ compatibility and updated dependencies as well as online documentation overhaul.
 - Restructured and expanded online documentation based on suggestions from @naehert:
   moved most examples and usage notes from `ParallelMap`'s docstring to dedicated
   docu pages and added new "Troubleshooting + FAQ" site.
+
+### DEPRECATED
+- The keyword `n_jobs` in both `ParallelMap` and `esi_cluster_setup`is not
+  supported any more . To specify the number of parallel workers to use, please
+  use `n_workers` instead (see corresponding item in the Section CHANGED above)
 
 ### FIXED
 - Repeated `ParallelMap` calls ignored differing `logfile` specifications. This
