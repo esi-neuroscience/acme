@@ -23,6 +23,7 @@ if sys.platform == "win32":
 # Local imports: differentiate b/w being imported as Syncopy sub-package or
 # standalone ACME module: if imported by Syncopy, use some lambda magic to avoid
 # circular imports due to (at import-time) only partially initialized Syncopy
+from acme import __deprecated__, __deprecation_wrng__
 from .shared import user_input, user_yesno
 if "syncopy" in sys.modules:
     isSpyModule = True
@@ -140,12 +141,24 @@ def esi_cluster_setup(partition="8GBXS", n_workers=2, mem_per_worker="auto", n_w
     """
 
     # Re-direct printing/warnings to ACME logger outside of SyNCoPy
-    customPrint, _ = _logging_setup()
+    customPrint, customWarning = _logging_setup()
 
     # For later reference: dynamically fetch name of current function
     funcName = "{pre:s}<{pkg:s}{name:s}> ".format(pre="Syncopy " if isSpyModule else "",
                                                  pkg="ACME: " if isSpyModule else "",
                                                  name=inspect.currentframe().f_code.co_name)
+
+    # Backwards compatibility: legacy keywords are converted to new nomenclature
+    if any(kw in kwargs for kw in __deprecated__):
+        wrng = "{name:s}{msg:s}"
+        customWarning(wrng.format(name="" if isSpyModule else funcName + " ",
+                                  msg=__deprecation_wrng__),
+                      DeprecationWarning,
+                      __file__,
+                      inspect.currentframe().f_lineno)
+        n_workers = kwargs.pop("n_jobs", n_workers)
+        mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
+        n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)
 
     # Don't start a new cluster on top of an existing one
     try:
@@ -253,7 +266,7 @@ def esi_cluster_setup(partition="8GBXS", n_workers=2, mem_per_worker="auto", n_w
 # Setup SLURM cluster
 def slurm_cluster_setup(partition, n_cores, n_workers, processes_per_worker, mem_per_worker,
                         n_workers_startup, timeout, interactive, interactive_wait,
-                        start_client, job_extra, invalid_partitions=[]):
+                        start_client, job_extra, invalid_partitions=[], **kwargs):
     """
     Start a distributed Dask cluster of parallel processing workers using SLURM
 
@@ -322,6 +335,19 @@ def slurm_cluster_setup(partition, n_cores, n_workers, processes_per_worker, mem
     funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
                                                  pkg="ACME: " if isSpyModule else "",
                                                  name=inspect.currentframe().f_code.co_name)
+
+    # Backwards compatibility: legacy keywords are converted to new nomenclature
+    if any(kw in kwargs for kw in __deprecated__):
+        wrng = "{name:s}{msg:s}"
+        customWarning(wrng.format(name="" if isSpyModule else funcName + " ",
+                                  msg=__deprecation_wrng__),
+                      DeprecationWarning,
+                      __file__,
+                      inspect.currentframe().f_lineno)
+        n_workers = kwargs.pop("n_jobs", n_workers)
+        processes_per_worker = kwargs.pop("workers_per_job", processes_per_worker)
+        mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
+        n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)
 
     # Retrieve all partitions currently available in SLURM
     availPartitions = _get_slurm_partitions(funcName)

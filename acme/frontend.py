@@ -10,6 +10,7 @@ import numpy as np
 import dask.array as da
 
 # Local imports
+from acme import __deprecated__, __deprecation_wrng__
 from .backend import ACMEdaemon
 from . import shared as acs
 isSpyModule = False
@@ -232,6 +233,12 @@ class ParallelMap(object):
 
         # First and foremost, set up logging system (unless logger is already present)
         self.log = acs.prepare_log(func, caller=self.msgName, logfile=logfile, verbose=verbose)
+
+        # Backwards compatibility: legacy keywords are converted to new nomenclature
+        if any(kw in kwargs for kw in __deprecated__):
+            self.log.warning(__deprecation_wrng__)
+            n_workers = kwargs.pop("n_jobs", n_workers)
+            mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`

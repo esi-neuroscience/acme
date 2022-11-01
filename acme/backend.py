@@ -78,7 +78,8 @@ class ACMEdaemon(object):
         setup_interactive=True,
         stop_client="auto",
         verbose=None,
-        logfile=None):
+        logfile=None,
+        **kwargs):
         """
         Manager class for performing concurrent user function calls
 

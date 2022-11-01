@@ -16,6 +16,13 @@ Major changes in managing auto-generated files
   results container.
 - By providing `output_dir`, the location of auto-generated HDF5/pickle files can
   be customized
+- Entities in a distributed computing client that concurrently process tasks
+  are now consistently called "workers" (in line with dask terminology).
+  Accordingly the keywords `n_jobs`, `mem_per_job`, `n_jobs_startup` and
+  `workers_per_job` have been renamed `n_workers`, `mem_per_worker`,
+  `n_workers_startup` and `processes_per_worker`, respectively. To ensure
+  compatibility  with existing code, the former names have been marked
+  deprecated but were not removed and are still functional.
 
 A full list of changes is provided below
 
@@ -51,10 +58,12 @@ A full list of changes is provided below
   - in `ParallelMap`:
     - `n_jobs` -> `n_workers`
     - `mem_per_job` -> `mem_per_worker`
-  - in `esi_cluster_setup`:
+  - in `esi_cluster_setup` and `slurm_cluster_setup`:
     - `n_jobs` -> `n_workers`
     - `mem_per_job` -> `mem_per_worker`
     - `n_jobs_startup` -> `n_workers_startup`
+  - in `slurm_cluster_setup`:
+    - `workers_per_job` -> `processes_per_worker`
 - Made `esi_cluster_setup` respect already running clients so that new parallel
   computing clients are not launched on top of existing ones (thanks to @timnaher)
 - Introduced support for positional/keyword arguments of unit-length in
@@ -65,6 +74,17 @@ A full list of changes is provided below
 - Code coverage is not computed by a GitHub action workflow but is now
   calculated by the GitLab CI job that invokes SLURM to run tests on the
   ESI HPC cluster.
+
+### DEPRECATED
+The keywords `n_jobs`, `mem_per_job`, `n_jobs_startup` and `workers_per_job`
+have been renamed. Using these keywords is still supported but raises a
+`DeprecationWarning`.
+- The keywords `n_jobs` and `mem_per_job` in both `ParallelMap` and
+  `esi_cluster_setup` are deprecated. To specify the number of parallel
+  workers and their memory resources, please use `n_workers` and  `mem_per_worker`,
+  respectively (see corresponding item in the Section CHANGED above)
+- The keyword `n_jobs_startup` in `esi_cluster_setup` is deprecated. Please
+  use `n_workers_startup` instead
 
 ### FIXED
 - Updated dependency versions (pin `click` to version < 8.1) and fixed Syncopy
@@ -85,7 +105,7 @@ compatibility and updated dependencies as well as online documentation overhaul.
 ### NEW
 - On the ESI HPC cluster, using `partition="auto"` in `ParallelMap` now launches
   a heuristic  automatic SLURM partition selection algorithm (instead of simply
-  falling back to the "8GBXS" partition)
+  falling back to the "8GBXS" partition on the ESI HPC cluster)
 
 ### CHANGED
 - Updated package dependencies (allow `h5py` ver 3.x) and expanded support for
@@ -94,20 +114,12 @@ compatibility and updated dependencies as well as online documentation overhaul.
   moved most examples and usage notes from `ParallelMap`'s docstring to dedicated
   docu pages and added new "Troubleshooting + FAQ" site.
 
-### DEPRECATED
-- The keyword `n_jobs` in both `ParallelMap` and `esi_cluster_setup`is not
-  supported any more . To specify the number of parallel workers to use, please
-  use `n_workers` instead (see corresponding item in the Section CHANGED above)
-
 ### FIXED
 - Repeated `ParallelMap` calls ignored differing `logfile` specifications. This
   has been corrected. In addition, the logging setup routine now ensures that only
   one `FileHandler` is used (any existing non-default log-file locations are
   removed from the logger to avoid generating multiple logs and/or accidentally
   appending to existing logs from previous runs).
-
-### CHANGED
-- Modified versioning scheme: use date-based version tags instead of increasing
 
 ## [2022.7] - 2022-07-06
 Bugfixes, new versioning scheme and updated dependencies.
@@ -117,7 +129,7 @@ Bugfixes, new versioning scheme and updated dependencies.
   numbers
 - Updated `dask`, `dask-jobqueue` and `scipy` dependency requirements
 - Removed any mentions of "hpx" from the code after upgrading the main file-server
-  of the ESI cluster
+  of the ESI HPC cluster
 
 ### FIXED
 - Repaired broken FQDN detection in `is_esi_node`
