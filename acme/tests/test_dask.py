@@ -4,6 +4,7 @@
 #
 
 # Builtin/3rd party package imports
+import pytest
 import getpass
 import numpy as np
 
