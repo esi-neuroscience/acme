@@ -1365,6 +1365,7 @@ class TestParallelMap():
                             partition=defaultQ,
                             n_jobs=n_workers,
                             mem_per_job=mem_per_worker,
+                            stop_client=False,
                             setup_interactive=False) as pmap:
                 pmap.compute()
             outDirs.append(pmap.out_dir)
@@ -1381,6 +1382,7 @@ class TestParallelMap():
         for folder in outDirs:
             shutil.rmtree(folder, ignore_errors=True)
         time.sleep(0.1)
+        cluster_cleanup()
 
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):
@@ -1434,7 +1436,8 @@ class TestParallelMap():
 
         # Re-run tests with pre-allocated client (except for those in `skipTests`); ensure
         # client "survives" multiple independent test runs and is not accidentally closed
-        skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun", "test_memest", "_prep_data"]
+        skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun",
+                     "test_memest", "test_backcompat", "_prep_data"]
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:
