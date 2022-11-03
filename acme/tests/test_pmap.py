@@ -1375,17 +1375,6 @@ class TestParallelMap():
         # Test custom SLURM cluster setup
         if useSLURM:
 
-            # Ensure invalid partition/memory specifications are caught
-            with pytest.raises(customIOError):
-                esi_cluster_setup(partition="invalid", interactive=False)
-            cluster_cleanup()
-            with pytest.raises(ValueError):
-                esi_cluster_setup(mem_per_worker="invalidGB", interactive=False)
-            cluster_cleanup()
-            with pytest.raises(ValueError):
-                esi_cluster_setup(mem_per_worker="-20MB", interactive=False)
-            cluster_cleanup()
-
             # Over-allocation of memory should default to partition max
             client = esi_cluster_setup(partition="8GBDEV", n_workers=1, mem_per_worker="9000MB", interactive=False)
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
@@ -1393,19 +1382,8 @@ class TestParallelMap():
             assert np.round(memory / 1000**3)[0] == 8
             cluster_cleanup(client)
 
-            # Test if invalid extra args are caught
-            slurmOut = "/cs/home/{}/acme_out".format(getpass.getuser())
-            with pytest.raises(TypeError):
-                esi_cluster_setup(job_extra="--output={}".format(slurmOut), interactive=False)
-            cluster_cleanup()
-            with pytest.raises(ValueError):
-                esi_cluster_setup(job_extra=["output={}".format(slurmOut)], interactive=False)
-            cluster_cleanup()
-            with pytest.raises(ValueError):
-                esi_cluster_setup(job_extra=["--output=/path/to/nowhere"], interactive=False)
-            cluster_cleanup()
-
             # Supply extra args to start client for actual tests
+            slurmOut = "/cs/home/{}/acme_out".format(getpass.getuser())
             client = esi_cluster_setup(partition=defaultQ,
                                        n_workers=10,
                                        job_extra=["--output={}".format(slurmOut)],

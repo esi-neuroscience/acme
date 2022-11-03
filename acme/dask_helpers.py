@@ -55,9 +55,16 @@ __all__ = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm
 
 
 # Setup SLURM workers on the ESI HPC cluster
-def esi_cluster_setup(partition="8GBXS", n_workers=2, mem_per_worker="auto", n_workers_startup=100,
-                      timeout=60, interactive=True, interactive_wait=120, start_client=True,
-                      job_extra=[], **kwargs):
+def esi_cluster_setup(partition="8GBXS",
+                      n_workers=2,
+                      mem_per_worker="auto",
+                      n_workers_startup=100,
+                      timeout=60,
+                      interactive=True,
+                      interactive_wait=120,
+                      start_client=True,
+                      job_extra=[],
+                      **kwargs):
     """
     Start a Dask distributed SLURM worker cluster on the ESI HPC infrastructure
     (or local multi-processing)
@@ -264,9 +271,19 @@ def esi_cluster_setup(partition="8GBXS", n_workers=2, mem_per_worker="auto", n_w
 
 
 # Setup SLURM cluster
-def slurm_cluster_setup(partition, n_cores, n_workers, processes_per_worker, mem_per_worker,
-                        n_workers_startup, timeout, interactive, interactive_wait,
-                        start_client, job_extra, invalid_partitions=[], **kwargs):
+def slurm_cluster_setup(partition="partition_name",
+                        n_cores=1,
+                        n_workers=1,
+                        processes_per_worker=1,
+                        mem_per_worker="1GB",
+                        n_workers_startup=1,
+                        timeout=60,
+                        interactive=True,
+                        interactive_wait=10,
+                        start_client=True,
+                        job_extra=[],
+                        invalid_partitions=[],
+                        **kwargs):
     """
     Start a distributed Dask cluster of parallel processing workers using SLURM
 
@@ -506,6 +523,8 @@ def slurm_cluster_setup(partition, n_cores, n_workers, processes_per_worker, mem
                 msg = "{} `slurmWorkingDirectory` has to be an existing directory, not {}"
                 if not os.path.isdir(os.path.expanduser(slurm_wdir)):
                     raise ValueError(msg.format(funcName, str(slurm_wdir)))
+    else:
+        slurm_wdir = None
 
     # Create `SLURMCluster` object using provided parameters
     cluster = SLURMCluster(cores=n_cores,
