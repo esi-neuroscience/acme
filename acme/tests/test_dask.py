@@ -90,17 +90,18 @@ def test_local_setup():
 
 def test_backcompat_cluster():
 
-    client = slurm_cluster_setup(partition=defaultQ,
-                                 n_jobs=1,
-                                 workers_per_job=1,
-                                 mem_per_job="1GB",
-                                 n_jobs_startup=1)
-    assert len(client.cluster.workers) == 1
-    memory = [w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()]
-    assert round(memory[0] / 1000**3) == 1
-    threads = [w["nthreads"] for w in client.cluster.scheduler_info["workers"].values()]
-    assert threads[0] == 1
-    cluster_cleanup(client)
+    if useSLURM:
+        client = slurm_cluster_setup(partition=defaultQ,
+                                    n_jobs=1,
+                                    workers_per_job=1,
+                                    mem_per_job="1GB",
+                                    n_jobs_startup=1)
+        assert len(client.cluster.workers) == 1
+        memory = [w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()]
+        assert round(memory[0] / 1000**3) == 1
+        threads = [w["nthreads"] for w in client.cluster.scheduler_info["workers"].values()]
+        assert threads[0] == 1
+        cluster_cleanup(client)
 
 
 #   Accordingly the keywords `n_jobs`, `mem_per_job`, `n_jobs_startup` and
