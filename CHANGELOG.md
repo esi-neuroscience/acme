@@ -43,6 +43,7 @@ A full list of changes is provided below
   This option is only available for auto-generated HDF5 containers, pickle
   files are not supported (i.e., `write_worker_results = True` and
   `write_pickle = False`).
+- Included options to specify worker count and memory consumption in `local_cluster_setup`
 - Added a new section "Advanced Usage and Customization" in the online documentation
   that discusses settings and associated technical details
 - Added support for Python 3.10 and updated dask dependencies

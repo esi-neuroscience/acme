@@ -45,7 +45,7 @@ else:
     customTypeError = lambda msg, varname=None, expected=None : TypeError(msg)
 
 from dask_jobqueue import SLURMCluster
-from dask.distributed import Client, get_client
+from dask.distributed import Client, get_client, LocalCluster
 from datetime import datetime, timedelta
 
 # Be optimistic: prepare success message to be used throughout this module
@@ -142,6 +142,7 @@ def esi_cluster_setup(partition="8GBXS",
 
     See also
     --------
+    dask_jobqueue.SLURMCluster : launch a dask cluster of SLURM workers
     slurm_cluster_setup : start a distributed Dask cluster of parallel processing workers using SLURM
     local_cluster_setup : start a local Dask multi-processing cluster on the host machine
     cluster_cleanup : remove dangling parallel processing worker-clusters
@@ -340,6 +341,7 @@ def slurm_cluster_setup(partition="partition_name",
 
     See also
     --------
+    dask_jobqueue.SLURMCluster : launch a dask cluster of SLURM workers
     esi_cluster_setup : start a SLURM worker cluster on the ESI HPC infrastructure
     local_cluster_setup : start a local Dask multi-processing cluster on the host machine
     cluster_cleanup : remove dangling parallel processing worker-clusters
@@ -647,12 +649,21 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
     return False
 
 
-def local_cluster_setup(interactive=True, start_client=True):
+def local_cluster_setup(n_workers=None,
+                        mem_per_worker=None,
+                        interactive=True,
+                        start_client=True):
     """
     Start a local distributed Dask multi-processing cluster
 
     Parameters
     ----------
+    n_workers : int
+        Number of local workers to start (this should align with the locally
+        available hardware, see :class:`distributed.LocalCluster` for details)
+    mem_per_worker : str
+        Memory cap for each local worker (corresponds to the `memory_limit`
+        keyword of a :class:`distributed.worker.Worker`)
     interactive : bool
         If `True`, a confirmation dialog is displayed to ensure proper encapsulation
         of calls to `local_cluster_setup` inside a script's main module block.
@@ -710,6 +721,7 @@ def local_cluster_setup(interactive=True, start_client=True):
 
     See also
     --------
+    distributed.LocalCluster : create local worker cluster
     esi_cluster_setup : Start a distributed Dask cluster using SLURM
     cluster_cleanup : remove dangling parallel processing worker-clusters
     """
@@ -771,7 +783,11 @@ def local_cluster_setup(interactive=True, start_client=True):
             return
 
     # Start the actual distributed client
-    client = Client()
+    if n_workers is not None or mem_per_worker is not None:
+        cluster = LocalCluster(n_workers=n_workers, memory_limit=mem_per_worker)
+        client = Client(cluster)
+    else:
+        client = Client()
     successMsg = "{name:s} Local parallel computing client ready. \n" + _successMsg
     customPrint(successMsg.format(name=funcName, dash=client.cluster.dashboard_link))
     if start_client:
@@ -797,6 +813,8 @@ def cluster_cleanup(client=None):
     See also
     --------
     esi_cluster_setup : Launch SLURM workers on the ESI compute cluster
+    slurm_cluster_setup : start a distributed Dask cluster of parallel processing workers using SLURM
+    local_cluster_setup : start a local Dask multi-processing cluster on the host machine
     """
 
     # Re-direct printing/warnings to ACME logger outside SyNCoPy

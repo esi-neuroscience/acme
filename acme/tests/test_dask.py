@@ -10,7 +10,7 @@ import numpy as np
 
 # Import main actors here
 from acme.dask_helpers import customIOError
-from acme import cluster_cleanup, esi_cluster_setup, slurm_cluster_setup
+from acme import cluster_cleanup, esi_cluster_setup, slurm_cluster_setup, local_cluster_setup
 from conftest import useSLURM, onESI, defaultQ
 
 def test_cluster_setup():
@@ -85,7 +85,20 @@ def test_cluster_setup():
 
 
 def test_local_setup():
-    pass
+
+    # Allocate local distributed computing client w/custom settings
+    client = local_cluster_setup(n_workers=2, mem_per_worker="2GB", interactive=False)
+    wMem = [w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()]
+    assert len(wMem) == 2
+    memory = np.unique(wMem)
+    assert memory.size == 1
+    assert np.round(memory / 1000**3)[0] == 2
+    cluster_cleanup()
+
+    # Allocate local distributed computing client w/default settings
+    client = local_cluster_setup(interactive=False)
+    assert len(client.cluster.scheduler_info["workers"].keys()) > 1
+    cluster_cleanup()
 
 
 def test_backcompat_cluster():

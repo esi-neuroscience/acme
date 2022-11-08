@@ -1375,13 +1375,6 @@ class TestParallelMap():
         # Test custom SLURM cluster setup
         if useSLURM:
 
-            # Over-allocation of memory should default to partition max
-            client = esi_cluster_setup(partition="8GBDEV", n_workers=1, mem_per_worker="9000MB", interactive=False)
-            memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
-            assert memory.size == 1
-            assert np.round(memory / 1000**3)[0] == 8
-            cluster_cleanup(client)
-
             # Supply extra args to start client for actual tests
             slurmOut = "/cs/home/{}/acme_out".format(getpass.getuser())
             client = esi_cluster_setup(partition=defaultQ,
@@ -1390,12 +1383,8 @@ class TestParallelMap():
                                        interactive=False)
             assert "--output={}".format(slurmOut) in client.cluster.job_header
 
-            # Invoking `esi_cluster_setup` with existing client must not start a new one
-            clnt = esi_cluster_setup(partition="16GBXS", n_workers=2, interactive=False)
-            assert clnt == client
-
         else:
-            client = esi_cluster_setup(n_workers=6, interactive=False)
+            client = esi_cluster_setup(interactive=False)
 
         # Re-run tests with pre-allocated client (except for those in `skipTests`); ensure
         # client "survives" multiple independent test runs and is not accidentally closed

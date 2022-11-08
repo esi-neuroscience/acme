@@ -1,5 +1,5 @@
-ACME User Guide
-===============
+User Guide
+==========
 Learn how to get the most out of ACME for your own work by running through a
 quick but (hopefully) illustrative example that starts simple and subsequently
 turns on ACME's bells and whistles.
@@ -278,6 +278,28 @@ control options are discussed in :doc:`Advanced Usage and Customization <advance
 
 Reuse Worker Clients
 ^^^^^^^^^^^^^^^^^^^^^
+Instead of letting ACME automatically start and stop parallel worker clients
+witch each invocation of :class:`~acme.ParallelMap`, a dask :class:`distributed.Client`
+can be customized and set up manually **before** launching the actual concurrent
+computation. The convenience functions :func:`~acme.slurm_cluster_setup` (on HPC
+clusters managed by the
+`SLURM Workload Manager <https://slurm.schedmd.com/documentation.html>`_)
+and :func:`~acme.local_cluster_setup` (on local multi-core machines) provide
+this functionality by wrapping :class:`dask_jobqueue.SLURMCluster` and
+:class:`distributed.LocalCluster`, respectively. Once a client has been set up,
+any subsequent invocation of :class:`~acme.ParallelMap` automatically picks
+up the allocated client and distributes computational payload across the
+workers collected inside.
+
+.. note::
+    The routine :func:`~acme.esi_cluster_setup` is specifically geared to the
+    SLURM setup of the ESI HPC cluster. If you are working on the ESI cluster,
+    please use :func:`~acme.esi_cluster_setup` to allocate computing clients.
+
+Alternatively, instead of manually setting up computing resources using the
+``*_cluster_setup`` routines, any distributed client automatically sized and
+started by :class:`~acme.ParallelMap` can be re-used for subsequent
+computations by setting the ``stop_client`` keyword to ``False``.
 Assume ACME is used on a HPC cluster managed by SLURM and suppose ``f``
 needs to be evaluated for fixed values of ``x`` and ``y`` with ``z`` varying randomly 500 times between 1 and 10. Since ``f`` is a
 very simple function, it is not necessary to spawn 500 SLURM workers (=jobs) for this.

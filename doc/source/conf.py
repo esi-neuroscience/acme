@@ -148,6 +148,10 @@ intersphinx_mapping = {
         "https://distributed.dask.org/en/stable/",
         "https://distributed.dask.org/en/stable/objects.inv",
     ),
+    "jobqueue": (
+        "https://jobqueue.dask.org/en/stable/",
+        "https://jobqueue.dask.org/en/stable/objects.inv"
+    ),
     "scipy": ("https://docs.scipy.org/doc/scipy/reference",
               "https://docs.scipy.org/doc/scipy/reference/objects.inv"
     ),

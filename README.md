@@ -100,18 +100,18 @@ def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
 def g(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
     return (max(x) + y) * z * w.sum()
 
-n_jobs = 200
-client = esi_cluster_setup(partition="8GBXS", n_jobs=n_jobs)
+n_workers = 200
+client = esi_cluster_setup(partition="8GBXS", n_workers=n_workers)
 
 x = [2, 4, 6, 8]
-z = range(n_jobs)
+z = range(n_workers)
 w = np.ones((8, 1))
 
-pmap = ParallelMap(f, x, np.random.rand(n_jobs), z=z, w=w, n_inputs=n_jobs)
+pmap = ParallelMap(f, x, np.random.rand(n_workers), z=z, w=w, n_inputs=n_workers)
 with pmap as p:
     p.compute()
 
-pmap = ParallelMap(g, x, np.random.rand(n_jobs), z=z, w=w, n_inputs=n_jobs)
+pmap = ParallelMap(g, x, np.random.rand(n_workers), z=z, w=w, n_inputs=n_workers)
 with pmap as p:
     p.compute()
 ```
