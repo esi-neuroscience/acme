@@ -439,11 +439,11 @@ def slurm_cluster_setup(partition="partition_name",
         else:
             mem_req = int(round(float(mem_per_worker[:mem_per_worker.find("GB")]) * 1000))
         if mem_req > mem_lim:
-            msg = "{name:s}`mem_per_worker` exceeds limit of {lim:d}GB for partition {par:s}. " +\
+            msg = "{name:s}`mem_per_worker` exceeds limit of {lim:d}MB for partition {par:s}. " +\
                 "Capping memory at partition limit. "
             customWarning(msg.format(name=funcName + " " if not isSpyModule else "", lim=mem_lim, par=partition),
                           RuntimeWarning, __file__, inspect.currentframe().f_lineno)
-            mem_per_worker = str(int(mem_lim)) + "GB"
+            mem_per_worker = str(int(mem_lim)) + "MB"
 
     # Parse requested timeout period
     try:

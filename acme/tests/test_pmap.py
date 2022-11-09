@@ -26,7 +26,6 @@ from scipy import signal
 # Import main actors here
 from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
 from acme.dask_helpers import customIOError
-from acme.shared import is_slurm_node, is_esi_node
 from conftest import skip_if_not_linux, useSLURM, onESI, defaultQ
 
 # Functions that act as stand-ins for user-funcs

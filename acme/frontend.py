@@ -7,7 +7,6 @@
 import inspect
 import sys
 import numpy as np
-import dask.array as da
 
 # Local imports
 from acme import __deprecated__, __deprecation_wrng__
