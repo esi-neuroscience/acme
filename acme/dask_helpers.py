@@ -536,7 +536,7 @@ def slurm_cluster_setup(partition="partition_name",
                            queue=partition,
                            python=sys.executable,
                            header_skip=["-t", "--mem"],
-                           job_extra=job_extra)
+                           job_extra_directives=job_extra)
                            # interface="asdf", # interface is set via `psutil.net_if_addrs()`
 
     # Compute total no. of workers and up-scale cluster accordingly
