@@ -10,7 +10,7 @@ import yaml
 from setuptools_scm import get_version
 
 # Set release version by hand
-releaseVersion = "2022.8"
+releaseVersion = "2022.11"
 
 # Read dependencies from setup.cfg + pyproject.toml and create conda environment file
 envFile = "acme.yml"
