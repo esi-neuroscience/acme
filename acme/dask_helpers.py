@@ -535,7 +535,7 @@ def slurm_cluster_setup(partition="partition_name",
                            local_directory=slurm_wdir,
                            queue=partition,
                            python=sys.executable,
-                           header_skip=["-t", "--mem"],
+                           job_directives_skip=["-t", "--mem"],
                            job_extra_directives=job_extra)
                            # interface="asdf", # interface is set via `psutil.net_if_addrs()`
 

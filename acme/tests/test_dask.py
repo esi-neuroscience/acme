@@ -73,7 +73,7 @@ def test_cluster_setup():
 
             # Specify CPU count manually
             client = esi_cluster_setup(partition="16GBDEV", n_workers=1, n_cores=1, interactive=False)
-            assert "--cpus-per-task=1" in client.cluster.job_header
+            assert [w["nthreads"] for w in client.cluster.scheduler_info["workers"].values()][0] == 1
             cluster_cleanup(client)
 
     else:
