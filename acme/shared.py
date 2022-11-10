@@ -19,10 +19,11 @@ import dask.distributed as dd
 from tqdm import tqdm
 
 # from .dask_helpers import cluster_cleanup
+from acme import __version__
 from . import dask_helpers as dh
 
 callCount = 0
-callMax = 50000
+callMax = 1000000
 
 __all__ = []
 
@@ -311,6 +312,9 @@ def prepare_log(func, caller=None, logfile=False, verbose=None):
         fileHandler.setLevel(loglevel)
         fileHandler.setFormatter(formatter)
         log.addHandler(fileHandler)
+
+    # Start log w/version info
+    log.info("This is ACME v. %s", __version__)
 
     return log
 

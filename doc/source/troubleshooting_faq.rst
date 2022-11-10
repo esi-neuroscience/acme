@@ -111,7 +111,7 @@ you don't have to tell it beforehand):
     from acme import ParallelMap, cluster_cleanup
 
     if __name__ == "__main__":
-        myclient = esi_cluster_setup(partition="16GBXL", n_jobs=10)
+        myclient = esi_cluster_setup(partition="16GBXL", n_workers=10)
 
         ...
         with ParallelMap(...) as pmap:

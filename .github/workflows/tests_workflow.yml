@@ -1,4 +1,4 @@
-name: Run tests and determine coverage
+name: tests
 
 on:
   # Triggers the workflow on push or pull request events
@@ -32,9 +32,4 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test with pytest and get coverage
       run: |
-        pytest --cov=./ --cov-report=xml
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v2
-      with:
-        name: acme-codecov
-        verbose: true
+        pytest --verbose

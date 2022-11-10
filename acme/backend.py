@@ -43,8 +43,10 @@ __all__ = ["ACMEdaemon"]
 # Main manager for parallel execution of user-defined functions
 class ACMEdaemon(object):
 
-    __slots__ = "func", "argv", "kwargv", "n_calls", "n_jobs", "acme_func", \
-        "task_ids", "collect_results", "client", "stop_client", "has_slurm", "log"
+    # Restrict valid class attributes
+    __slots__ = "func", "argv", "kwargv", "n_calls", "n_workers", "acme_func", \
+        "task_ids", "out_dir", "collect_results", "results_container", "result_shape", \
+        "result_dtype", "stacking_dim", "client", "stop_client", "has_slurm", "log"
 
     # Prepend every stdout/stderr message with the name of this class
     msgName = "<ACMEdaemon>"
@@ -62,17 +64,22 @@ class ACMEdaemon(object):
         argv=None,
         kwargv=None,
         n_calls=None,
-        n_jobs="auto",
+        n_workers="auto",
         write_worker_results=True,
+        output_dir=None,
+        result_shape=None,
+        result_dtype="float",
+        single_file=False,
         write_pickle=False,
         dryrun=False,
         partition="auto",
-        mem_per_job="auto",
+        mem_per_worker="auto",
         setup_timeout=60,
         setup_interactive=True,
         stop_client="auto",
         verbose=None,
-        logfile=None):
+        logfile=None,
+        **kwargs):
         """
         Manager class for performing concurrent user function calls
 
@@ -99,11 +106,23 @@ class ACMEdaemon(object):
         n_calls : int
             Number of concurrent calls of `func` to perform. If `pmap` is not `None`,
             then ``n_calls = pmap.n_inputs``
-        n_jobs : int or "auto"
-            Number of SLURM jobs (=workers) to spawn. See :class:~`acme.ParallelMap`
+        n_workers : int or "auto"
+            Number of SLURM workers (=jobs) to spawn. See :class:~`acme.ParallelMap`
             for details.
         write_worker_results : bool
             If `True`, the return value(s) of `func` is/are saved on disk. See
+            :class:~`acme.ParallelMap` for details.
+        output_dir : str or None
+            If provided, auto-generated results are stored in the given path. See
+            :class:~`acme.ParallelMap` for details.
+        result_shape : tuple or None
+            If provided, results are slotted into a dataset/array with layout `result_shape`. See
+            :class:~`acme.ParallelMap` for details.
+        result_dtype : str or None
+            If provided, determines numerical datatype of dataset laid out
+            by `result_shape`. See :class:~`acme.ParallelMap` for details.
+        single_file : bool
+            If `True`, parallel workers write to the same results container. See
             :class:~`acme.ParallelMap` for details.
         write_pickle : bool
             If `True`, the return value(s) of `func` is/are pickled to disk. See
@@ -113,7 +132,7 @@ class ACMEdaemon(object):
             `args`, `kwargs` tuple. See :class:~`acme.ParallelMap` for details.
         partition : str
             Name of SLURM partition to use. See :class:~`acme.ParallelMap` for details.
-        mem_per_job : str
+        mem_per_worker : str
             Memory booking for each SLURM worker. See :class:~`acme.ParallelMap` for details.
         setup_timeout : int
             Timeout period (in seconds) for SLURM workers to come online. See
@@ -168,7 +187,12 @@ class ACMEdaemon(object):
             self.log = pmap.log
 
         # Set up output handler
-        self.prepare_output(write_worker_results, write_pickle)
+        self.prepare_output(write_worker_results,
+                            output_dir,
+                            result_shape,
+                            result_dtype,
+                            single_file,
+                            write_pickle)
 
         # If requested, perform single-worker dry-run (and quit if desired)
         if dryrun:
@@ -177,9 +201,9 @@ class ACMEdaemon(object):
                 return
 
         # Either use existing dask client or start a fresh instance
-        self.prepare_client(n_jobs=n_jobs,
+        self.prepare_client(n_workers=n_workers,
                             partition=partition,
-                            mem_per_job=mem_per_job,
+                            mem_per_worker=mem_per_worker,
                             setup_timeout=setup_timeout,
                             setup_interactive=setup_interactive,
                             stop_client=stop_client)
@@ -189,6 +213,25 @@ class ACMEdaemon(object):
         Parse (provided) inputs: make sure positional and keyword args are
         properly formatted for concurrently calling `func`
         """
+
+        # Allocate slots
+        self.func = None
+        self.argv = None
+        self.kwargv = None
+        self.n_calls = None
+        self.n_workers = None
+        self.acme_func = None
+        self.task_ids = None
+        self.out_dir = None
+        self.collect_results = None
+        self.results_container = None
+        self.result_shape = None
+        self.result_dtype = None
+        self.stacking_dim = None
+        self.client = None
+        self.stop_client = None
+        self.has_slurm = None
+        self.log = None
 
         # Ensure `func` is callable
         if not callable(func):
@@ -233,7 +276,13 @@ class ACMEdaemon(object):
         # Finally, determine if the code is executed on a SLURM-enabled node
         self.has_slurm = acs.is_slurm_node()
 
-    def prepare_output(self, write_worker_results, write_pickle):
+    def prepare_output(self,
+                       write_worker_results,
+                       output_dir,
+                       result_shape,
+                       result_dtype,
+                       single_file,
+                       write_pickle):
         """
         If `write_*` is `True` set up directories for saving output HDF5 containers
         (or pickle files). Warn if results are to be collected in memory
@@ -241,45 +290,165 @@ class ACMEdaemon(object):
 
         # Basal sanity check for Boolean flags
         if not isinstance(write_worker_results, bool):
-            msg = "{} `write_worker_results` has to be `True` or `False`, not {}"
-            raise TypeError(msg.format(self.msgName, str(write_worker_results)))
+            msg = "%s `write_worker_results` has to be `True` or `False`, not %s"
+            raise TypeError(msg%(self.msgName, str(write_worker_results)))
+        if not isinstance(single_file, bool):
+            msg = "%s `single_file` has to be `True` or `False`, not %s"
+            raise TypeError(msg%(self.msgName, str(single_file)))
         if not isinstance(write_pickle, bool):
-            msg = "{} `write_pickle` has to be `True` or `False`, not {}"
-            raise TypeError(msg.format(self.msgName, str(write_pickle)))
+            msg = "%s `write_pickle` has to be `True` or `False`, not %s"
+            raise TypeError(msg%(self.msgName, str(write_pickle)))
+
+        # Check compatibility of provided optional args
         if not write_worker_results and write_pickle:
             self.log.warning("Pickling of results only possible if `write_worker_results` is `True`. ")
+        if not write_worker_results and output_dir:
+            self.log.warning("Output directory specification has no effect if `write_worker_results` is `False`.")
+        if write_pickle and result_shape:
+            self.log.warning("Pickling of results does not support output array shape specification. ")
+        if not write_worker_results and single_file:
+            self.log.warning("Generating a single output file only possible if `write_worker_results` is `True`. ")
+        if write_pickle and single_file:
+            msg = "%s Pickling of results does not support single output file creation. "
+            raise ValueError(msg%self.msgName)
+
+        # Check validity of output shape/dtype specifications
+        if result_shape is not None:
+            if not isinstance(result_shape, (list, tuple)):
+                msg = "%s `result_shape` has to be either `None` or tuple, not %s"
+                raise TypeError(msg%(self.msgName, str(type(result_shape))))
+
+            if not isinstance(result_dtype, str):
+                msg = "%s `result_dtype` has to be a string, not %s"
+                raise TypeError(msg%(self.msgName, str(type(result_shape))))
+
+            if sum(spec is None for spec in result_shape) != 1:
+                msg = "%s `result_shape` must contain exactly one `None` entry"
+                raise ValueError(msg%self.msgName)
+
+            rShape = list(result_shape)
+            self.stacking_dim = result_shape.index(None)
+            rShape[self.stacking_dim] = self.n_calls
+            if write_worker_results:
+                self.kwargv["stackingDim"] = [self.stacking_dim]
+
+            if not all(isinstance(spec, numbers.Number) for spec in rShape):
+                msg = "%s `result_shape` must only contain numerical values"
+                raise ValueError(msg%self.msgName)
+            if any(spec < 0 or int(spec) != spec for spec in rShape):
+                msg = "%s `result_shape` must only contain non-negative integers"
+                raise ValueError(msg%self.msgName)
+
+            self.result_shape = tuple(rShape)
+            ShapeSource = list(rShape)
+            ShapeSource.pop(self.stacking_dim)
+            ShapeSource = tuple(ShapeSource)
+
+            try:
+                self.result_dtype = np.dtype(result_dtype)
+            except Exception as exc:
+                msg = "%s `result_dtype` has to be a valid NumPy datatype specification. "
+                msg += "Original error message below:\n%s"
+                raise TypeError(msg%(self.msgName, str(exc)))
 
         # If automatic saving of results is requested, make necessary preparations
         if write_worker_results:
 
-            # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
-            if self.has_slurm:
-                outDir = "/cs/home/{usr:s}/".format(usr=getpass.getuser())
+            # Check validity of output dir specification
+            if not isinstance(output_dir, (type(None), str)):
+                msg = "%s `output_dir` has to be either `None` or str, not %s"
+                raise TypeError(msg%(self.msgName, str(type(output_dir))))
+
+            # If provided, standardize output dir spec, otherwise use default locations
+            if output_dir is not None:
+                outDir = os.path.abspath(os.path.expanduser(output_dir))
+
             else:
-                outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
-            outDir = os.path.join(outDir, "ACME_{date:s}")
-            outDir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
+                # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
+                if self.has_slurm:
+                    outDir = "/cs/home/{usr:s}/".format(usr=getpass.getuser())
+                else:
+                    outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
+                outDir = os.path.join(outDir, "ACME_{date:s}")
+                outDir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
+
+            # Unless specifically denied by the user, each worker stores results
+            # separately with a common container file pointing to the individual
+            # by-worker files residing in a "payload" directory
+            self.out_dir = str(outDir)
+            if not single_file and not write_pickle:
+                payloadName = "{}_payload".format(self.func.__name__)
+                outputDir = os.path.join(self.out_dir, payloadName)
+            else:
+                outputDir = self.out_dir
             try:
-                os.makedirs(outDir)
+                os.makedirs(outputDir)
             except Exception as exc:
                 msg = "{} automatic creation of output folder {} failed. Original error message below:\n{}"
-                raise OSError(msg.format(self.msgName, outDir, str(exc)))
+                raise OSError(msg.format(self.msgName, outputDir, str(exc)))
 
-            # Prepare `outDir` for distribution across workers via `kwargv` and
-            # re-define or allocate key "taskID" to track concurrent processing results
-            self.kwargv["outDir"] = [outDir] * self.n_calls
+            # Re-define or allocate key "taskID" to track concurrent processing results
             self.kwargv["taskID"] = self.task_ids
             self.collect_results = False
-            fExt = "h5"
+
+            # Set up correct file-extension for output files; in case of HDF5
+            # containers, prepare "main" file for collecting/symlinking worker results
             if write_pickle:
                 fExt = "pickle"
-            self.kwargv["outFile"] = ["{}_{}.{}".format(self.func.__name__, taskID, fExt) for taskID in self.task_ids]
+            else:
+                fExt = "h5"
+                self.results_container = os.path.join(self.out_dir, "{}.h5".format(self.func.__name__))
+
+            # By default, `results_container` is a collection of links that point to
+            # worker-generated HDF5 containers; if `single_file` is `True`, then
+            # `results_container` is a "real" container with actual dataset(s)
+            if single_file:
+                self.kwargv["singleFile"] = [True]
+                self.kwargv["outFile"] = [self.results_container]
+
+                # If no output shape provided, prepare groups for storing datasets;
+                # otherwise allocate a single dataset w/specified dimension
+                if result_shape is None:
+                    with h5py.File(self.results_container, "w") as h5f:
+                        for i in self.task_ids:
+                            h5f.create_group("comp_{}".format(i))
+                else:
+                    with h5py.File(self.results_container, "w") as h5f:
+                        h5f.create_dataset("result_0", shape=self.result_shape, dtype=self.result_dtype)
+
+            else:
+                self.kwargv["outFile"] = [os.path.join(outputDir,
+                                                       "{}_{}.{}".format(self.func.__name__,
+                                                                         taskID,
+                                                                         fExt))
+                                                       for taskID in self.task_ids]
+                if not write_pickle:
+
+                    # If no output shape provided, generate links to external datasets;
+                    # otherwise allocate a virtual dataset w/specified dimension
+                    if result_shape is None:
+                        with h5py.File(self.results_container, "w") as h5f:
+                            for i, fname in enumerate(self.kwargv["outFile"]):
+                                relPath = os.path.join(payloadName, os.path.basename(fname))
+                                h5f["comp_{}".format(i)] = h5py.ExternalLink(relPath, "/")
+                    else:
+
+                        # Assemble virtual dataset
+                        layout = h5py.VirtualLayout(shape=self.result_shape, dtype=self.result_dtype)
+                        idx = [slice(None)] * len(self.result_shape)
+                        for i, fname in enumerate(self.kwargv["outFile"]):
+                            idx[self.stacking_dim] = i
+                            relPath = os.path.join(payloadName, os.path.basename(fname))
+                            vsource = h5py.VirtualSource(fname, "result_0", shape=ShapeSource)
+                            layout[tuple(idx)] = vsource
+                        with h5py.File(self.results_container, "w", libver="latest") as h5f:
+                            h5f.create_virtual_dataset("result_0", layout)
 
             # Include logger name in keywords so that workers can use it
-            self.kwargv["logName"] = [self.log.name] * self.n_calls
+            self.kwargv["logName"] = [self.log.name]
 
             # Wrap the user-provided func and distribute it across workers
-            self.kwargv["userFunc"] = [self.func] * self.n_calls
+            self.kwargv["userFunc"] = [self.func]
             self.acme_func = self.func_wrapper
 
         else:
@@ -321,9 +490,8 @@ class ACMEdaemon(object):
         mem1 = psutil.Process().memory_info().rss / 1024 ** 2
 
         # Remove any generated output files
-        if "outDir" in self.kwargv.keys():
-            fname = os.path.join(self.kwargv["outDir"][dryRunIdx], self.kwargv["outFile"][dryRunIdx])
-            os.unlink(fname)
+        if self.out_dir is not None:
+            os.unlink(self.kwargv["outFile"][dryRunIdx])
 
         # Compute elapsed time and memory usage
         elapsedTime = toc - tic
@@ -344,8 +512,8 @@ class ACMEdaemon(object):
         if setup_interactive:
             msg = "Do you want to continue executing {fname:s} with the provided arguments?"
             if not user_yesno(msg.format(fname=self.func.__name__), default="yes"):
-                if "outDir" in self.kwargv.keys():
-                    shutil.rmtree(self.kwargv["outDir"][dryRunIdx], ignore_errors=True)
+                if self.out_dir is not None:
+                    shutil.rmtree(self.out_dir, ignore_errors=True)
                 goOn = False
 
         return goOn
@@ -371,9 +539,9 @@ class ACMEdaemon(object):
 
     def prepare_client(
         self,
-        n_jobs="auto",
+        n_workers="auto",
         partition="auto",
-        mem_per_job="auto",
+        mem_per_worker="auto",
         setup_timeout=180,
         setup_interactive=True,
         stop_client="auto"):
@@ -402,7 +570,7 @@ class ACMEdaemon(object):
             self.client = dd.get_client()
             if stop_client == "auto":
                 self.stop_client = False
-            self.n_jobs = len(self.client.cluster.workers)
+            self.n_workers = len(self.client.cluster.workers)
             msg = "Attaching to global parallel computing client {}"
             self.log.info(msg.format(str(self.client)))
             return
@@ -411,7 +579,7 @@ class ACMEdaemon(object):
                 self.stop_client = True
 
         # If things are running locally, simply fire up a dask-distributed client,
-        # otherwise go through the motions of preparing a full cluster job swarm
+        # otherwise go through the motions of preparing a full worker cluster
         if not self.has_slurm:
             self.client = local_cluster_setup(interactive=False)
 
@@ -426,38 +594,38 @@ class ACMEdaemon(object):
                 if is_esi_node():
                     msg = "Automatic SLURM partition selection is experimental"
                     self.log.warning(msg)
-                    mem_per_job = self.estimate_memuse()
+                    mem_per_worker = self.estimate_memuse()
                 else:
                     err = "Automatic SLURM partition selection currently only available " +\
                         "on the ESI HPC cluster. "
                     self.log.error(err)
 
-            # If `n_jobs` is `"auto`, set `n_jobs = n_calls` (default)
-            msg = "{} `n_jobs` has to be 'auto' or an integer >= 2, not {}"
-            if isinstance(n_jobs, str):
-                if n_jobs != "auto":
-                    raise ValueError(msg.format(self.msgName, n_jobs))
-                n_jobs = self.n_calls
+            # If `n_workers` is `"auto`, set `n_workers = n_calls` (default)
+            msg = "{} `n_workers` has to be 'auto' or an integer >= 2, not {}"
+            if isinstance(n_workers, str):
+                if n_workers != "auto":
+                    raise ValueError(msg.format(self.msgName, n_workers))
+                n_workers = self.n_calls
 
             # All set, remaining input processing is done by respective `*_cluster_setup` routines
             if is_esi_node():
-                self.client = esi_cluster_setup(partition=partition, n_jobs=n_jobs,
-                                                mem_per_job=mem_per_job, timeout=setup_timeout,
+                self.client = esi_cluster_setup(partition=partition, n_workers=n_workers,
+                                                mem_per_worker=mem_per_worker, timeout=setup_timeout,
                                                 interactive=setup_interactive, start_client=True)
 
             # Unknown cluster node, use vanilla config
             else:
                 wrng = "Cluster node {} not recognized. Falling back to vanilla " +\
-                    "SLURM setup allocating one worker and one core per job"
+                    "SLURM setup allocating one worker and one core per worker"
                 self.log.warning(wrng.format(socket.getfqdn()))
-                workers_per_job = 1
+                processes_per_worker = 1
                 n_cores = 1
                 self.client = slurm_cluster_setup(partition=partition,
                                                   n_cores=n_cores,
-                                                  n_jobs=n_jobs,
-                                                  workers_per_job=workers_per_job,
-                                                  mem_per_job=mem_per_job,
-                                                  n_jobs_startup=100,
+                                                  n_workers=n_workers,
+                                                  processes_per_worker=processes_per_worker,
+                                                  mem_per_worker=mem_per_worker,
+                                                  n_workers_startup=100,
                                                   timeout=setup_timeout,
                                                   interactive=setup_interactive,
                                                   interactive_wait=120,
@@ -470,8 +638,13 @@ class ACMEdaemon(object):
                 msg = "{} Could not start distributed computing client. "
                 raise ConnectionAbortedError(msg.format(self.msgName))
 
-        # Set `n_jobs` to no. of active workers in the initialized cluster
-        self.n_jobs = len(self.client.cluster.workers)
+        # Set `n_workers` to no. of active workers in the initialized cluster
+        self.n_workers = len(self.client.cluster.workers)
+
+        # If single output file saving was chosen, initialize distributed
+        # lock for shared writing to container
+        if self.kwargv.get("singleFile") is not None:
+            dd.lock.Lock(name=os.path.basename(self.results_container))
 
     def estimate_memuse(self):
         """
@@ -482,16 +655,20 @@ class ACMEdaemon(object):
         # Let helper randomly pick some jobs and prepare corresponding args + kwargs
         dryRunIdx, dryRunArgs, dryRunKwargs = self._dryrun_setup()
 
+        # Append new dummy keyword to return before any disk-writes happen
+        for k in range(len(dryRunKwargs)):
+            dryRunKwargs[k]["memEstRun"] = True
+
         # Set run-time for each job (in seconds) and allocate arrays for memory
         # consumption estimates (in GB)
         runTime = 30
         memPerSec = np.zeros((runTime,))
         memPerJob = np.zeros((len(dryRunIdx),))
 
-        # Check if auto-generated output files have to be removed
-        rmOutDir = False
-        if "outDir" in self.kwargv.keys():
-            rmOutDir = True
+        # # Check if auto-generated output files have to be removed
+        # rmOutDir = False
+        # if self.out_dir is not None and self.kwargv.get("singleFile") is None:
+        #     rmOutDir = True
 
         # Adequately warn about this heuristic gymnastics...
         msg = "Estimating memory consumption of {fname:s} by running {numwrks:d} " +\
@@ -525,11 +702,10 @@ class ACMEdaemon(object):
             # Compute peak memory consumption across `runTime` seconds
             memPerJob[i] = memPerSec.max()
 
-            # Remove auto-generated files (if any were created within `runTime` seconds)
-            if rmOutDir:
-                fname = os.path.join(self.kwargv["outDir"][idx], self.kwargv["outFile"][idx])
-                if os.path.isfile(fname):
-                    os.unlink(fname)
+            # # Remove auto-generated files (if any were created within `runTime` seconds)
+            # if rmOutDir:
+            #     if os.path.isfile(self.kwargv["outFile"][idx]):
+            #         os.unlink(self.kwargv["outFile"][idx])
 
         # Compute aggregate average memory consumption across all runs
         memUsage = memPerJob.mean()
@@ -545,12 +721,12 @@ class ACMEdaemon(object):
         Perform the actual parallel execution of `func`
 
         If `debug` is `True`, use a single-threaded dask scheduler that does
-        not actually process anythin concurrently but uses the dask framework
+        not actually process anything concurrently but uses the dask framework
         in a sequential setup.
         """
 
         # If `prepare_client` has not been called yet, don't attempt to compute anything
-        if not hasattr(self, "client"):
+        if self.client is None:
             return
 
         # Ensure `debug` is a simple Boolean flag
@@ -558,17 +734,15 @@ class ACMEdaemon(object):
             msg = "{} `debug` has to be `True` or `False`, not {}"
             raise TypeError(msg.format(self.msgName, str(debug)))
 
-        # If `client` attribute is not set, the daemon is being re-used: prepare
-        # everything for re-entry
-        if self.client is None:
-            write_worker_results = self.acme_func == self.func_wrapper
-            if write_worker_results:
-                write_pickle = self.kwargv["outFile"][0].endswith(".pickle")
-            else:
-                write_pickle = False
-            self.prepare_output(write_worker_results=write_worker_results,
-                                write_pickle=write_pickle)
-            self.prepare_client(n_jobs=self.n_jobs, stop_client=self.stop_client)
+        # Deduce result output information
+        write_worker_results = self.acme_func == self.func_wrapper
+        single_file = False
+        if write_worker_results:
+            write_pickle = self.results_container is None
+            if not write_pickle and self.kwargv.get("singleFile") is not None:
+                single_file = True
+        else:
+            write_pickle = False
 
         # Check if the underlying parallel computing cluster hosts actually usable workers
         if len([w["memory_limit"] for w in self.client.cluster.scheduler_info["workers"].values()]) == 0:
@@ -629,7 +803,7 @@ class ACMEdaemon(object):
             logFiles = []
             logDir = os.path.dirname(self.client.cluster.dashboard_link) + "/info/main/workers.html"
         msg = "Preparing {} parallel calls of `{}` using {} workers"
-        self.log.info(msg.format(self.n_calls, self.func.__name__, self.n_jobs))
+        self.log.info(msg.format(self.n_calls, self.func.__name__, self.n_workers))
         msg = "Log information available at {}"
         self.log.info(msg.format(logDir))
 
@@ -701,32 +875,104 @@ class ACMEdaemon(object):
             raise RuntimeError(msg)
 
         # If wanted (not recommended) collect computed results in local memory
+        # The return `values` is either
+        # `None` : if neither in-memory results collection or auto-writing was requested
+        # list of file-names: if `write_worker_results` is `True`
+        # list of objects: if in-memory results collection was requested
         if self.collect_results:
             if not isSpyModule:
                 self.log.info("Gathering results in local memory")
-            values = self.client.gather(futures)
+            collected = self.client.gather(futures)
+            if self.result_shape is not None:
+                values = []
+                arrVal = np.empty(shape=self.result_shape, dtype=self.result_dtype)
+                idx = [slice(None)] * len(self.result_shape)
+                for i, res in enumerate(collected):
+                    if not isinstance(res, (list, tuple)):
+                        res = [res]
+                    idx[self.stacking_dim] = i
+                    arrVal[tuple(idx)] = res[0]
+                    for r in res[1:]:
+                        values.append(r)
+                values.insert(0, arrVal)
+            else:
+                values = collected
         else:
             values = None
 
-        # Assemble final triumphant output message and get out
-        msg = "SUCCESS! Finished parallel computation. "
-        if "outDir" in self.kwargv.keys():
-            dirname = self.kwargv["outDir"][0]
-            msgRes = "Results have been saved to {}".format(dirname)
-            msg += msgRes
-            # Determine filepaths of results files (query disk to catch emergency pickles)
-            if values is None:
-                values = []
-                for fname in self.kwargv["outFile"]:
-                    h5Name = os.path.join(dirname, fname)
-                    pklName = h5Name.rstrip(".h5") + ".pickle"
-                    if os.path.isfile(h5Name):
-                        values.append(h5Name)
-                    elif os.path.isfile(pklName):
-                        values.append(pklName)
+        # Prepare final output message
+        finalMsg = "{}Finished parallel computation. "
+        successMsg = "SUCCESS! "
+
+        # If automatic results writing was requested, perform some housekeeping
+        if write_worker_results:
+            if write_pickle:
+                values = list(self.kwargv["outFile"])
+                finalMsg += "Results have been saved to {}".format(self.out_dir)
+            else:
+                if single_file:
+                    finalMsg += "Results have been saved to {}".format(self.results_container)
+                    if values is None:
+                        values = [self.results_container]
+                else:
+                    picklesFound = False
+                    values = []
+                    for fname in self.kwargv["outFile"]:
+                        pklName = fname.rstrip(".h5") + ".pickle"
+                        if os.path.isfile(fname):
+                            values.append(fname)
+                        elif os.path.isfile(pklName):
+                            values.append(pklName)
+                            picklesFound = True
+                        else:
+                            values.append("Missing {}".format(fname.rstrip(".h5")))
+                    payloadDir = os.path.dirname(values[0])
+
+                    # If pickles are found, remove global `results_container` as it
+                    # would contain invalid file-links and move compute results out
+                    # of payload dir
+                    if picklesFound:
+                        os.unlink(self.results_container)
+                        wrng = "Some compute runs could not be saved as HDF5, " +\
+                            "collection container %s has been removed as it would " +\
+                                "comprise invalid file-links"
+                        self.log.warning(wrng, self.results_container)
+                        self.results_container = None
+
+                        # Move files out of payload dir and update return `values`
+                        target = os.path.abspath(os.path.join(payloadDir, os.pardir))
+                        for i, fname in enumerate(values):
+                            shutil.move(fname, target)
+                            self.kwargv["outFile"][i] = os.path.join(target, os.path.basename(fname))
+                        values = list(self.kwargv["outFile"])
+                        shutil.rmtree(payloadDir)
+                        successMsg = ""
+                        finalMsg += "Results have been saved to {}".format(target)
+
+                    # All good, no pickle gymnastics was needed
                     else:
-                        values.append("Missing {}".format(fname.rstrip(".h5")))
-        self.log.info(msg)
+
+                        # In case of multiple return values present in by-worker
+                        # containers but missing in collection container (happens
+                        # if `result_shape` is not `None` and data-sets have to
+                        # be pre-allocated), create "symlinks" to corresponding
+                        # missing returns
+                        if self.stacking_dim is not None:
+                            with h5py.File(self.results_container, "r") as h5r:
+                                with h5py.File(values[0], "r") as h5Tmp:
+                                    missingReturns = set(h5Tmp.keys()).difference(h5r.keys())
+                            if len(missingReturns) > 0:
+                                with h5py.File(self.results_container, "a") as h5r:
+                                    for retVal in missingReturns:
+                                        for i, fname in enumerate(values):
+                                            relPath = os.path.join(os.path.basename(payloadDir), os.path.basename(fname))
+                                            h5r["comp_{}/{}".format(i, retVal)] = h5py.ExternalLink(relPath, retVal)
+
+                        msg = "Results have been saved to {} with links to data payload located in {}"
+                        finalMsg += msg.format(self.results_container, payloadDir)
+
+        # Print final triumphant output message and get out
+        self.log.info(finalMsg.format(successMsg))
 
         # Either return collected by-worker results or the filepaths of results
         return values
@@ -755,34 +1001,71 @@ class ACMEdaemon(object):
 
         # Extract everything from `kwargs` appended by `ACMEdaemon`
         func = kwargs.pop("userFunc")
-        outDir = kwargs.pop("outDir")
         taskID = kwargs.pop("taskID")
         fname = kwargs.pop("outFile")
         logName = kwargs.pop("logName")
+        singleFile = kwargs.pop("singleFile", False)
+        stackingDim = kwargs.pop("stackingDim", None)
+        memEstRun = kwargs.pop("memEstRun", False)
         log = logging.getLogger(logName)
 
         # Call user-provided function
         result = func(*args, **kwargs)
 
+        # For memory estimation runs, don't start saving stuff
+        if memEstRun:
+            return
+
         # Save results: either (try to) use HDF5 or pickle stuff
         if fname.endswith(".h5"):
+
+            grpName = ""
+            if singleFile:
+                lock = dd.lock.Lock(name=os.path.basename(fname))
+                lock.acquire()
+                grpName = "comp_{}/".format(taskID)
+                errName = pname = fname.rstrip(".h5") + ".failed"
+                err = "Could not write to %s. File potentially corrupted. "
+                if os.path.isfile(errName):
+                    log.error(err, fname)
+                    lock.release()
+                    raise IOError(err%fname)
+
+            if not isinstance(result, (list, tuple)):
+                result = [result]
+
             try:
-                h5name = os.path.join(outDir, fname)
-                with h5py.File(h5name, "w") as h5f:
-                    if isinstance(result, (list, tuple)):
+
+                with h5py.File(fname, "a") as h5f:
+                    if stackingDim is None:
                         if not all(isinstance(value, (numbers.Number, str)) for value in result):
                             for rk, res in enumerate(result):
-                                h5f.create_dataset("result_{}".format(rk), data=res)
+                                h5f.create_dataset(grpName + "result_{}".format(rk), data=res)
                         else:
-                            h5f.create_dataset("result_0", data=result)
+                            h5f.create_dataset(grpName + "result_0", data=result)
                     else:
-                        h5f.create_dataset("result_0", data=result)
+                        if singleFile:
+                            idx = [slice(None)] * len(h5f["result_0"].shape)
+                            idx[stackingDim] = taskID
+                            h5f["result_0"][tuple(idx)] = result[0]
+                            for rk, res in enumerate(result[1:]):
+                                h5f.create_dataset(grpName + "result_{}".format(rk + 1), data=res)
+                        else:
+                            for rk, res in enumerate(result):
+                                h5f.create_dataset(grpName + "result_{}".format(rk), data=res)
+
+                if singleFile:
+                    lock.release()
+
             except TypeError as exc:
-                if "has no native HDF5 equivalent" in str(exc) or "One of data, shape or dtype must be specified" in str(exc):
+
+                if ("has no native HDF5 equivalent" in str(exc) \
+                    or "One of data, shape or dtype must be specified" in str(exc)) \
+                        and not singleFile:
                     try:
-                        os.unlink(h5name)
+                        os.unlink(fname)
                         pname = fname.rstrip(".h5") + ".pickle"
-                        with open(os.path.join(outDir, pname), "wb") as pkf:
+                        with open(os.path.join(pname), "wb") as pkf:
                             pickle.dump(result, pkf)
                         msg = "Could not write %s results have been pickled instead: %s. Return values are most likely " +\
                             "not suitable for storage in HDF5 containers. Original error message: %s"
@@ -791,12 +1074,24 @@ class ACMEdaemon(object):
                         err = "Unable to write %s, successive attempts to pickle results failed too: %s"
                         log.error(err, fname, str(pexc))
                 else:
-                    err = "Could not access %s. Original error message: %s"
-                    log.error(err, h5name, str(exc))
+                    if singleFile:
+                        err = "Could not write to %s. File potentially corrupted. Original error message: %s"
+                        lock.release()
+                    else:
+                        err = "Could not access %s. Original error message: %s"
+                    log.error(err, fname, str(exc))
                     raise exc
+
+            except Exception as exc:
+
+                if singleFile:
+                    lock.release()
+                raise exc
+
         else:
+
             try:
-                with open(os.path.join(outDir, fname), "wb") as pkf:
+                with open(os.path.join(fname), "wb") as pkf:
                     pickle.dump(result, pkf)
             except pickle.PicklingError as pexc:
                 err = "Could not pickle results to file %s. Original error message: %s"
