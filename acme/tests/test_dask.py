@@ -40,7 +40,8 @@ def test_cluster_setup():
             slurm_cluster_setup(partition=defaultQ, job_extra=["invalid"])
         cluster_cleanup()
         client = slurm_cluster_setup(partition=defaultQ,
-                                     job_extra=["--job-name='averycustomjobname'"])
+                                     job_extra=["--job-name='averycustomjobname'"],
+                                     interactive=False)
         assert 'averycustomjobname' in client.cluster.job_header
         cluster_cleanup()
 
@@ -50,7 +51,8 @@ def test_cluster_setup():
         cluster_cleanup()
         slurmOut = "/tmp/{}".format(getpass.getuser())
         client = slurm_cluster_setup(partition=defaultQ,
-                                     job_extra=["--output={}".format(slurmOut), "--job-name='averycustomjobname'"])
+                                     job_extra=["--output={}".format(slurmOut), "--job-name='averycustomjobname'"],
+                                     interactive=False)
         assert "--output={}".format(slurmOut) in client.cluster.job_header
         assert 'averycustomjobname' in client.cluster.job_header
         cluster_cleanup(client)
@@ -108,15 +110,11 @@ def test_backcompat_cluster():
                                     n_jobs=1,
                                     workers_per_job=1,
                                     mem_per_job="1GB",
-                                    n_jobs_startup=1)
+                                    n_jobs_startup=1,
+                                    interactive=False)
         assert len(client.cluster.workers) == 1
         memory = [w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()]
         assert round(memory[0] / 1000**3) == 1
         threads = [w["nthreads"] for w in client.cluster.scheduler_info["workers"].values()]
         assert threads[0] == 1
         cluster_cleanup(client)
-
-
-#   Accordingly the keywords `n_jobs`, `mem_per_job`, `n_jobs_startup` and
-#   `workers_per_job` have been renamed `n_workers`, `mem_per_worker`,
-#   `n_workers_startup` and `processes_per_worker`, respectively. To ensure
