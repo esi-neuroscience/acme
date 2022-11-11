@@ -25,4 +25,4 @@ message: If you use this software, please cite it based on metadata found in thi
   itself used as the parallelization engine of SyNCoPy.
 repository-code: https://github.com/esi-neuroscience/acme
 title: 'ACME: Asynchronous Computing Made ESI'
-version: 2022.9.dev53
+version: '2022.11'

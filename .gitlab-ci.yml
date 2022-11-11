@@ -119,7 +119,7 @@ pypitest:
     - version=$(sed -e 's/esi-acme-\(.*\)/\1/' <<< "$tarname")
     - twine upload --repository testpypi --config-file=~/.esipypirc dist/*
     - sleep 300
-    - conda create --yes --name piptest python=3.8
+    - conda create --yes --name piptest python=3.10
     - conda activate piptest
     - conda install --yes pip
     - pip --no-cache-dir install --extra-index-url https://test.pypi.org/simple esi-acme==$version
