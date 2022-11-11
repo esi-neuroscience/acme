@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2022.11] - 2022-11-11
 Major changes in managing auto-generated files
 - If `write_worker_results` is `True`, ACME now creates an aggregate results
   container comprised of external links that point to actual data in HDF5
