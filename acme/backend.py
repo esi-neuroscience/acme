@@ -656,8 +656,10 @@ class ACMEdaemon(object):
         dryRunIdx, dryRunArgs, dryRunKwargs = self._dryrun_setup()
 
         # Append new dummy keyword to return before any disk-writes happen
-        for k in range(len(dryRunKwargs)):
-            dryRunKwargs[k]["memEstRun"] = True
+        # in case ACME handles results output
+        if self.out_dir is not None:
+            for k in range(len(dryRunKwargs)):
+                dryRunKwargs[k]["memEstRun"] = True
 
         # Set run-time for each job (in seconds) and allocate arrays for memory
         # consumption estimates (in GB)
