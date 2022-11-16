@@ -10,6 +10,9 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### REMOVED
 ### DEPRECATED
 ### FIXED
+- Updated memory estimation logic on the ESI HPC cluster: if ACME does not
+  handle result output distribution but memory estimation is still requested
+  do not perform `memEstRun` keyword injection.
 
 ## [2022.11] - 2022-11-11
 Major changes in managing auto-generated files

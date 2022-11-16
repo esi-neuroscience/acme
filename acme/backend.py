@@ -704,11 +704,6 @@ class ACMEdaemon(object):
             # Compute peak memory consumption across `runTime` seconds
             memPerJob[i] = memPerSec.max()
 
-            # # Remove auto-generated files (if any were created within `runTime` seconds)
-            # if rmOutDir:
-            #     if os.path.isfile(self.kwargv["outFile"][idx]):
-            #         os.unlink(self.kwargv["outFile"][idx])
-
         # Compute aggregate average memory consumption across all runs
         memUsage = memPerJob.mean()
 
