@@ -625,7 +625,7 @@ class ACMEdaemon(object):
                                                   n_workers=n_workers,
                                                   processes_per_worker=processes_per_worker,
                                                   mem_per_worker=mem_per_worker,
-                                                  n_workers_startup=100,
+                                                  n_workers_startup=1,
                                                   timeout=setup_timeout,
                                                   interactive=setup_interactive,
                                                   interactive_wait=120,

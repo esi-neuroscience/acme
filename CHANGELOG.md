@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ## [Unreleased]
 ### NEW
 ### CHANGED
+- If not provided, a new lower default value of one is used for `n_workers_startup`
+
 ### REMOVED
 ### DEPRECATED
 ### FIXED
