@@ -1,8 +1,17 @@
 # Changelog of ACME
 All notable changes to this project will be documented in this file.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2022.12] - 2022-12-15
+Bugfix release.
+
+### CHANGED
+- If not provided, a new lower default value of one is used for `n_workers_startup`
+
+### FIXED
+- Updated memory estimation logic on the ESI HPC cluster: if ACME does not
+  handle result output distribution but memory estimation is still requested
+  do not perform `memEstRun` keyword injection.
 
 ## [2022.11] - 2022-11-11
 Major changes in managing auto-generated files

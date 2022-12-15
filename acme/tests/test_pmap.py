@@ -1209,6 +1209,22 @@ class TestParallelMap():
         outDirs.append(pmap.daemon.out_dir)
         assert len(os.listdir(os.path.dirname(pmap.kwargv['outFile'][0]))) == 0
 
+        # Syncopy-related test: ensure memory profiling works also if ACME
+        # does not handle result collection
+        syncopylog = os.path.join(tempDir, "syncopylog.txt")
+        pmap = ParallelMap(memtest_func,
+                           np.arange(100),
+                           2,
+                           sleeper=300,
+                           arrsize=arrsize,
+                           logfile=syncopylog,
+                           setup_timeout=10,
+                           write_worker_results=False,
+                           setup_interactive=False)
+        with open(syncopylog, "r", encoding="utf8") as f:
+            logTxt = f.read()
+        assert "memEstRun" not in logTxt
+
         # Now prepare `ParallelMap` instance for 100 concurrent calls of `memtest_func`:
         # again a 2GB array is allocated, but set final sleep to 5 minutes, enforcing
         # abort of profiling runs (set `setup_interactive` low to not have 100

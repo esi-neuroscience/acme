@@ -93,6 +93,8 @@ slurmtest:
     - conda env update -f acme.yml --prune
     - conda activate acme
     - export PYTHONPATH=$CI_PROJECT_DIR
+    - rm -rf $CI_PROJECT_DIR/acme/__pycache__
+    - rm -rf $CI_PROJECT_DIR/acme/tests/__pycache__
     - srun -p DEV --mem=4000m -c 4 pytest
     - codecov -t ${CODECOV_TOKEN}
 
