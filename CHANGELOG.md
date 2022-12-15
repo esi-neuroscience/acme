@@ -2,13 +2,12 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [Unreleased]
-### NEW
+## [2022.12] - 2022-12-15
+Bugfix release.
+
 ### CHANGED
 - If not provided, a new lower default value of one is used for `n_workers_startup`
 
-### REMOVED
-### DEPRECATED
 ### FIXED
 - Updated memory estimation logic on the ESI HPC cluster: if ACME does not
   handle result output distribution but memory estimation is still requested
