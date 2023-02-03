@@ -171,11 +171,14 @@ def esi_cluster_setup(partition="8GBXS",
     # Don't start a new cluster on top of an existing one
     try:
         client = get_client()
-        msg = "{}Found existing parallel computing client {}. Not starting new cluster."
-        customPrint(msg.format(funcName, str(client)))
-        if start_client:
-            return client
-        return client.cluster
+        if len([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()]) == 0:
+            cluster_cleanup(client)
+        else:
+            msg = "{}Found existing parallel computing client {}. Not starting new cluster."
+            customPrint(msg.format(funcName, str(client)))
+            if start_client:
+                return client
+            return client.cluster
     except ValueError:
         pass
 
