@@ -289,7 +289,8 @@ def prepare_log(func, caller=None, logfile=False, verbose=None):
     log.setLevel(loglevel)
 
     # Create logging formatter
-    formatter = logging.Formatter("%(name)s %(levelname)s: %(message)s")
+    # formatter = logging.Formatter("%(name)s %(levelname)s: %(message)s")
+    formatter = AcmeFormatter("%(name)s %(levelname)s %(message)s")
 
     # Output handlers: print log messages to `stderr` via `StreamHandler` as well
     # as to a provided text file `logfile using a `FileHandler`.
@@ -314,9 +315,53 @@ def prepare_log(func, caller=None, logfile=False, verbose=None):
         log.addHandler(fileHandler)
 
     # Start log w/version info
-    log.info("This is ACME v. %s", __version__)
+    log.info("\x1b[1mThis is ACME v. %s\x1b[0m", __version__)
 
     return log
+
+
+class AcmeFormatter(logging.Formatter):
+    """
+    Adapted from https://alexandra-zaharia.github.io/posts/make-your-own-custom-color-formatter-with-python-logging/
+    """
+
+    green = "\x1b[92m"
+    lightGreen = "\x1b[92m"
+    blue = "\x1b[38;5;39m"
+    magenta = "\x1b[35m"
+    red = "\x1b[38;5;196m"
+    bold = "\x1b[1m"
+    reset = "\x1b[0m"
+
+    def __init__(self, fmt):
+        super().__init__()
+
+        fmtName = fmt.partition("%(name)s")
+        fmtName = fmtName[0] + self.bold + fmtName[1] + self.reset + fmtName[2]
+        fmt = "".join(fmtName)
+
+        fmtLvl = fmt.partition("%(levelname)s")
+        fmtDebug = fmtLvl[0] + self.bold + self.green + \
+            "# " + fmtLvl[1] + " #" + self.reset + self.lightGreen + fmtLvl[2] + self.reset
+        fmtInfo = fmtLvl[0] + self.bold + self.blue + \
+            "- " + fmtLvl[1] + " -" + self.reset + fmtLvl[2]
+        fmtWarn = fmtLvl[0] + self.bold + self.magenta + \
+            "! " + fmtLvl[1] + " !" + self.reset + fmtLvl[2]
+        fmtError = fmtLvl[0] + self.bold + self.red + \
+            "> " + fmtLvl[1] + " <" + self.reset + self.red + fmtLvl[2] + self.reset
+
+        self.FORMATS = {
+            logging.DEBUG: "".join(fmtDebug),
+            logging.INFO: "".join(fmtInfo),
+            logging.WARNING: "".join(fmtWarn),
+            logging.ERROR: "".join(fmtError),
+            logging.CRITICAL: "".join(fmtError),
+        }
+
+    def format(self, record):
+        logFmt = self.FORMATS.get(record.levelno)
+        formatter = logging.Formatter(logFmt)
+        return formatter.format(record)
 
 
 def ctrlc_catcher(*excargs, **exckwargs):
