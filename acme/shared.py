@@ -326,7 +326,7 @@ class AcmeFormatter(logging.Formatter):
     """
 
     green = "\x1b[92m"
-    lightGreen = "\x1b[92m"
+    gray = "\x1b[90m"
     blue = "\x1b[38;5;39m"
     magenta = "\x1b[35m"
     red = "\x1b[38;5;196m"
@@ -342,7 +342,7 @@ class AcmeFormatter(logging.Formatter):
 
         fmtLvl = fmt.partition("%(levelname)s")
         fmtDebug = fmtLvl[0] + self.bold + self.green + \
-            "# " + fmtLvl[1] + " #" + self.reset + self.lightGreen + fmtLvl[2] + self.reset
+            "# " + fmtLvl[1] + " #" + self.reset + self.gray + fmtLvl[2] + self.reset
         fmtInfo = fmtLvl[0] + self.bold + self.blue + \
             "- " + fmtLvl[1] + " -" + self.reset + fmtLvl[2]
         fmtWarn = fmtLvl[0] + self.bold + self.magenta + \

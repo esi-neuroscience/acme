@@ -49,7 +49,7 @@ from dask.distributed import Client, get_client, LocalCluster
 from datetime import datetime, timedelta
 
 # Be optimistic: prepare success message to be used throughout this module
-_successMsg = "{name:s} Cluster dashboard accessible at {dash:s}"
+_successMsg = "dashboard accessible at {dash:s}"
 
 __all__ = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm_cluster_setup"]
 
@@ -149,7 +149,7 @@ def esi_cluster_setup(partition="8GBXS",
     """
 
     # Re-direct printing/warnings to ACME logger outside of SyNCoPy
-    customPrint, customWarning = _logging_setup()
+    customDebug, customPrint, customWarning = _logging_setup()
 
     # For later reference: dynamically fetch name of current function
     funcName = "{pre:s}<{pkg:s}{name:s}> ".format(pre="Syncopy " if isSpyModule else "",
@@ -351,7 +351,7 @@ def slurm_cluster_setup(partition="partition_name",
     """
 
     # Re-direct printing/warnings to ACME logger outside of SyNCoPy
-    customPrint, customWarning = _logging_setup()
+    customDebug, customPrint, customWarning = _logging_setup()
 
     # For later reference: dynamically fetch name of current function
     funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
@@ -566,7 +566,7 @@ def slurm_cluster_setup(partition="partition_name",
         raise TimeoutError(err.format(timeout))
 
     # Highlight how to connect to dask performance monitor
-    customPrint(_successMsg.format(name=funcName, dash=cluster.dashboard_link))
+    customPrint(_successMsg.format(dash=cluster.dashboard_link))
 
     # If client was requested, return that instead of the created cluster
     if start_client:
@@ -603,7 +603,7 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
     """
 
     # Re-direct printing/warnings to ACME logger outside SyNCoPy
-    customPrint, _ = _logging_setup()
+    customDebug, customPrint, _ = _logging_setup()
 
     # Wait until all workers have been started successfully or we run out of time
     wrkrs = _count_running_workers(cluster)
@@ -730,7 +730,7 @@ def local_cluster_setup(n_workers=None,
     """
 
     # Re-direct printing/warnings to ACME logger outside of SyNCoPy
-    customPrint, _ = _logging_setup()
+    customDebug, customPrint, _ = _logging_setup()
 
     # For later reference: dynamically fetch name of current function
     funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
@@ -776,7 +776,7 @@ def local_cluster_setup(n_workers=None,
         new processes being started before the calling process can finish its bootstrapping
         phase.
         """
-        customPrint(textwrap.dedent(msg.format(name=funcName + " " if not isSpyModule else "")))
+        customDebug(textwrap.dedent(msg.format(name=funcName + " " if not isSpyModule else "")))
 
     # Additional safe-guard: if a script is executed, double-check with the user
     # for proper main idiom usage
@@ -791,7 +791,7 @@ def local_cluster_setup(n_workers=None,
         client = Client(cluster)
     else:
         client = Client()
-    successMsg = "{name:s} Local parallel computing client ready. \n" + _successMsg
+    successMsg = "{name:s} Local parallel computing client ready, " + _successMsg
     customPrint(successMsg.format(name=funcName, dash=client.cluster.dashboard_link))
     if start_client:
         return client
@@ -821,7 +821,7 @@ def cluster_cleanup(client=None):
     """
 
     # Re-direct printing/warnings to ACME logger outside SyNCoPy
-    customPrint, customWarning = _logging_setup()
+    customDebug, customPrint, customWarning = _logging_setup()
 
     # For later reference: dynamically fetch name of current function
     funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
@@ -883,9 +883,11 @@ def _logging_setup():
     Local helper to customize warning and print functionality at runtime
     """
     if isSpyModule:
+        dFunc = print
         pFunc = print
         wFunc = lambda msg, kind, caller, lineno : spy.shared.errors.SPYWarning(msg, caller=caller)
     else:
+        dFunc = print
         pFunc = print
         wFunc = showwarning
         allLoggers = list(logging.root.manager.loggerDict.keys())
@@ -893,6 +895,7 @@ def _logging_setup():
             for moduleName in ["ACME", "ParallelMap"] if moduleName in loggerName]
         if len(idxList) > 0:
             logger = logging.getLogger(allLoggers[idxList[0]])
+            dFunc = logger.debug
             pFunc = logger.info
             wFunc = lambda msg, kind, caller, lineno: logger.warning(msg)
-    return pFunc, wFunc
+    return dFunc, pFunc, wFunc
