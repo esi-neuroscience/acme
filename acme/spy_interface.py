@@ -1,27 +1,20 @@
 # -*- coding: utf-8 -*-
 #
-# Interface for streamlining output to Syncopy
+# Interface for integrating with Syncopy
 #
 
-try:
-    import syncopy as spy
-    isSpyModule = True
-except ImportError:
-    isSpyModule = False
+# Builtin/3rd party package imports
+import sys
+import logging
 
-if isSpyModule:
-    customIOError = lambda msg : spy.shared.errors.SPYIOError(msg)
-    customValueError = lambda legal=None, varname=None, actual=None : \
-        spy.shared.errors.SPYValueError(legal=legal, varname=varname, actual=actual)
-    customTypeError = lambda val, varname=None, expected=None : \
-        spy.shared.errors.SPYTypeError(val, varname=varname, expected=expected)
+# Differentiate b/w being imported as Syncopy sub-package or standalone
+# ACME module: do not attempt to import syncopy but instead see if it has
+# already been imported; then ACME should use Syncopy's built-in logging
+if "syncopy" in sys.modules:
+    import syncopy as spy
+    log = logging.getLogger("syncopy")
     scalar_parser = lambda var, varname="", ntype=None, lims=None : \
         spy.shared.parsers.scalar_parser(var, varname=varname, ntype=ntype, lims=lims)
 else:
-    isSpyModule = False
-    from warnings import showwarning
-    import logging
     from .shared import _scalar_parser as scalar_parser
-    customIOError = IOError
-    customValueError = lambda legal=None, varname=None, actual=None : ValueError(legal)
-    customTypeError = lambda msg, varname=None, expected=None : TypeError(msg)
+    log = logging.getLogger("ACME")

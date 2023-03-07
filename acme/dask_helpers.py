@@ -19,34 +19,36 @@ if sys.platform == "win32":
     import colorama
     colorama.deinit()
     colorama.init(strip=False)
-
-# Local imports: differentiate b/w being imported as Syncopy sub-package or
-# standalone ACME module: if imported by Syncopy, use some lambda magic to avoid
-# circular imports due to (at import-time) only partially initialized Syncopy
-from acme import __deprecated__, __deprecation_wrng__
-from .shared import user_input, user_yesno
-if "syncopy" in sys.modules:
-    isSpyModule = True
-    import syncopy as spy
-    customIOError = lambda msg : spy.shared.errors.SPYIOError(msg)
-    customValueError = lambda legal=None, varname=None, actual=None : \
-        spy.shared.errors.SPYValueError(legal=legal, varname=varname, actual=actual)
-    customTypeError = lambda val, varname=None, expected=None : \
-        spy.shared.errors.SPYTypeError(val, varname=varname, expected=expected)
-    scalar_parser = lambda var, varname="", ntype=None, lims=None : \
-        spy.shared.parsers.scalar_parser(var, varname=varname, ntype=ntype, lims=lims)
-else:
-    isSpyModule = False
-    from warnings import showwarning
-    import logging
-    from .shared import _scalar_parser as scalar_parser
-    customIOError = IOError
-    customValueError = lambda legal=None, varname=None, actual=None : ValueError(legal)
-    customTypeError = lambda msg, varname=None, expected=None : TypeError(msg)
-
 from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, get_client, LocalCluster
 from datetime import datetime, timedelta
+
+# # Local imports: differentiate b/w being imported as Syncopy sub-package or
+# # standalone ACME module: if imported by Syncopy, use some lambda magic to avoid
+# # circular imports due to (at import-time) only partially initialized Syncopy
+# if "syncopy" in sys.modules:
+#     isSpyModule = True
+#     import syncopy as spy
+#     customIOError = lambda msg : spy.shared.errors.SPYIOError(msg)
+#     customValueError = lambda legal=None, varname=None, actual=None : \
+#         spy.shared.errors.SPYValueError(legal=legal, varname=varname, actual=actual)
+#     customTypeError = lambda val, varname=None, expected=None : \
+#         spy.shared.errors.SPYTypeError(val, varname=varname, expected=expected)
+#     scalar_parser = lambda var, varname="", ntype=None, lims=None : \
+#         spy.shared.parsers.scalar_parser(var, varname=varname, ntype=ntype, lims=lims)
+# else:
+#     isSpyModule = False
+#     from warnings import showwarning
+#     import logging
+#     from .shared import _scalar_parser as scalar_parser
+#     customIOError = IOError
+#     customValueError = lambda legal=None, varname=None, actual=None : ValueError(legal)
+#     customTypeError = lambda msg, varname=None, expected=None : TypeError(msg)
+
+# Local imports
+from acme import __deprecated__, __deprecation_wrng__
+from .shared import user_input, user_yesno
+from .spy_interface import scalar_parser, log
 
 # Be optimistic: prepare success message to be used throughout this module
 _successMsg = "dashboard accessible at {dash:s}"
@@ -148,22 +150,12 @@ def esi_cluster_setup(partition="8GBXS",
     cluster_cleanup : remove dangling parallel processing worker-clusters
     """
 
-    # Re-direct printing/warnings to ACME logger outside of SyNCoPy
-    customDebug, customPrint, customWarning = _logging_setup()
-
     # For later reference: dynamically fetch name of current function
-    funcName = "{pre:s}<{pkg:s}{name:s}> ".format(pre="Syncopy " if isSpyModule else "",
-                                                 pkg="ACME: " if isSpyModule else "",
-                                                 name=inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
 
     # Backwards compatibility: legacy keywords are converted to new nomenclature
     if any(kw in kwargs for kw in __deprecated__):
-        wrng = "{name:s}{msg:s}"
-        customWarning(wrng.format(name="" if isSpyModule else funcName + " ",
-                                  msg=__deprecation_wrng__),
-                      DeprecationWarning,
-                      __file__,
-                      inspect.currentframe().f_lineno)
+        log.warning("%s %s", funcName, DeprecationWarning)
         n_workers = kwargs.pop("n_jobs", n_workers)
         mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
         n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)
