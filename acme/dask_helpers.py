@@ -839,7 +839,7 @@ def cluster_cleanup(client=None):
 
     # Communicate what just happened and get outta here
     msg = "%s Successfully shut down %s containing %d workers"
-    log.info(msg, funcName, str(client), nWorkers)
+    log.info(msg, funcName, userClust, nWorkers)
 
     return
 

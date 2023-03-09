@@ -10,6 +10,7 @@ import socket
 import subprocess
 import inspect
 import logging
+import traceback
 import warnings
 import datetime
 import multiprocessing
@@ -408,7 +409,15 @@ def ctrlc_catcher(*excargs, **exckwargs):
     else:
         sys.__excepthook__(etype, evalue, etb)
 
-    # Log exception
-    log.exception("Encountered an error")
+    # Write to all logging locations, manually print traceback to file (stdout
+    # printing was handled above)
+    log.error("Exception received.")
+    fHandlers = [h for h in log.handlers if isinstance(h, logging.FileHandler)]
+    for handler in fHandlers:
+        handler.acquire()
+        with open(handler.baseFilename, "a") as logfile:
+            logfile.write("".join(traceback.format_exception_only(etype, evalue)))
+            logfile.write("".join(traceback.format_tb(etb)))
+        handler.release()
 
     return
