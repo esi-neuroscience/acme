@@ -386,7 +386,7 @@ def ctrlc_catcher(*excargs, **exckwargs):
             isipy = False
 
     # Prepare to log any uncaught exceptions
-    print, _ = dh._logging_setup()
+    log = logging.getLogger("ACME")
 
     # The only exception we really care about is a `KeyboardInterrupt`: if CTRL + C
     # is pressed, ensure graceful shutdown of any parallel processing clients
@@ -400,14 +400,15 @@ def ctrlc_catcher(*excargs, **exckwargs):
                 st.cancel()
             client.futures.clear()
             dh.cluster_cleanup(client)
-            print("<ACME> CTRL + C acknowledged, client and workers successfully killed")
-
-    # Log/print exception
-    print("<ACME> Exception received: {}: {}".format(str(etype), str(evalue)))
+            log.debug("CTRL + C acknowledged, client and workers successfully killed")
 
     # Relay exception handling back to appropriate system tools
     if isipy:
         shell.ipyTBshower(shell, exc_tuple=(etype, evalue, etb), **exckwargs)
     else:
         sys.__excepthook__(etype, evalue, etb)
+
+    # Log exception
+    log.exception("Encountered an error")
+
     return

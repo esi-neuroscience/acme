@@ -30,7 +30,7 @@ import numpy as np
 # Local imports
 from . import __path__
 from .dask_helpers import (esi_cluster_setup, local_cluster_setup,
-                           slurm_cluster_setup, cluster_cleanup)
+                           slurm_cluster_setup, cluster_cleanup, count_online_workers)
 from .shared import user_yesno, is_esi_node
 from . import shared as acs
 isSpyModule = False
@@ -742,7 +742,7 @@ class ACMEdaemon(object):
             write_pickle = False
 
         # Check if the underlying parallel computing cluster hosts actually usable workers
-        if len([w["memory_limit"] for w in self.client.cluster.scheduler_info["workers"].values()]) == 0:
+        if count_online_workers(self.client.cluster) == 0:
             msg = "{} no active workers found in distributed computing cluster {} " +\
                 "Consider running \n" +\
                 "\timport dask.distributed as dd; dd.get_client().restart()\n" +\

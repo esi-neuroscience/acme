@@ -23,35 +23,10 @@ from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, get_client, LocalCluster
 from datetime import datetime, timedelta
 
-# # Local imports: differentiate b/w being imported as Syncopy sub-package or
-# # standalone ACME module: if imported by Syncopy, use some lambda magic to avoid
-# # circular imports due to (at import-time) only partially initialized Syncopy
-# if "syncopy" in sys.modules:
-#     isSpyModule = True
-#     import syncopy as spy
-#     customIOError = lambda msg : spy.shared.errors.SPYIOError(msg)
-#     customValueError = lambda legal=None, varname=None, actual=None : \
-#         spy.shared.errors.SPYValueError(legal=legal, varname=varname, actual=actual)
-#     customTypeError = lambda val, varname=None, expected=None : \
-#         spy.shared.errors.SPYTypeError(val, varname=varname, expected=expected)
-#     scalar_parser = lambda var, varname="", ntype=None, lims=None : \
-#         spy.shared.parsers.scalar_parser(var, varname=varname, ntype=ntype, lims=lims)
-# else:
-#     isSpyModule = False
-#     from warnings import showwarning
-#     import logging
-#     from .shared import _scalar_parser as scalar_parser
-#     customIOError = IOError
-#     customValueError = lambda legal=None, varname=None, actual=None : ValueError(legal)
-#     customTypeError = lambda msg, varname=None, expected=None : TypeError(msg)
-
 # Local imports
 from acme import __deprecated__, __deprecation_wrng__
 from .shared import user_input, user_yesno
 from .spy_interface import scalar_parser, log
-
-# Be optimistic: prepare success message to be used throughout this module
-_successMsg = "dashboard accessible at {dash:s}"
 
 __all__ = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm_cluster_setup"]
 
@@ -155,26 +130,31 @@ def esi_cluster_setup(partition="8GBXS",
 
     # Backwards compatibility: legacy keywords are converted to new nomenclature
     if any(kw in kwargs for kw in __deprecated__):
-        log.warning("%s %s", funcName, DeprecationWarning)
+        log.warning("%s %s", funcName, __deprecation_wrng__)
         n_workers = kwargs.pop("n_jobs", n_workers)
         mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
         n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)
+        log.debug("%s Set `n_workers = n_jobs`, `mem_per_worker = mem_per_job`\
+                  and `n_workers_startup = n_jobs_startup`", funcName)
 
     # Don't start a new cluster on top of an existing one
     try:
         client = get_client()
-        if len([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()]) == 0:
+        log.debug("%s Found existing client", funcName)
+        if count_online_workers(client) == 0:
+            log.debug("%s No active workers detected in %s", funcName, str(client))
             cluster_cleanup(client)
         else:
-            msg = "{}Found existing parallel computing client {}. Not starting new cluster."
-            customPrint(msg.format(funcName, str(client)))
+            log.info("%s Found existing parallel computing client %s. \
+                     Not starting new cluster.", funcName, str(client))
             if start_client:
                 return client
             return client.cluster
     except ValueError:
-        pass
+        log.debug("%s No existing clients detected", funcName)
 
     # Check if SLURM's `sinfo` can be accessed
+    log.debug("%s Test if `sinfo` is available", funcName)
     proc = subprocess.Popen("sinfo",
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, shell=True)
@@ -197,14 +177,13 @@ def esi_cluster_setup(partition="8GBXS",
                 return local_cluster_setup(interactive=interactive, start_client=start_client)
 
         # SLURM is installed, but something's wrong
-        msg = "{preamble:s}SLURM queuing system from node {node:s}. " +\
-              "Original error message below:\n{error:s}"
-        raise customIOError(msg.format(preamble=funcName + " Cannot access " if not isSpyModule else "",
-                                       node=socket.gethostname(),
-                                       error=err))
+        msg = "%s Cannot access SLURM queuing system from node %s: %s "
+        log.error(msg, funcName, socket.gethostname(), err)
+        raise IOError(msg%(funcName, socket.gethostname(), err))
 
     # Use default by-worker process count or extract it from anonymous keyword args (if provided)
     processes_per_worker = kwargs.pop("processes_per_worker", 1)
+    log.debug("%s Set `processes_per_worker` to %d", funcName, processes_per_worker)
 
     # If partition is "auto" use `mem_per_worker` to pick pseudo-optimal partition
     # Note: the `np.where` gymnastic below is necessary since `argmin` refuses
@@ -212,55 +191,62 @@ def esi_cluster_setup(partition="8GBXS",
     # however, 8GB won't fit a 12GB worker, so we have to pick the second match 16GB
     if isinstance(partition, str) and partition == "auto":
         if not isinstance(mem_per_worker, str) or mem_per_worker.find("estimate_memuse:") < 0:
-            msg = "{preamble:s}automatic partition selector without first invoking memory estimation in `ParallelMap`. "
-            raise customIOError(msg.format(preamble=funcName + " Cannot access " if not isSpyModule else ""))
+            msg = "%s cannot auto-select partition without first invoking memory estimation in `ParallelMap`. "
+            log.error(msg, funcName)
+            raise IOError(msg%(funcName))
         memEstimate = int(mem_per_worker.replace("estimate_memuse:" ,""))
         mem_per_worker = "auto"
-        customPrint("{}Automatically selecting SLURM partition...".format(funcName))
+        log.info("%s Automatically selecting SLURM partition...", funcName)
         availPartitions = _get_slurm_partitions(funcName)
         gbQueues = np.unique([int(queue.split("GB")[0]) for queue in availPartitions if queue[0].isdigit()])
         memDiff = np.abs(gbQueues - memEstimate)
         queueIdx = np.where(memDiff == memDiff.min())[0][-1]
         partition = "{}GBXS".format(gbQueues[queueIdx])
-        msg = "{preamble:s}Picked partition {p:s} based on estimated memory consumption of {m:d} GB"
-        customPrint(msg.format(preamble=funcName, p=partition, m=memEstimate))
+        log.info("%s Picked partition %s based on estimated \
+                 memory consumption of %d GB", funcName, partition, memEstimate)
 
     # Extract by-worker CPU core count from anonymous keyword args or...
     if kwargs.get("n_cores") is not None:
         n_cores = kwargs.pop("n_cores")
+        log.debug("%s Set `n_cores = %d` from kwargs", funcName, n_cores)
     else:
         # ...get memory limit (*in MB*) of chosen partition and set core count
         # accordingly (multiple of 8 wrt to GB RAM)
         try:
+            log.debug("%s Using `scontrol` to get partition info", funcName)
             pc = subprocess.run("scontrol -o show partition {}".format(partition),
                                 capture_output=True, check=True, shell=True, text=True)
             defMem = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
+            log.debug("%s Found DefMemPerCPU=%d", funcName, defMem)
         except Exception as exc:
-            msg = "{preamble:s}available memory per CPU in chosen SLURM partition. " +\
-                "Original error message below:\n{error:s}"
-            raise customIOError(msg.format(preamble=funcName + " Cannot access " if not isSpyModule else "",
-                                           error=str(exc)))
+            msg = "%s Cannot fetch available memory per CPU in SLURM: %s"
+            log.error(msg, funcName, str(exc))
+            raise IOError(msg%(funcName, str(exc)))
         n_cores = int(defMem / 8000)
+        log.debug("%s Using `n_cores=%d`", funcName, n_cores)
 
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
     # but we may need to append to it, so ensure that's possible)
     if not isinstance(job_extra, list):
-        msg = "{} `job_extra` has to be List, not {}"
-        raise customTypeError(job_extra if isSpyModule else msg.format(funcName, str(job_extra)),
-                              varname="job_extra",
-                              expected="list")
+        msg = "%s `job_extra` has to be a list, not %s"
+        log.error(msg, funcName, str(type(job_extra)))
+        raise TypeError(msg%(funcName, str(type(job_extra))))
 
     # If '--output' was not provided, append default output folder to `job_extra`
     if not any(option.startswith("--output") or option.startswith("-o") for option in job_extra):
+        log.debug("%s Auto-populating `--output` setting for sbatch", funcName)
         usr = getpass.getuser()
         slurm_wdir = "/cs/slurm/{usr:s}/{usr:s}_{date:s}"
         slurm_wdir = slurm_wdir.format(usr=usr,
                                        date=datetime.now().strftime('%Y%m%d-%H%M%S'))
         os.makedirs(slurm_wdir, exist_ok=True)
+        log.debug("%s Using %s for slurm logs", funcName, slurm_wdir)
         out_files = os.path.join(slurm_wdir, "slurm-%j.out")
         job_extra.append("--output={}".format(out_files))
+        log.debug("%s Setting `--output=%s`", funcName, out_files)
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
+    log.debug("%s Done parsing inputs, relaying control to `slurm_cluster_setup`", funcName)
     return slurm_cluster_setup(partition, n_cores, n_workers, processes_per_worker, mem_per_worker,
                                n_workers_startup, timeout, interactive, interactive_wait,
                                start_client, job_extra, invalid_partitions=["DEV", "PPC"], **kwargs)
@@ -342,26 +328,19 @@ def slurm_cluster_setup(partition="partition_name",
     cluster_cleanup : remove dangling parallel processing worker-clusters
     """
 
-    # Re-direct printing/warnings to ACME logger outside of SyNCoPy
-    customDebug, customPrint, customWarning = _logging_setup()
-
     # For later reference: dynamically fetch name of current function
-    funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
-                                                 pkg="ACME: " if isSpyModule else "",
-                                                 name=inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
 
     # Backwards compatibility: legacy keywords are converted to new nomenclature
     if any(kw in kwargs for kw in __deprecated__):
-        wrng = "{name:s}{msg:s}"
-        customWarning(wrng.format(name="" if isSpyModule else funcName + " ",
-                                  msg=__deprecation_wrng__),
-                      DeprecationWarning,
-                      __file__,
-                      inspect.currentframe().f_lineno)
+        log.warning("%s %s", funcName, __deprecation_wrng__)
         n_workers = kwargs.pop("n_jobs", n_workers)
         processes_per_worker = kwargs.pop("workers_per_job", processes_per_worker)
         mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
         n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)
+        log.debug("%s Set `n_workers = n_jobs`, `processes_per_worker = workers_per_job`, \
+                  `mem_per_worker = mem_per_job` \
+                  and `n_workers_startup = n_jobs_startup`", funcName)
 
     # Retrieve all partitions currently available in SLURM
     availPartitions = _get_slurm_partitions(funcName)
@@ -370,51 +349,53 @@ def slurm_cluster_setup(partition="partition_name",
     if partition not in availPartitions:
         valid = list(set(availPartitions).difference(invalid_partitions))
         lgl = "'" + "or '".join(opt + "' " for opt in valid)
-        msg = "{} Invalid partition selection {}, available SLURM partitions are {}"
-        raise customValueError(legal=lgl if isSpyModule else msg.format(funcName, str(partition), lgl),
-                               varname="partition",
-                               actual=partition)
+        msg = "%s Invalid partition selection %s, available SLURM partitions are %s"
+        log.error(msg, funcName, str(partition), lgl)
+        raise ValueError(msg%(funcName, str(partition), lgl))
+    log.debug("%s Found `partition = %s`", funcName, partition)
 
     # Parse worker count
     try:
         scalar_parser(n_workers, varname="n_workers", ntype="int_like", lims=[1, np.inf])
     except Exception as exc:
+        log.error("%s Error parsing `n_workers`", funcName)
         raise exc
+    log.debug("%s Using `n_workers = %d`", funcName, n_workers)
 
     # Get requested memory per worker
     if isinstance(mem_per_worker, str):
         if mem_per_worker == "auto":
             mem_per_worker = None
+            log.debug("%s Using auto-memory selection", funcName)
     if mem_per_worker is not None:
-        msg = "{} `mem_per_worker` has to be a valid memory specifier (e.g., '8GB', '12000MB'), not {}"
-        lgl = "string representation of requested memory (e.g., '8GB', '12000MB')"
+        msg = "%s `mem_per_worker` has to be a valid memory specifier (e.g., '8GB', '12000MB'), not %s"
         if not isinstance(mem_per_worker, str):
-            raise customTypeError(mem_per_worker if isSpyModule else msg.format(funcName, str(mem_per_worker)),
-                                  varname="mem_per_worker",
-                                  expected="string")
+            log.error(msg, funcName, str(type(mem_per_worker)))
+            raise TypeError(msg%(funcName, str(type(mem_per_worker))))
         if not any(szstr in mem_per_worker for szstr in ["MB", "GB"]):
-            raise customValueError(legal=lgl if isSpyModule else msg.format(funcName, str(mem_per_worker)),
-                                   varname="mem_per_worker",
-                                   actual=mem_per_worker)
+            log.error(msg, funcName, mem_per_worker)
+            raise ValueError(msg%(funcName, mem_per_worker))
         memNumeric = mem_per_worker.replace("MB","").replace("GB","")
+        log.debug("%s Found `mem_per_worker = %s` in input args", funcName, mem_per_worker)
         try:
             memVal = float(memNumeric)
         except:
-            raise customValueError(legal=lgl if isSpyModule else msg.format(funcName, str(mem_per_worker)),
-                                   varname="mem_per_worker",
-                                   actual=mem_per_worker)
+            log.error(msg, funcName, mem_per_worker)
+            raise ValueError(msg%(funcName, mem_per_worker))
         if memVal <= 0:
-            raise customValueError(legal=lgl if isSpyModule else msg.format(funcName, str(mem_per_worker)),
-                                   varname="mem_per_worker",
-                                   actual=mem_per_worker)
+            log.error(msg, funcName, mem_per_worker)
+            raise ValueError(msg%(funcName, mem_per_worker))
 
     # Parse worker-waiter count
     try:
         scalar_parser(n_workers_startup, varname="n_workers_startup", ntype="int_like", lims=[0, np.inf])
     except Exception as exc:
+        log.error("%s Error parsing `n_workers_startup`", funcName)
         raise exc
+    log.debug("%s Using `n_workers_startup = %d`", funcName, n_workers_startup)
 
     # Get memory limit (*in MB*) of chosen partition (guaranteed to exist, cf. above)
+    log.debug("%s Use `scontrol` to fetch partition's memory limit")
     pc = subprocess.run("scontrol -o show partition {}".format(partition),
                         capture_output=True, check=True, shell=True, text=True)
     try:
@@ -424,80 +405,89 @@ def slurm_cluster_setup(partition="partition_name",
             mem_lim = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
         except IndexError:
             mem_lim = np.inf
+    log.debug("%s Found a limit of  %s MB", funcName, str(mem_lim))
 
     # Consolidate requested memory with chosen partition (or assign default memory)
     if mem_per_worker is None:
         mem_per_worker = str(mem_lim) + "MB"
+        log.debug("%s Using partition limit of %s MB", funcName, str(mem_lim))
     else:
         if "MB" in mem_per_worker:
             mem_req = int(mem_per_worker[:mem_per_worker.find("MB")])
         else:
             mem_req = int(round(float(mem_per_worker[:mem_per_worker.find("GB")]) * 1000))
         if mem_req > mem_lim:
-            msg = "{name:s}`mem_per_worker` exceeds limit of {lim:d}MB for partition {par:s}. " +\
+            msg = "%s `mem_per_worker` exceeds limit of %d MB for partition %s. " +\
                 "Capping memory at partition limit. "
-            customWarning(msg.format(name=funcName + " " if not isSpyModule else "", lim=mem_lim, par=partition),
-                          RuntimeWarning, __file__, inspect.currentframe().f_lineno)
+            log.warning(msg, funcName, mem_lim, partition)
             mem_per_worker = str(int(mem_lim)) + "MB"
 
     # Parse requested timeout period
     try:
         scalar_parser(timeout, varname="timeout", ntype="int_like", lims=[1, np.inf])
     except Exception as exc:
+        log.error("%s Error parsing `timeout`", funcName)
         raise exc
+    log.debug("%s Using `timeout = %d`", funcName, timeout)
 
     # Parse requested interactive waiting period
     try:
         scalar_parser(interactive_wait, varname="interactive_wait", ntype="int_like",
                       lims=[0, np.inf])
     except Exception as exc:
+        log.error("%s Error parsing `interactive_wait`", funcName)
         raise exc
+    log.debug("%s Using `interactive_wait = %d`", funcName, interactive_wait)
 
     # Determine if cluster allocation is happening interactively
     if not isinstance(interactive, bool):
-        msg = "{} `interactive` has to be Boolean, not {}"
-        raise customTypeError(interactive if isSpyModule else msg.format(funcName, str(interactive)),
-                              varname="interactive",
-                              expected="bool")
+        msg = "%s `interactive` has to be Boolean, not %s"
+        log.error(msg, funcName, str(type(interactive)))
+        raise TypeError(msg%(funcName, str(type(interactive))))
+    log.debug("%s Using `interactive = %s`", funcName, str(interactive))
 
     # Determine if a dask client was requested
     if not isinstance(start_client, bool):
-        msg = "{} `start_client` has to be Boolean, not {}"
-        raise customTypeError(start_client if isSpyModule else msg.format(funcName, str(start_client)),
-                              varname="start_client",
-                              expected="bool")
+        msg = "%s `start_client` has to be Boolean, not %s"
+        log.error(msg, funcName, str(type(start_client)))
+        raise TypeError(msg%(funcName, str(type(start_client))))
+    log.debug("%s Using `start_client = %s`", funcName, str(start_client))
 
     # Determine if job_extra is a list
     if not isinstance(job_extra, list):
-        msg = "{} `job_extra` has to be List, not {}"
-        raise customTypeError(job_extra if isSpyModule else msg.format(funcName, str(job_extra)),
-                              varname="job_extra",
-                              expected="list")
+        msg = "%s `job_extra` has to be List, not %s"
+        log.error(msg, funcName, str(type(job_extra)))
+        raise TypeError(msg%(funcName, str(type(job_extra))))
 
     # Determine if job_extra options are valid
     for option in job_extra:
-        msg = "{} `job_extra` has to be a valid sbatch option, not {}"
+        msg = "%s `job_extra` has to be a valid sbatch option, not %s"
         if not isinstance(option, str):
-            raise customTypeError(option if isSpyModule else msg.format(funcName, str(option)),
-                                  varname="option",
-                                  expected="string")
+            log.error(msg, funcName, str(type(option)))
+            raise TypeError(msg%(funcName, str(type(option))))
         if not option[0] == "-":
-            lgl = "job_extra options should be flagged with - or --"
-            raise customValueError(legal=lgl, varname="option", actual=option)
+            msg = "%s `job_extra` options must be flagged with - or --"
+            log.error(msg, funcName)
+            raise ValueError(msg%(funcName))
+    log.debug("%s Using `job_extra = %s`", funcName, str(job_extra))
 
     # Ensure validity of requested worker processes
     try:
         scalar_parser(processes_per_worker, varname="processes_per_worker",
                       ntype="int_like", lims=[1, 16])
     except Exception as exc:
+        log.error("%s Error parsing `processes_per_worker`", funcName)
         raise exc
+    log.debug("%s Using `processes_per_worker = %d`", funcName, processes_per_worker)
 
     # Check for sanity of requested core count
     try:
         scalar_parser(n_cores, varname="n_cores",
                       ntype="int_like", lims=[1, np.inf])
     except Exception as exc:
+        log.error("%s Error parsing `n_cores`", funcName)
         raise exc
+    log.debug("%s Using `n_cores = %d`", funcName, n_cores)
 
     # Check validity of '--output' option if provided
     userOutSpec = [option.startswith("--output") or option.startswith("-o") for option in job_extra]
@@ -505,25 +495,20 @@ def slurm_cluster_setup(partition="partition_name",
         userOut = job_extra[userOutSpec.index(True)]
         outSpec = userOut.split("=")
         if len(outSpec) != 2:
-            lgl = "the SLURM output directory must be specified using -o/--output=/path/to/file"
-            raise customValueError(legal=lgl if isSpyModule else "{} {}, not {}".format(funcName, lgl, userOut),
-                                   varname="job_extra",
-                                   actual=userOut)
+            msg = "%s the SLURM output directory must be specified using -o/--output=/path/to/file, not %s"
+            log.error(msg, funcName, userOut)
+            raise ValueError(msg%(funcName, userOut))
         slurm_wdir = os.path.split(outSpec[1])[0]
-        if len(slurm_wdir) > 0:
-            if isSpyModule:
-                try:
-                    spy.shared.parsers.io_parser(slurm_wdir, varname="job_extra", isfile=False)
-                except Exception as exc:
-                    raise exc
-            else:
-                msg = "{} `slurmWorkingDirectory` has to be an existing directory, not {}"
-                if not os.path.isdir(os.path.expanduser(slurm_wdir)):
-                    raise ValueError(msg.format(funcName, str(slurm_wdir)))
+        if len(slurm_wdir) > 0 and not os.path.isdir(os.path.expanduser(slurm_wdir)):
+            msg = "%s SLURM output location has to be an existing directory, not %s"
+            log.error(msg, funcName, slurm_wdir)
+            raise ValueError(msg%(funcName, slurm_wdir))
     else:
         slurm_wdir = None
+    log.debug("%s Using `local_directory = %s`", funcName, slurm_wdir)
 
     # Create `SLURMCluster` object using provided parameters
+    log.debug("%s Invoking dask_jobqueue's `SLURMCluster`", funcName)
     cluster = SLURMCluster(cores=n_cores,
                            memory=mem_per_worker,
                            processes=processes_per_worker,
@@ -535,43 +520,46 @@ def slurm_cluster_setup(partition="partition_name",
                            # interface="asdf", # interface is set via `psutil.net_if_addrs()`
 
     # Compute total no. of workers and up-scale cluster accordingly
-    total_workers = n_workers * processes_per_worker
-    worker_count = min(total_workers, n_workers_startup)
-    if worker_count < total_workers:
-        # cluster.adapt(minimum=worker_count, maximum=total_workers)
-        cluster.scale(total_workers)
-        msg = "{} Requested worker-count {} exceeds `n_workers_startup`: " +\
-            "waiting for {} workers to come online, then proceed"
-        customPrint(msg.format(funcName, total_workers, n_workers_startup))
-    else:
-        cluster.scale(total_workers)
+    if n_workers_startup < n_workers:
+        msg = "%s Requested worker-count %d exceeds `n_workers_startup`: %d" +\
+            "waiting for %d workers to come online"
+        log.debug(msg, funcName, n_workers_startup, n_workers_startup)
+    cluster.scale(n_workers)
 
-    # Fire up waiting routine to avoid unfinished cluster setups
-    if _cluster_waiter(cluster, funcName, worker_count, timeout, interactive, interactive_wait):
+    # Fire up waiting routine to avoid returning an undercooked cluster
+    if _cluster_waiter(cluster, funcName, n_workers, timeout, interactive, interactive_wait):
         return
 
     # Kill a zombie cluster in non-interactive mode
     if not interactive and count_online_workers(cluster) == 0:
         cluster.close()
-        err = "SLURM workers could not be started within given time-out " +\
-              "interval of {0:d} seconds"
-        raise TimeoutError(err.format(timeout))
+        msg = "%s SLURM workers could not be started within given time-out " +\
+              "interval of %d seconds"
+        log.error(msg, funcName, timeout)
+        raise TimeoutError(msg%(funcName, timeout))
 
     # Highlight how to connect to dask performance monitor
-    customPrint(_successMsg.format(dash=cluster.dashboard_link))
+    msg = "%s Parallel computing client ready, dashboard accessible at %s"
+    log.info(msg, funcName, cluster.dashboard_link)
 
     # If client was requested, return that instead of the created cluster
     if start_client:
+        log.debug("%s Returning dask client", funcName)
         return Client(cluster)
+    log.debug("%s Returning dask cluster", funcName)
     return cluster
 
 
 def _get_slurm_partitions(funcName):
     """
-    Coming soon...
+    Local helper to fetch all partitions defined in SLURM
     """
 
+    # For later reference: dynamically fetch name of current function
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+
     # Retrieve all partitions currently available in SLURM
+    log.debug("%s Use `sinfo` to fetch available partitions", funcName)
     proc = subprocess.Popen("sinfo -h -o %P",
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, shell=True)
@@ -579,13 +567,12 @@ def _get_slurm_partitions(funcName):
 
     # Any non-zero return-code means SLURM is not ready to use
     if proc.returncode != 0:
-        msg = "{preamble:s}SLURM queuing system from node {node:s}. " +\
-              "Original error message below:\n{error:s}"
-        raise customIOError(msg.format(preamble=funcName + " Cannot access " if not isSpyModule else "",
-                                       node=socket.gethostname(),
-                                       error=err))
+        msg = "%s Error fetching SLURM partition setup from node %s: %s"
+        log.error(msg, funcName, socket.gethostname(), err)
+        raise IOError(msg%(funcName, socket.gethostname(), err))
 
     # Return formatted subprocess shell output
+    log.debug("%s Found partitions: %s", funcName, out)
     return out.split()
 
 
@@ -593,9 +580,6 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
     """
     Local helper that can be called recursively
     """
-
-    # Re-direct printing/warnings to ACME logger outside SyNCoPy
-    customDebug, customPrint, _ = _logging_setup()
 
     # Wait until all workers have been started successfully or we run out of time
     wrkrs = count_online_workers(cluster)
@@ -614,9 +598,9 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
 
     # If we ran out of time before all workers could be started, ask what to do
     if counter == timeout and interactive:
-        msg = "{name:s} SLURM workers could not be started within given time-out " +\
-              "interval of {time:d} seconds"
-        customPrint(msg.format(name=funcName, time=timeout))
+        msg = "%s SLURM workers could not be started within given time-out " +\
+              "interval of %d seconds"
+        log.info(msg, funcName, timeout)
         query = "{name:s} Do you want to [k]eep waiting for 60s, [a]bort or " +\
                 "[c]ontinue with {wrk:d} workers?"
         choice = user_input(query.format(name=funcName, wrk=wrkrs),
@@ -625,7 +609,7 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
         if choice == "k":
             return _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
         elif choice == "a":
-            customPrint("{} Closing cluster...".format(funcName))
+            log.info("%s Closing cluster...", funcName)
             cluster.close()
             return True
         else:
@@ -637,7 +621,7 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
                 if choice == "k":
                     _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
                 else:
-                    customPrint("{} Closing cluster...".format(funcName))
+                    log.info("%s Closing cluster...", funcName)
                     cluster.close()
                     return True
 
@@ -721,42 +705,40 @@ def local_cluster_setup(n_workers=None,
     cluster_cleanup : remove dangling parallel processing worker-clusters
     """
 
-    # Re-direct printing/warnings to ACME logger outside of SyNCoPy
-    customDebug, customPrint, _ = _logging_setup()
-
     # For later reference: dynamically fetch name of current function
-    funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
-                                                 pkg="ACME: " if isSpyModule else "",
-                                                 name=inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
 
     # Determine if cluster allocation is happening interactively
     if not isinstance(interactive, bool):
-        msg = "{} `interactive` has to be Boolean, not {}"
-        raise customTypeError(interactive if isSpyModule else msg.format(funcName, str(interactive)),
-                              varname="interactive",
-                              expected="bool")
+        msg = "%s `interactive` has to be Boolean, not %s"
+        log.error(msg, funcName, str(type(interactive)))
+        raise TypeError(msg%(funcName, str(type(interactive))))
+    log.debug("%s Using `interactive = %s`", funcName, str(interactive))
 
     # Determine if a dask client was requested
     if not isinstance(start_client, bool):
-        msg = "{} `start_client` has to be Boolean, not {}"
-        raise customTypeError(start_client if isSpyModule else msg.format(funcName, str(start_client)),
-                              varname="start_client",
-                              expected="bool")
+        msg = "%s `start_client` has to be Boolean, not $s"
+        log.error(msg, funcName, str(type(start_client)))
+        raise TypeError(msg%(funcName, str(type(start_client))))
+    log.debug("%s Using `start_client = %s`", funcName, str(start_client))
 
     # Check, if we're running inside a Jupyter notebook...
     try:
         ipy = get_ipython()
         if ipy.__class__.__name__ == "ZMQInteractiveShell":
             maybeScript = False # Jupyter Notebook
+            log.debug("%s Running in a Jupyter Notebook", funcName)
         else:
             maybeScript = True  # iPython shell
+            log.debug("%s Running in an iPython shell", funcName)
     except NameError:
         maybeScript = True      # Python shell
+        log.debug("%s Running in a standard Python shell", funcName)
 
     # ...if not, print warning/info message
     if maybeScript:
         msg = """\
-        {name:s}If you use a script to start a local parallel computing client, please ensure
+        %s If you use a script to start a local parallel computing client, please ensure
         the call to `local_cluster_setup` is wrapped inside a main module block, i.e.,
 
             if __name__ == "__main__":
@@ -768,25 +750,31 @@ def local_cluster_setup(n_workers=None,
         new processes being started before the calling process can finish its bootstrapping
         phase.
         """
-        customDebug(textwrap.dedent(msg.format(name=funcName + " " if not isSpyModule else "")))
+        msg = textwrap.dedent(msg)
+        log.debug(msg, funcName)
 
     # Additional safe-guard: if a script is executed, double-check with the user
     # for proper main idiom usage
     if interactive:
-        msg = "{name:s}If launched from a script, did you wrap your code inside a main module block?"
-        if not user_yesno(msg.format(name=funcName + " " if not isSpyModule else ""), default="no"):
+        msg = "{name:s} If launched from a script, did you wrap your code \
+            inside a __main__ module block?"
+        if not user_yesno(msg.format(name=funcName), default="no"):
             return
 
     # Start the actual distributed client
     if n_workers is not None or mem_per_worker is not None:
+        msg = "%s Starting `LocalCluster` with `n_workers = %s` and `memory_limit = %s`"
+        log.debug(msg, funcName, str(n_workers), str(mem_per_worker))
         cluster = LocalCluster(n_workers=n_workers, memory_limit=mem_per_worker)
         client = Client(cluster)
     else:
         client = Client()
-    successMsg = "{name:s} Local parallel computing client ready, " + _successMsg
-    customPrint(successMsg.format(name=funcName, dash=client.cluster.dashboard_link))
+    msg = "%s Local parallel computing client ready, dashboard accessible at %s"
+    log.info(msg, funcName, client.cluster.dashboard_link)
     if start_client:
+        log.debug("%s Returning dask client", funcName)
         return client
+    log.debug("%s Returning dask cluster", funcName)
     return client.cluster
 
 
@@ -812,33 +800,26 @@ def cluster_cleanup(client=None):
     local_cluster_setup : start a local Dask multi-processing cluster on the host machine
     """
 
-    # Re-direct printing/warnings to ACME logger outside SyNCoPy
-    customDebug, customPrint, customWarning = _logging_setup()
-
     # For later reference: dynamically fetch name of current function
-    funcName = "{pre:s}<{pkg:s}{name:s}>".format(pre="Syncopy " if isSpyModule else "",
-                                                 pkg="ACME: " if isSpyModule else "",
-                                                 name=inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
 
     # Attempt to establish connection to dask client
     if client is None:
         try:
             client = get_client()
         except ValueError:
-            msg = "{name:s}No dangling clients or clusters found."
-            customWarning(msg.format(name="" if isSpyModule else funcName + " "),
-                          RuntimeWarning,
-                          __file__,
-                          inspect.currentframe().f_lineno)
+            msg = "%s No dangling clients or clusters found."
+            log.warning(msg, funcName)
             return
         except Exception as exc:
+            log.error("%s Error looking for dask client", funcName)
             raise exc
     else:
         if not isinstance(client, Client):
-            msg = "{} `client` has to be a dask client object, not {}"
-            customTypeError(client if isSpyModule else msg.format(funcName, str(client)),
-                            varname="client",
-                            expected="dask client object")
+            msg = "%s `client` has to be a dask client object, not %s"
+            log.error(msg, funcName, str(type(client)))
+            raise TypeError(msg%(funcName, str(type(client))))
+    log.debug("%s Found client %s", funcName, str(client))
 
     # Prepare message for prompt
     if client.cluster.__class__.__name__ == "LocalCluster":
@@ -848,17 +829,17 @@ def cluster_cleanup(client=None):
         outDir = client.cluster.job_header.partition("--output=")[-1]
         jobID = outDir.partition("{}_".format(userName))[-1].split(os.sep)[0]
         userClust = "cluster {0}_{1}".format(userName, jobID)
-    nWorkers = len(client.cluster.workers)
+    nWorkers = count_online_workers(client.cluster)
 
     # If connection was successful, first close the client, then the cluster
     client.close()
+    log.debug("%s Closed client", funcName)
     client.cluster.close()
+    log.debug("%s Closed associated cluster", funcName)
 
     # Communicate what just happened and get outta here
-    msg = "{fname:s} Successfully shut down {cname:s} containing {nj:d} workers"
-    customPrint(msg.format(fname=funcName,
-                     nj=nWorkers,
-                     cname=userClust))
+    msg = "%s Successfully shut down %s containing %d workers"
+    log.info(msg, funcName, str(client), nWorkers)
 
     return
 
@@ -867,27 +848,4 @@ def count_online_workers(cluster):
     """
     Local replacement for the late `._count_active_workers` class method
     """
-    return len(cluster.scheduler_info.get('workers'))
-
-
-def _logging_setup():
-    """
-    Local helper to customize warning and print functionality at runtime
-    """
-    if isSpyModule:
-        dFunc = print
-        pFunc = print
-        wFunc = lambda msg, kind, caller, lineno : spy.shared.errors.SPYWarning(msg, caller=caller)
-    else:
-        dFunc = print
-        pFunc = print
-        wFunc = showwarning
-        allLoggers = list(logging.root.manager.loggerDict.keys())
-        idxList = [allLoggers.index(loggerName) for loggerName in allLoggers \
-            for moduleName in ["ACME", "ParallelMap"] if moduleName in loggerName]
-        if len(idxList) > 0:
-            logger = logging.getLogger(allLoggers[idxList[0]])
-            dFunc = logger.debug
-            pFunc = logger.info
-            wFunc = lambda msg, kind, caller, lineno: logger.warning(msg)
-    return dFunc, pFunc, wFunc
+    return len([w["memory_limit"] for w in cluster.scheduler_info["workers"].values()])
