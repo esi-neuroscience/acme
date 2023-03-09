@@ -551,7 +551,7 @@ def slurm_cluster_setup(partition="partition_name",
         return
 
     # Kill a zombie cluster in non-interactive mode
-    if not interactive and _count_running_workers(cluster) == 0:
+    if not interactive and count_online_workers(cluster) == 0:
         cluster.close()
         err = "SLURM workers could not be started within given time-out " +\
               "interval of {0:d} seconds"
@@ -598,17 +598,17 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
     customDebug, customPrint, _ = _logging_setup()
 
     # Wait until all workers have been started successfully or we run out of time
-    wrkrs = _count_running_workers(cluster)
+    wrkrs = count_online_workers(cluster)
     to = str(timedelta(seconds=timeout))[2:]
     fmt = "{desc}: {n}/{total} \t[elapsed time {elapsed} | timeout at " + to + "]"
     ani = tqdm(desc="{} SLURM workers ready".format(funcName), total=total_workers,
                leave=True, bar_format=fmt, initial=wrkrs, position=0)
     counter = 0
-    while _count_running_workers(cluster) < total_workers and counter < timeout:
+    while count_online_workers(cluster) < total_workers and counter < timeout:
         time.sleep(1)
         counter += 1
-        ani.update(max(0, _count_running_workers(cluster) - wrkrs))
-        wrkrs = _count_running_workers(cluster)
+        ani.update(max(0, count_online_workers(cluster) - wrkrs))
+        wrkrs = count_online_workers(cluster)
         ani.refresh()   # force refresh to display elapsed time every second
     ani.close()
 
@@ -863,7 +863,7 @@ def cluster_cleanup(client=None):
     return
 
 
-def _count_running_workers(cluster):
+def count_online_workers(cluster):
     """
     Local replacement for the late `._count_active_workers` class method
     """
