@@ -181,7 +181,7 @@ class ACMEdaemon(object):
 
         # If `log` is `None`, `prepare_log` has not been called yet
         if getattr(pmap, "log", None) is None:
-            self.log = acs.prepare_log(func, caller=self.msgName, logfile=logfile,
+            self.log = acs.prepare_log(func, caller="ACME", logfile=logfile,
                                        verbose=verbose)
         else:
             self.log = pmap.log
