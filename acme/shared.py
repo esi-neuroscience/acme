@@ -54,12 +54,14 @@ def sizeOf(obj, varname):
     # Keep track of the no. of recursive calls
     global callCount
 
+    # For later reference: dynamically fetch name of current function
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+
     # Protect against circular object references
     callCount += 1
     if callCount >= callMax:
-        msgName = sys._getframe().f_back.f_code.co_name
-        msg = "{} maximum recursion depth {} exceeded when processing {}"
-        raise RecursionError(msg.format(msgName, callMax, varname))
+        msg = "%s maximum recursion depth %s exceeded while processing %s"
+        raise RecursionError(msg%(funcName, callMax, varname))
 
     # Use `sys.getsizeof` to estimate memory consumption of primitive objects
     objsize = sys.getsizeof(obj) / 1024**2
@@ -245,21 +247,23 @@ def prepare_log(func, caller=None, logfile=False, verbose=None):
         A Python :class:`logging.Logger` instance
     """
 
+    # For later reference: dynamically fetch name of current function
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+
     # If not provided, get name of calling method/function
     if caller is None:
         caller = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
     elif not isinstance(caller, str):
-        msg = "{} `caller` has to be a string, not {}"
-        raise TypeError(msg.format(inspect.currentframe().f_back.f_code.co_name),
-                        str(caller))
+        msg = "%s `caller` has to be a string, not %s"
+        raise TypeError(msg%(funcName, str(type(caller))))
 
     # Basal sanity check for Boolean flag
     if verbose is not None and not isinstance(verbose, bool):
-        msg = "{} `verbose` has to be `True`, `False` or `None`, not {}"
-        raise TypeError(msg.format(caller, str(verbose)))
+        msg = "%s `verbose` has to be `True`, `False` or `None`, not %s"
+        raise TypeError(msg%(funcName, str(type(verbose))))
 
     # Either parse provided `logfile` or set up an auto-generated file
-    msg = "{} `logfile` has to be `None`, `True`, `False` or a valid file-name, not {}"
+    msg = "%s `logfile` has to be `None`, `True`, `False` or a valid file-name, not %s"
     if logfile is None or isinstance(logfile, bool):
         if logfile is True:
             logfile = os.path.dirname(os.path.abspath(inspect.getfile(func)))
@@ -270,13 +274,13 @@ def prepare_log(func, caller=None, logfile=False, verbose=None):
             logfile = None
     elif isinstance(logfile, str):
         if os.path.isdir(logfile):
-            raise IOError(msg.format(caller, "a directory"))
+            raise IOError(msg%(funcName, "a directory"))
         logfile = os.path.abspath(os.path.expanduser(logfile))
     else:
-        raise TypeError(msg.format(caller, str(logfile)))
+        raise TypeError(msg%(funcName, str(type(logfile))))
     if logfile is not None and os.path.isfile(logfile):
-        msg = "{} log-file {} already exists, appending to it"
-        warnings.showwarning(msg.format(caller, logfile), RuntimeWarning,
+        msg = "%s log-file %s already exists, appending to it"
+        warnings.showwarning(msg%(caller, logfile), RuntimeWarning,
                              __file__, inspect.currentframe().f_lineno)
 
     # Set logging verbosity based on `verbose` flag
@@ -290,7 +294,6 @@ def prepare_log(func, caller=None, logfile=False, verbose=None):
     log.setLevel(loglevel)
 
     # Create logging formatter
-    # formatter = logging.Formatter("%(name)s %(levelname)s: %(message)s")
     formatter = AcmeFormatter("%(name)s %(levelname)s %(message)s")
 
     # Output handlers: print log messages to `stderr` via `StreamHandler` as well

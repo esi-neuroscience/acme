@@ -49,7 +49,7 @@ class ACMEdaemon(object):
         "result_dtype", "stacking_dim", "client", "stop_client", "has_slurm", "log"
 
     # Prepend every stdout/stderr message with the name of this class
-    msgName = "<ACMEdaemon>"
+    objName = "<ACMEdaemon>"
 
     # format string for tqdm progress bars
     tqdmFormat = "{desc}: {percentage:3.0f}% |{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]"
@@ -171,7 +171,7 @@ class ACMEdaemon(object):
         if pmap is not None:
             if pmap.__class__.__name__ != "ParallelMap":
                 msg = "{} `pmap` has to be a `ParallelMap` instance, not {}"
-                raise TypeError(msg.format(self.msgName, str(pmap)))
+                raise TypeError(msg.format(self.objName, str(pmap)))
 
         # Input pre-processed by a `ParallelMap` object takes precedence over keyword args
         self.initialize(getattr(pmap, "func", func),
@@ -236,7 +236,7 @@ class ACMEdaemon(object):
         # Ensure `func` is callable
         if not callable(func):
             msg = "{} first input has to be a callable function, not {}"
-            raise TypeError(msg.format(self.msgName, str(type(func))))
+            raise TypeError(msg.format(self.objName, str(type(func))))
 
         # Next, vet `n_calls` which is needed to validate `argv` and `kwargv`
         try:
@@ -247,22 +247,22 @@ class ACMEdaemon(object):
         # Ensure all elements of `argv` are list-like with lengths `n_calls` or 1
         msg = "{} `argv` has to be a list with list-like elements of length 1 or {}"
         if not isinstance(argv, (list, tuple)):
-            raise TypeError(msg.format(self.msgName, n_calls))
+            raise TypeError(msg.format(self.objName, n_calls))
         try:
             validArgv = all(len(arg) == n_calls or len(arg) == 1 for arg in argv)
         except TypeError:
-            raise TypeError(msg.format(self.msgName, n_calls))
+            raise TypeError(msg.format(self.objName, n_calls))
         if not validArgv:
-            raise ValueError(msg.format(self.msgName, n_calls))
+            raise ValueError(msg.format(self.objName, n_calls))
 
         # Ensure all values of `kwargv` are list-like with lengths `n_calls` or 1
         msg = "{} `kwargv` has to be a dictionary with list-like elements of length {}"
         try:
             validKwargv = all(len(value) == n_calls or len(value) == 1 for value in kwargv.values())
         except TypeError:
-            raise TypeError(msg.format(self.msgName, n_calls))
+            raise TypeError(msg.format(self.objName, n_calls))
         if not validKwargv:
-            raise ValueError(msg.format(self.msgName, n_calls))
+            raise ValueError(msg.format(self.objName, n_calls))
 
         # Basal sanity checks have passed, keep the provided input signature
         self.func = func
@@ -291,13 +291,13 @@ class ACMEdaemon(object):
         # Basal sanity check for Boolean flags
         if not isinstance(write_worker_results, bool):
             msg = "%s `write_worker_results` has to be `True` or `False`, not %s"
-            raise TypeError(msg%(self.msgName, str(write_worker_results)))
+            raise TypeError(msg%(self.objName, str(write_worker_results)))
         if not isinstance(single_file, bool):
             msg = "%s `single_file` has to be `True` or `False`, not %s"
-            raise TypeError(msg%(self.msgName, str(single_file)))
+            raise TypeError(msg%(self.objName, str(single_file)))
         if not isinstance(write_pickle, bool):
             msg = "%s `write_pickle` has to be `True` or `False`, not %s"
-            raise TypeError(msg%(self.msgName, str(write_pickle)))
+            raise TypeError(msg%(self.objName, str(write_pickle)))
 
         # Check compatibility of provided optional args
         if not write_worker_results and write_pickle:
@@ -310,21 +310,21 @@ class ACMEdaemon(object):
             self.log.warning("Generating a single output file only possible if `write_worker_results` is `True`. ")
         if write_pickle and single_file:
             msg = "%s Pickling of results does not support single output file creation. "
-            raise ValueError(msg%self.msgName)
+            raise ValueError(msg%self.objName)
 
         # Check validity of output shape/dtype specifications
         if result_shape is not None:
             if not isinstance(result_shape, (list, tuple)):
                 msg = "%s `result_shape` has to be either `None` or tuple, not %s"
-                raise TypeError(msg%(self.msgName, str(type(result_shape))))
+                raise TypeError(msg%(self.objName, str(type(result_shape))))
 
             if not isinstance(result_dtype, str):
                 msg = "%s `result_dtype` has to be a string, not %s"
-                raise TypeError(msg%(self.msgName, str(type(result_shape))))
+                raise TypeError(msg%(self.objName, str(type(result_shape))))
 
             if sum(spec is None for spec in result_shape) != 1:
                 msg = "%s `result_shape` must contain exactly one `None` entry"
-                raise ValueError(msg%self.msgName)
+                raise ValueError(msg%self.objName)
 
             rShape = list(result_shape)
             self.stacking_dim = result_shape.index(None)
@@ -334,10 +334,10 @@ class ACMEdaemon(object):
 
             if not all(isinstance(spec, numbers.Number) for spec in rShape):
                 msg = "%s `result_shape` must only contain numerical values"
-                raise ValueError(msg%self.msgName)
+                raise ValueError(msg%self.objName)
             if any(spec < 0 or int(spec) != spec for spec in rShape):
                 msg = "%s `result_shape` must only contain non-negative integers"
-                raise ValueError(msg%self.msgName)
+                raise ValueError(msg%self.objName)
 
             self.result_shape = tuple(rShape)
             ShapeSource = list(rShape)
@@ -349,7 +349,7 @@ class ACMEdaemon(object):
             except Exception as exc:
                 msg = "%s `result_dtype` has to be a valid NumPy datatype specification. "
                 msg += "Original error message below:\n%s"
-                raise TypeError(msg%(self.msgName, str(exc)))
+                raise TypeError(msg%(self.objName, str(exc)))
 
         # If automatic saving of results is requested, make necessary preparations
         if write_worker_results:
@@ -357,7 +357,7 @@ class ACMEdaemon(object):
             # Check validity of output dir specification
             if not isinstance(output_dir, (type(None), str)):
                 msg = "%s `output_dir` has to be either `None` or str, not %s"
-                raise TypeError(msg%(self.msgName, str(type(output_dir))))
+                raise TypeError(msg%(self.objName, str(type(output_dir))))
 
             # If provided, standardize output dir spec, otherwise use default locations
             if output_dir is not None:
@@ -385,7 +385,7 @@ class ACMEdaemon(object):
                 os.makedirs(outputDir)
             except Exception as exc:
                 msg = "{} automatic creation of output folder {} failed. Original error message below:\n{}"
-                raise OSError(msg.format(self.msgName, outputDir, str(exc)))
+                raise OSError(msg.format(self.objName, outputDir, str(exc)))
 
             # Re-define or allocate key "taskID" to track concurrent processing results
             self.kwargv["taskID"] = self.task_ids
@@ -559,11 +559,11 @@ class ACMEdaemon(object):
         msg = "{} `stop_client` has to be 'auto' or Boolean, not {}"
         if isinstance(stop_client, str):
             if stop_client != "auto":
-                raise ValueError(msg.format(self.msgName, stop_client))
+                raise ValueError(msg.format(self.objName, stop_client))
         elif isinstance(stop_client, bool):
             self.stop_client = stop_client
         else:
-            raise TypeError(msg.format(self.msgName, stop_client))
+            raise TypeError(msg.format(self.objName, stop_client))
 
         # Check if a dask client is already running
         try:
@@ -589,7 +589,7 @@ class ACMEdaemon(object):
             # average memory consumption of jobs
             if not isinstance(partition, str):
                 msg = "{} `partition` has to be 'auto' or a valid SLURM partition name, not {}"
-                raise TypeError(msg.format(self.msgName, str(partition)))
+                raise TypeError(msg.format(self.objName, str(partition)))
             if partition == "auto":
                 if is_esi_node():
                     msg = "Automatic SLURM partition selection is experimental"
@@ -604,7 +604,7 @@ class ACMEdaemon(object):
             msg = "{} `n_workers` has to be 'auto' or an integer >= 2, not {}"
             if isinstance(n_workers, str):
                 if n_workers != "auto":
-                    raise ValueError(msg.format(self.msgName, n_workers))
+                    raise ValueError(msg.format(self.objName, n_workers))
                 n_workers = self.n_calls
 
             # All set, remaining input processing is done by respective `*_cluster_setup` routines
@@ -636,7 +636,7 @@ class ACMEdaemon(object):
             # If startup is aborted by user, get outta here
             if self.client is None:
                 msg = "{} Could not start distributed computing client. "
-                raise ConnectionAbortedError(msg.format(self.msgName))
+                raise ConnectionAbortedError(msg.format(self.objName))
 
         # Set `n_workers` to no. of active workers in the initialized cluster
         self.n_workers = len(self.client.cluster.workers)
@@ -729,7 +729,7 @@ class ACMEdaemon(object):
         # Ensure `debug` is a simple Boolean flag
         if not isinstance(debug, bool):
             msg = "{} `debug` has to be `True` or `False`, not {}"
-            raise TypeError(msg.format(self.msgName, str(debug)))
+            raise TypeError(msg.format(self.objName, str(debug)))
 
         # Deduce result output information
         write_worker_results = self.acme_func == self.func_wrapper
@@ -749,7 +749,7 @@ class ACMEdaemon(object):
                 "If this fails to make workers come online, please use\n" +\
                 "\timport acme; acme.cluster_cleanup()\n" +\
                 "to shut down any defunct distributed computing clients"
-            raise RuntimeError(msg.format(self.msgName, self.client))
+            raise RuntimeError(msg.format(self.objName, self.client))
 
         # Dask does not correctly forward the `sys.path` from the parent process
         # to its workers. Fix this.
@@ -835,7 +835,7 @@ class ACMEdaemon(object):
             schedulerLog = list(self.client.cluster.get_logs(cluster=False, scheduler=True, workers=False).values())[0]
             erredFutures = [f for f in futures if f.status == "error"]
             msg = "{} Parallel computation failed: {}/{} tasks failed or stalled.\n"
-            msg = msg.format(self.msgName, totalTasks - finishedTasks, totalTasks)
+            msg = msg.format(self.objName, totalTasks - finishedTasks, totalTasks)
             msg += "Concurrent computing scheduler log below: \n\n"
             msg += schedulerLog + "\n"
 
