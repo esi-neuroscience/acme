@@ -78,7 +78,12 @@ def is_slurm_node():
     otherwise
     """
 
+    # Fetch ACME logger and set up caller's name
+    log = logging.getLogger("ACME")
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+
     # Simply test if the srun command is available
+    log.debug("%s Test if `sinfo` is available", funcName)
     out, _ = subprocess.Popen("sinfo --version",
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               text=True, shell=True).communicate()
@@ -89,6 +94,11 @@ def is_esi_node():
     """
     Returns `True` if code is running on an ESI cluster node, `False` otherwise
     """
+
+    # Fetch ACME logger, set up caller's name and write debug message
+    log = logging.getLogger("ACME")
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+    log.debug("%s Test if hostname matches the pattern 'esi-sv*'", funcName)
     return socket.gethostname().startswith("esi-sv") and os.path.isdir("/cs")
 
 
@@ -98,10 +108,12 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
     """
 
     # Get name of calling method/function
-    caller = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
+    log = logging.getLogger("ACME")
+    funcName = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
+    log.debug("%s Parsing `%s`", funcName, varname)
 
     # Make sure `var` is a scalar-like number
-    msg = "{caller:s} `{varname:s}` has to be {scalartype:s} between {lower:s} and {upper:s}, not {var:s}"
+    msg = "%s `%s` has to be %s between %s and %s, not %s"
     if np.issubdtype(type(var), np.number):
         error = False
         if ntype == "int_like":
@@ -113,16 +125,17 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
         if var < lims[0] or var > lims[1]:
             error = True
         if error:
-            raise ValueError(msg.format(caller=caller,
-                                        varname=varname,
-                                        scalartype=scalartype,
-                                        lower=str(lims[0]),
-                                        upper=str(lims[1]),
-                                        var=str(var)))
+            raise ValueError(msg%(funcName,
+                                  varname,
+                                  scalartype,
+                                  str(lims[0]),
+                                  str(lims[1]),
+                                  str(var)))
     else:
-        msg = "{caller:s} `{varname:s}` has to be a scalar, not {var:s}"
-        raise TypeError(msg.format(caller=caller, varname=varname, var=str(var)))
+        msg = "%s `%s` has to be a scalar, not %s"
+        raise TypeError(msg%(funcName, varname, str(type(var))))
 
+    log.debug("%s Successfully parsed `%s`", funcName, varname)
     return
 
 

@@ -170,14 +170,8 @@ class ACMEdaemon(object):
         # The only error checking happening in `__init__`
         if pmap is not None:
             if pmap.__class__.__name__ != "ParallelMap":
-                msg = "{} `pmap` has to be a `ParallelMap` instance, not {}"
-                raise TypeError(msg.format(self.objName, str(pmap)))
-
-        # Input pre-processed by a `ParallelMap` object takes precedence over keyword args
-        self.initialize(getattr(pmap, "func", func),
-                        getattr(pmap, "argv", argv),
-                        getattr(pmap, "kwargv", kwargv),
-                        getattr(pmap, "n_inputs", n_calls))
+                msg = "%s `pmap` has to be a `ParallelMap` instance, not %s"
+                raise TypeError(msg%(self.objName, str(type(pmap))))
 
         # If `log` is `None`, `prepare_log` has not been called yet
         if getattr(pmap, "log", None) is None:
@@ -186,7 +180,15 @@ class ACMEdaemon(object):
         else:
             self.log = pmap.log
 
+        # Input pre-processed by a `ParallelMap` object takes precedence over keyword args
+        self.log.debug("%s Passing control to `initialize`", self.objName)
+        self.initialize(getattr(pmap, "func", func),
+                        getattr(pmap, "argv", argv),
+                        getattr(pmap, "kwargv", kwargv),
+                        getattr(pmap, "n_inputs", n_calls))
+
         # Set up output handler
+        self.log.debug("%s Passing control to `prepare_output`", self.objName)
         self.prepare_output(write_worker_results,
                             output_dir,
                             result_shape,
@@ -196,11 +198,16 @@ class ACMEdaemon(object):
 
         # If requested, perform single-worker dry-run (and quit if desired)
         if dryrun:
+            self.log.debug("%s Dryrun requested, passing control to \
+                           `perform_dryrun`", self.objName)
             goOn = self.perform_dryrun(setup_interactive)
             if not goOn:
+                self.log.debug("%s Quitting after dryrun", self.objName)
                 return
+            self.log.debug("%s Continuing after dryrun", self.objName)
 
         # Either use existing dask client or start a fresh instance
+        self.log.debug("%s Passing control to `prepare_client`", self.objName)
         self.prepare_client(n_workers=n_workers,
                             partition=partition,
                             mem_per_worker=mem_per_worker,
@@ -215,6 +222,7 @@ class ACMEdaemon(object):
         """
 
         # Allocate slots
+        self.log.debug("%s Initializing ACMEdaemon slots and attributes", self.objName)
         self.func = None
         self.argv = None
         self.kwargv = None
@@ -235,34 +243,38 @@ class ACMEdaemon(object):
 
         # Ensure `func` is callable
         if not callable(func):
-            msg = "{} first input has to be a callable function, not {}"
-            raise TypeError(msg.format(self.objName, str(type(func))))
+            msg = "%s first input has to be a callable function, not %s"
+            raise TypeError(msg%(self.objName, str(type(func))))
 
         # Next, vet `n_calls` which is needed to validate `argv` and `kwargv`
         try:
             acs._scalar_parser(n_calls, varname="n_calls", ntype="int_like", lims=[1, np.inf])
         except Exception as exc:
+            self.log.error("%s Error parsing `n_calls`", self.objName)
             raise exc
+        self.log.debug("%s Using provided `n_calls = %d`", self.objName, n_calls)
 
         # Ensure all elements of `argv` are list-like with lengths `n_calls` or 1
-        msg = "{} `argv` has to be a list with list-like elements of length 1 or {}"
+        msg = "%s `argv` has to be a list with list-like elements of length 1 or %d"
         if not isinstance(argv, (list, tuple)):
-            raise TypeError(msg.format(self.objName, n_calls))
+            raise TypeError(msg%(self.objName, n_calls))
         try:
             validArgv = all(len(arg) == n_calls or len(arg) == 1 for arg in argv)
         except TypeError:
-            raise TypeError(msg.format(self.objName, n_calls))
+            raise TypeError(msg%(self.objName, n_calls))
         if not validArgv:
-            raise ValueError(msg.format(self.objName, n_calls))
+            raise ValueError(msg%(self.objName, n_calls))
+        self.log.debug("%s Ensured validity of `argv`", self.objName)
 
         # Ensure all values of `kwargv` are list-like with lengths `n_calls` or 1
-        msg = "{} `kwargv` has to be a dictionary with list-like elements of length {}"
+        msg = "%s `kwargv` has to be a dictionary with list-like elements of length %d"
         try:
             validKwargv = all(len(value) == n_calls or len(value) == 1 for value in kwargv.values())
         except TypeError:
-            raise TypeError(msg.format(self.objName, n_calls))
+            raise TypeError(msg%(self.objName, n_calls))
         if not validKwargv:
-            raise ValueError(msg.format(self.objName, n_calls))
+            raise ValueError(msg%(self.objName, n_calls))
+        self.log.debug("%s Ensured validity of `kwargv`", self.objName)
 
         # Basal sanity checks have passed, keep the provided input signature
         self.func = func
@@ -272,9 +284,15 @@ class ACMEdaemon(object):
 
         # Define list of taskIDs for distribution across workers
         self.task_ids = list(range(n_calls))
+        self.log.debug("%s Allocated `taskID` list: %s", self.objName, str(self.task_ids))
 
         # Finally, determine if the code is executed on a SLURM-enabled node
         self.has_slurm = acs.is_slurm_node()
+        self.log.debug("%s Set `has_slurm = %s`", self.objName, str(self.has_slurm))
+
+        # Get out
+        self.log.debug("%s Finished initialization", self.objName)
+        return
 
     def prepare_output(self,
                        write_worker_results,
@@ -289,6 +307,7 @@ class ACMEdaemon(object):
         """
 
         # Basal sanity check for Boolean flags
+        self.log.debug("%s Setting up output structure", self.objName)
         if not isinstance(write_worker_results, bool):
             msg = "%s `write_worker_results` has to be `True` or `False`, not %s"
             raise TypeError(msg%(self.objName, str(write_worker_results)))
@@ -343,6 +362,9 @@ class ACMEdaemon(object):
             ShapeSource = list(rShape)
             ShapeSource.pop(self.stacking_dim)
             ShapeSource = tuple(ShapeSource)
+            self.log.debug("%s Found `result_shape = %s`. Set stacking \
+                           dimension to %d", self.objName, str(result_shape),
+                           self.stacking_dim)
 
             try:
                 self.result_dtype = np.dtype(result_dtype)
@@ -350,124 +372,183 @@ class ACMEdaemon(object):
                 msg = "%s `result_dtype` has to be a valid NumPy datatype specification. "
                 msg += "Original error message below:\n%s"
                 raise TypeError(msg%(self.objName, str(exc)))
+            self.log.debug("%s Set `result_dtype = %s`", self.objName, self.result_dtype)
 
         # If automatic saving of results is requested, make necessary preparations
         if write_worker_results:
-
-            # Check validity of output dir specification
-            if not isinstance(output_dir, (type(None), str)):
-                msg = "%s `output_dir` has to be either `None` or str, not %s"
-                raise TypeError(msg%(self.objName, str(type(output_dir))))
-
-            # If provided, standardize output dir spec, otherwise use default locations
-            if output_dir is not None:
-                outDir = os.path.abspath(os.path.expanduser(output_dir))
-
-            else:
-                # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
-                if self.has_slurm:
-                    outDir = "/cs/home/{usr:s}/".format(usr=getpass.getuser())
-                else:
-                    outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
-                outDir = os.path.join(outDir, "ACME_{date:s}")
-                outDir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
-
-            # Unless specifically denied by the user, each worker stores results
-            # separately with a common container file pointing to the individual
-            # by-worker files residing in a "payload" directory
-            self.out_dir = str(outDir)
-            if not single_file and not write_pickle:
-                payloadName = "{}_payload".format(self.func.__name__)
-                outputDir = os.path.join(self.out_dir, payloadName)
-            else:
-                outputDir = self.out_dir
-            try:
-                os.makedirs(outputDir)
-            except Exception as exc:
-                msg = "{} automatic creation of output folder {} failed. Original error message below:\n{}"
-                raise OSError(msg.format(self.objName, outputDir, str(exc)))
-
-            # Re-define or allocate key "taskID" to track concurrent processing results
-            self.kwargv["taskID"] = self.task_ids
-            self.collect_results = False
-
-            # Set up correct file-extension for output files; in case of HDF5
-            # containers, prepare "main" file for collecting/symlinking worker results
-            if write_pickle:
-                fExt = "pickle"
-            else:
-                fExt = "h5"
-                self.results_container = os.path.join(self.out_dir, "{}.h5".format(self.func.__name__))
-
-            # By default, `results_container` is a collection of links that point to
-            # worker-generated HDF5 containers; if `single_file` is `True`, then
-            # `results_container` is a "real" container with actual dataset(s)
-            if single_file:
-                self.kwargv["singleFile"] = [True]
-                self.kwargv["outFile"] = [self.results_container]
-
-                # If no output shape provided, prepare groups for storing datasets;
-                # otherwise allocate a single dataset w/specified dimension
-                if result_shape is None:
-                    with h5py.File(self.results_container, "w") as h5f:
-                        for i in self.task_ids:
-                            h5f.create_group("comp_{}".format(i))
-                else:
-                    with h5py.File(self.results_container, "w") as h5f:
-                        h5f.create_dataset("result_0", shape=self.result_shape, dtype=self.result_dtype)
-
-            else:
-                self.kwargv["outFile"] = [os.path.join(outputDir,
-                                                       "{}_{}.{}".format(self.func.__name__,
-                                                                         taskID,
-                                                                         fExt))
-                                                       for taskID in self.task_ids]
-                if not write_pickle:
-
-                    # If no output shape provided, generate links to external datasets;
-                    # otherwise allocate a virtual dataset w/specified dimension
-                    if result_shape is None:
-                        with h5py.File(self.results_container, "w") as h5f:
-                            for i, fname in enumerate(self.kwargv["outFile"]):
-                                relPath = os.path.join(payloadName, os.path.basename(fname))
-                                h5f["comp_{}".format(i)] = h5py.ExternalLink(relPath, "/")
-                    else:
-
-                        # Assemble virtual dataset
-                        layout = h5py.VirtualLayout(shape=self.result_shape, dtype=self.result_dtype)
-                        idx = [slice(None)] * len(self.result_shape)
-                        for i, fname in enumerate(self.kwargv["outFile"]):
-                            idx[self.stacking_dim] = i
-                            relPath = os.path.join(payloadName, os.path.basename(fname))
-                            vsource = h5py.VirtualSource(fname, "result_0", shape=ShapeSource)
-                            layout[tuple(idx)] = vsource
-                        with h5py.File(self.results_container, "w", libver="latest") as h5f:
-                            h5f.create_virtual_dataset("result_0", layout)
-
-            # Include logger name in keywords so that workers can use it
-            self.kwargv["logName"] = [self.log.name]
-
-            # Wrap the user-provided func and distribute it across workers
-            self.kwargv["userFunc"] = [self.func]
-            self.acme_func = self.func_wrapper
-
+            self.log.debug("% Automatic output processing requested, handing \
+                           control over to `_output_setup`", self.objName)
+            self._output_setup(output_dir, result_shape, ShapeSource, single_file, write_pickle)
         else:
 
             # If `taskID` is not an explicit kw-arg of `func` and `func` does not
             # accept "anonymous" `**kwargs`, don't save anything but return stuff
+            self.log.debug("% Automatic output processing disabled.", self.objName)
             if self.kwargv.get("taskID") is None:
                 if not isSpyModule:
-                    msg = "`write_worker_results` is `False` and `taskID` is not a keyword argument of {}. " +\
+                    msg = "`write_worker_results` is `False` and `taskID` is not a keyword argument of %s. " +\
                         "Results will be collected in memory by caller - this might be slow and can lead " +\
                         "to excessive memory consumption. "
-                    self.log.warning(msg.format(self.func.__name__))
+                    self.log.warning(msg, self.func.__name__)
                 self.collect_results = True
             else:
                 self.kwargv["taskID"] = self.task_ids
                 self.collect_results = False
+                self.log.debug("%s Not collecting results in memory, \
+                               leaving output processing to user-provided \
+                               function", self.objName)
 
             # The "raw" user-provided function is used in the computation
             self.acme_func = self.func
+            self.log.debug("%s Not wrapping user-provided function but invoking it directly",
+                           self.objName)
+
+        # Get out
+        self.log.debug("%s Finished setting up output structure", self.objName)
+        return
+
+    def _output_setup(self,
+                      output_dir,
+                      result_shape,
+                      ShapeSource,
+                      single_file,
+                      write_pickle):
+        """
+        Local helper for creating output directories and preparing containers
+        """
+
+        # Check validity of output dir specification
+        self.log.debug("%s Starting to create on-disk layout for results",
+                       self.objName)
+        if not isinstance(output_dir, (type(None), str)):
+            msg = "%s `output_dir` has to be either `None` or str, not %s"
+            raise TypeError(msg%(self.objName, str(type(output_dir))))
+
+        # If provided, standardize output dir spec, otherwise use default locations
+        if output_dir is not None:
+            outDir = os.path.abspath(os.path.expanduser(output_dir))
+
+        else:
+            # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
+            if self.has_slurm:
+                outDir = "/cs/home/{usr:s}/".format(usr=getpass.getuser())
+            else:
+                outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
+            outDir = os.path.join(outDir, "ACME_{date:s}")
+            outDir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
+        self.log.debug("%s Using output directory %s", self.objName, outDir)
+
+        # Unless specifically denied by the user, each worker stores results
+        # separately with a common container file pointing to the individual
+        # by-worker files residing in a "payload" directory
+        self.out_dir = str(outDir)
+        if not single_file and not write_pickle:
+            self.log.debug("%s Preparing payload directory for HDF5 containers",
+                           self.objName)
+            payloadName = "{}_payload".format(self.func.__name__)
+            outputDir = os.path.join(self.out_dir, payloadName)
+        else:
+            self.log.debug("%s Either single-file output or pickling was \
+                           requested. Not creating payload directory",
+                           self.objName)
+            outputDir = self.out_dir
+        try:
+            os.makedirs(outputDir)
+            self.log.debug("%s Created %s", self.objName, outputDir)
+        except Exception as exc:
+            msg = "%s automatic creation of output folder %s failed: %s"
+            raise OSError(msg%(self.objName, outputDir, str(exc)))
+
+        # Re-define or allocate key "taskID" to track concurrent processing results
+        self.kwargv["taskID"] = self.task_ids
+        self.collect_results = False
+
+        # Set up correct file-extension for output files; in case of HDF5
+        # containers, prepare "main" file for collecting/symlinking worker results
+        if write_pickle:
+            fExt = "pickle"
+            self.log.debug("%s Pickling was requested, using filename \
+                           extension *.%s for results", self.objName, fExt)
+        else:
+            fExt = "h5"
+            self.results_container = os.path.join(self.out_dir, "{}.h5".format(self.func.__name__))
+            self.log.debug("%s Using HDF5 storage %s", self.objName, self.results_container)
+
+        # By default, `results_container` is a collection of links that point to
+        # worker-generated HDF5 containers; if `single_file` is `True`, then
+        # `results_container` is a "real" container with actual dataset(s)
+        if single_file:
+            self.kwargv["singleFile"] = [True]
+            self.kwargv["outFile"] = [self.results_container]
+            self.log.debug("%s Saving results in single HDF5 container",
+                           self.objName)
+
+            # If no output shape provided, prepare groups for storing datasets;
+            # otherwise allocate a single dataset w/specified dimension
+            if result_shape is None:
+                with h5py.File(self.results_container, "w") as h5f:
+                    for i in self.task_ids:
+                        h5f.create_group("comp_{}".format(i))
+                        self.log.debug("%s Created group comp_%d in \
+                                       single shared results container",
+                                       self.objName, i)
+            else:
+                with h5py.File(self.results_container, "w") as h5f:
+                    h5f.create_dataset("result_0", shape=self.result_shape, dtype=self.result_dtype)
+                    self.log.debug("%s Created unique dataset 'result_0' \
+                                   with shape %s in single shared results container",
+                                   self.objName, str(self.result_shape))
+
+        else:
+            self.kwargv["outFile"] = [os.path.join(outputDir,
+                                                    "{}_{}.{}".format(self.func.__name__,
+                                                                        taskID,
+                                                                        fExt))
+                                                    for taskID in self.task_ids]
+            self.log.debug("%s Saving results to multiple files: %s",
+                           self.objName, str(self.kwargv["outFile"]))
+            if not write_pickle:
+
+                # If no output shape provided, generate links to external datasets;
+                # otherwise allocate a virtual dataset w/specified dimension
+                if result_shape is None:
+
+                    with h5py.File(self.results_container, "w") as h5f:
+                        for i, fname in enumerate(self.kwargv["outFile"]):
+                            relPath = os.path.join(payloadName, os.path.basename(fname))
+                            h5f["comp_{}".format(i)] = h5py.ExternalLink(relPath, "/")
+                            self.log.debug("%s Created external link comp_%d \
+                                           pointing to %s in results container",
+                                           self.objName, i, relPath)
+                else:
+
+                    # Assemble virtual dataset
+                    layout = h5py.VirtualLayout(shape=self.result_shape, dtype=self.result_dtype)
+                    idx = [slice(None)] * len(self.result_shape)
+                    for i, fname in enumerate(self.kwargv["outFile"]):
+                        idx[self.stacking_dim] = i
+                        relPath = os.path.join(payloadName, os.path.basename(fname))
+                        vsource = h5py.VirtualSource(fname, "result_0", shape=ShapeSource)
+                        layout[tuple(idx)] = vsource
+                    with h5py.File(self.results_container, "w", libver="latest") as h5f:
+                        h5f.create_virtual_dataset("result_0", layout)
+                        self.log.debug("%s Created virtual dataset \
+                                       'result_0' with shape %s in single \
+                                       shared results container",
+                                       self.objName, self.result_shape)
+
+        # Include logger name in keywords so that workers can use it
+        self.kwargv["logName"] = [self.log.name]
+
+        # Wrap the user-provided func and distribute it across workers
+        self.kwargv["userFunc"] = [self.func]
+        self.acme_func = self.func_wrapper
+        self.log.debug("%s Wrapping user-provided function inside func_wrapper",
+                       self.objName)
+
+        # Get out
+        self.log.debug("%s Finished setting up on-disk layout", self.objName)
+        return
 
     def perform_dryrun(self, setup_interactive):
         """
@@ -475,22 +556,32 @@ class ACMEdaemon(object):
         """
 
         # Let helper randomly pick a single scheduled job and prepare corresponding args + kwargs
+        self.log.debug("%s Preparing dryrun", self.objName)
+        self.log.debug("%s Passing control to `_dryrun_setup`", self.objName)
         [dryRunIdx], [dryRunArgs], [dryRunKwargs] = self._dryrun_setup(n_runs=1)
 
         # Create log entry
-        msg = "Performing a single dry-run of {fname:s} simulating randomly " +\
-            "picked worker #{wrknum:d} with automatically distributed arguments"
-        self.log.info(msg.format(fname=self.func.__name__, wrknum=dryRunIdx))
+        msg = "Performing a single dry-run of %s simulating randomly " +\
+            "picked worker #%d with automatically distributed arguments"
+        self.log.info(msg, self.func.__name__, dryRunIdx)
 
         # Use resident memory size (in MB) to estimate job's memory footprint and measure elapsed time
         mem0 = psutil.Process().memory_info().rss / 1024 ** 2
+        self.log.debug("%s Initial memory consumption estimate: %3.f MB",
+                       self.objName, mem0)
+        self.log.debug("%s Starting dryrun", self.objName)
         tic = time.perf_counter()
         self.acme_func(*dryRunArgs, **dryRunKwargs)
         toc = time.perf_counter()
+        self.log.debug("%s Finished dryrun", self.objName)
         mem1 = psutil.Process().memory_info().rss / 1024 ** 2
+        self.log.debug("%s Memory consumption estimate after dryrun: %3.f MB",
+                       self.objName, mem1)
 
         # Remove any generated output files
         if self.out_dir is not None:
+            self.log.debug("%s Removing %s generated during dryrun",
+                           self.objName, self.kwargv["outFile"][dryRunIdx])
             os.unlink(self.kwargv["outFile"][dryRunIdx])
 
         # Compute elapsed time and memory usage
@@ -502,9 +593,9 @@ class ACMEdaemon(object):
         if memUsage > 1000:
             memUsage /= 1024
             memUnit = "GB"
-        msg = "Dry-run completed. Elapsed time is {runtime:f} seconds, " +\
-            "estimated memory consumption was {memused:3.2f} {memunit:s}."
-        self.log.info(msg.format(runtime=elapsedTime, memused=memUsage, memunit=memUnit))
+        msg = "Dry-run completed. Elapsed time is %f seconds, " +\
+            "estimated memory consumption was %3.2f %s."
+        self.log.info(msg, elapsedTime, memUsage, memUnit)
 
         # If the worker setup is supposed to be interactive, ask for confirmation
         # here as well; if execution is terminated, remove auto-generated output directory
@@ -515,7 +606,7 @@ class ACMEdaemon(object):
                 if self.out_dir is not None:
                     shutil.rmtree(self.out_dir, ignore_errors=True)
                 goOn = False
-
+        self.log.debug("%s Finished dryrun", self.objName)
         return goOn
 
     def _dryrun_setup(self, n_runs=None):
@@ -524,8 +615,11 @@ class ACMEdaemon(object):
         """
 
         # If not provided, attempt to infer a "sane" default for the number of jobs to pick
+        self.log.debug("%s Setting up dryrun", self.objName)
         if n_runs is None:
             n_runs = min(self.n_calls, max(5, min(1, int(0.05 * self.n_calls))))
+            self.log.debug("%s Automatically choosing number of jobs to run", self.objName)
+        self.log.debug("%s Picking %d jobs at random", self.objName, n_runs)
 
         # Randomly pick `n_runs` jobs and extract positional and keyword args
         dryRunIdx = np.random.choice(self.n_calls, size=n_runs, replace=False)
@@ -535,6 +629,7 @@ class ACMEdaemon(object):
             dryRunArgs.append([arg[idx] if len(arg) > 1 else arg[0] for arg in self.argv])
             dryRunKwargs.append([{key:value[idx] if len(value) > 1 else value[0] \
                 for key, value in self.kwargv.items()}][0])
+        self.log.debug("%s Finished dryrun setup", self.objName)
         return dryRunIdx, dryRunArgs, dryRunKwargs
 
     def prepare_client(

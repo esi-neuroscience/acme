@@ -242,6 +242,7 @@ class ParallelMap(object):
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`
+        self.log.debug("%s Passing control to `prepare_input`", self.objName)
         self.prepare_input(func, n_inputs, *args, **kwargs)
 
         # Create an instance of `ACMEdaemon` that does the actual parallel computing work
@@ -286,7 +287,7 @@ class ParallelMap(object):
             try:
                 acs._scalar_parser(n_inputs, varname="n_inputs", ntype="int_like", lims=[1, np.inf])
             except Exception as exc:
-                log.error("%s Error parsing `n_inputs`", self.objName)
+                self.log.error("%s Error parsing `n_inputs`", self.objName)
                 raise exc
             guessInputs = False
             self.log.debug("%s Using provided `n_inputs = %d`", self.objName, n_inputs)
@@ -436,6 +437,7 @@ class ParallelMap(object):
         # Finally, attach user-provided function to class instance
         self.func = func
 
+        # Get out
         self.log.debug("%s Finished parsing inputs", self.objName)
         return
 
