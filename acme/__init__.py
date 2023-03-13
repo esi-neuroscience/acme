@@ -37,6 +37,9 @@ __deprecation_wrng__ = \
     "`workers_per_job` are DEPRECATED. Please use `n_workers`, `mem_per_worker`, " +\
     "`n_workers_startup` and `processes_per_worker`, respectively."
 
+# Remove dask-jobqueue's FutureWarnings about tmpfile (which we don't use)
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 # Import local modules
 from . import frontend, backend, shared, dask_helpers
 from .frontend import *

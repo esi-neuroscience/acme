@@ -350,7 +350,7 @@ class ParallelMap(object):
                 args[k] = arg
             acs.callCount = 0
             argsize = acs.sizeOf(arg, "positional arguments")
-            self.log.debug("%s Computed size of %s as %4.2f", self.objName, str(arg), argsize)
+            self.log.debug("%s Computed size of %s as %4.2f bytes", self.objName, str(arg), argsize)
             if argsize > self._maxArgSize:
                 self.log.warning(wrnMsg, argsize, self._maxArgSize)
             if isinstance(arg, (list, tuple)):
@@ -368,7 +368,7 @@ class ParallelMap(object):
                 kwargs[name] = value
             acs.callCount = 0
             valsize = acs.sizeOf(value, "keyword arguments")
-            self.log.debug("%s Computed size of %s as %4.2f", self.objName, name, valsize)
+            self.log.debug("%s Computed size of %s as %4.2f bytes", self.objName, name, valsize)
             if valsize > self._maxArgSize:
                 self.log.warning(wrnMsg, valsize, self._maxArgSize)
             if isinstance(value, (list, tuple)):
