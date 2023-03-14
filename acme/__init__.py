@@ -41,12 +41,11 @@ __deprecation_wrng__ = \
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 # Import local modules
-from . import frontend, backend, shared, dask_helpers
 from .frontend import *
 from .backend import *
 from .shared import *
-from .logger import prepare_log
 from .dask_helpers import *
+from .logger import prepare_log
 
 # Set up module-wide logging
 prepare_log(caller="ACME")

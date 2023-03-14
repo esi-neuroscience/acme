@@ -10,8 +10,6 @@ import inspect
 import logging
 import os
 
-from acme import __version__
-
 __all__ = []
 
 
@@ -97,30 +95,43 @@ def prepare_log(caller=None, logfile=False, func=None, verbose=None):
     # Create logging formatter
     formatter = AcmeFormatter("%(name)s %(levelname)s %(message)s")
 
-    # Output handlers: print log messages to `stderr` via `StreamHandler` as well
+    # Output handlers: print log messages via `StreamHandler` as well
     # as to a provided text file `logfile using a `FileHandler`.
-    # Note: avoid adding the same log-file location as distinct handlers to the logger
-    # in case `ParallelMap` is executed repeatedly; also remove existing non-default
-    # logfile handlers to avoid generating multiple logs (and accidental writes to existing logs)
+    # Note: at import time (when logger is initially set up) no `logfile`
+    # specification is provided, so `fileHandler`` can only be set up upon
+    # successive calls
     if len(log.handlers) == 0:
+        initialRun = True
         stdoutHandler = logging.StreamHandler()
-        stdoutHandler.setLevel(loglevel)
-        stdoutHandler.setFormatter(formatter)
-        log.addHandler(stdoutHandler)
-    if logfile is not None:
-        fHandlers = [h for h in log.handlers if isinstance(h, logging.FileHandler)]
-        for handler in fHandlers:
-            if handler.baseFilename == logfile:
-                break
-            else:
+    else:
+        # Note: avoid adding the same log-file location as distinct handlers to the logger
+        # in case `ParallelMap` is executed repeatedly; also remove existing non-default
+        # logfile handlers to avoid generating multiple logs (and accidental writes to existing logs)
+        initialRun = False
+        stdoutHandler = [h for h in log.handlers if isinstance(h, logging.StreamHandler)][0]
+        if logfile is not None:
+            fileHandler = None
+            fHandlers = [h for h in log.handlers if isinstance(h, logging.FileHandler)]
+            for handler in fHandlers:
+                if handler.baseFilename == logfile:
+                    fileHandler = handler
+                    break
                 log.handlers.remove(handler)
-        fileHandler = logging.FileHandler(logfile)
+            # No file-handler configured yet, create a new one
+            if fileHandler is None:
+                fileHandler = logging.FileHandler(logfile)
+                log.addHandler(fileHandler)
+
+    # Apply formatting to existing loggers as well as newly created ones
+    stdoutHandler.setLevel(loglevel)
+    stdoutHandler.setFormatter(formatter)
+    if logfile is not None:
         fileHandler.setLevel(loglevel)
         fileHandler.setFormatter(formatter)
-        log.addHandler(fileHandler)
 
-    # Start log w/version info
-    log.info("\x1b[1mThis is ACME v. %s\x1b[0m", __version__)
+    # If this is round one, add stdout handler
+    if initialRun:
+        log.addHandler(stdoutHandler)
 
     return log
 

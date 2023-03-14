@@ -756,8 +756,8 @@ def local_cluster_setup(n_workers=None,
     # Additional safe-guard: if a script is executed, double-check with the user
     # for proper main idiom usage
     if interactive:
-        msg = "{name:s} If launched from a script, did you wrap your code \
-            inside a __main__ module block?"
+        msg = "{name:s} If launched from a script, did you wrap your code " +\
+            "inside a __main__ module block?"
         if not user_yesno(msg.format(name=funcName), default="no"):
             return
 

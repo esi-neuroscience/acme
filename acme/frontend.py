@@ -9,8 +9,10 @@ import sys
 import numpy as np
 
 # Local imports
-from acme import __deprecated__, __deprecation_wrng__
+from acme import __deprecated__, __deprecation_wrng__, __version__
 from .backend import ACMEdaemon
+from .logger import prepare_log
+from .shared import _scalar_parser, sizeOf
 from . import shared as acs
 isSpyModule = False
 if "syncopy" in sys.modules:
@@ -230,7 +232,8 @@ class ParallelMap(object):
         """
 
         # First and foremost, set up logging system (unless logger is already present)
-        self.log = acs.prepare_log(caller="ACME", logfile=logfile, func=func, verbose=verbose)
+        self.log = prepare_log(caller="ACME", logfile=logfile, func=func, verbose=verbose)
+        self.log.info("\x1b[1mThis is ACME v. %s\x1b[0m", __version__)
 
         # Backwards compatibility: legacy keywords are converted to new nomenclature
         if any(kw in kwargs for kw in __deprecated__):
@@ -242,11 +245,11 @@ class ParallelMap(object):
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`
-        self.log.debug("%s Passing control to `prepare_input`", self.objName)
+        self.log.debug("%s Calling `prepare_input`", self.objName)
         self.prepare_input(func, n_inputs, *args, **kwargs)
 
         # Create an instance of `ACMEdaemon` that does the actual parallel computing work
-        self.log.debug("%s Passing control to `ACMEdaemon`", self.objName)
+        self.log.debug("%s Instantiating `ACMEdaemon`", self.objName)
         self.daemon = ACMEdaemon(self,
                                  n_workers=n_workers,
                                  write_worker_results=write_worker_results,
@@ -273,7 +276,6 @@ class ParallelMap(object):
         """
 
         # Ensure `func` really is a function and `n_inputs` makes sense
-        self.log.debug("%s Starting input parsing", self.objName)
         if not callable(func):
             msg = "%s first input has to be a callable function, not %s"
             raise TypeError(msg%(self.objName, str(type(func))))
@@ -285,7 +287,7 @@ class ParallelMap(object):
             self.log.debug("%s Using `n_inputs = 'auto'`", self.objName)
         else:
             try:
-                acs._scalar_parser(n_inputs, varname="n_inputs", ntype="int_like", lims=[1, np.inf])
+                _scalar_parser(n_inputs, varname="n_inputs", ntype="int_like", lims=[1, np.inf])
             except Exception as exc:
                 self.log.error("%s Error parsing `n_inputs`", self.objName)
                 raise exc
@@ -335,7 +337,6 @@ class ParallelMap(object):
                                   len(funcKwargs),
                                   validArgs,
                                   len(kwargs)))
-        self.log.debug("%s Validated number of positional/keyword args", self.objName)
 
         # Prepare argument parsing: collect the the length of anything 1D-array-like
         # in `argLens` and check the size of all provided positional and keyword args
@@ -349,7 +350,7 @@ class ParallelMap(object):
                 arg = list(arg)
                 args[k] = arg
             acs.callCount = 0
-            argsize = acs.sizeOf(arg, "positional arguments")
+            argsize = sizeOf(arg, "positional arguments")
             self.log.debug("%s Computed size of %s as %4.2f bytes", self.objName, str(arg), argsize)
             if argsize > self._maxArgSize:
                 self.log.warning(wrnMsg, argsize, self._maxArgSize)
@@ -367,7 +368,7 @@ class ParallelMap(object):
                 value = list(value)
                 kwargs[name] = value
             acs.callCount = 0
-            valsize = acs.sizeOf(value, "keyword arguments")
+            valsize = sizeOf(value, "keyword arguments")
             self.log.debug("%s Computed size of %s as %4.2f bytes", self.objName, name, valsize)
             if valsize > self._maxArgSize:
                 self.log.warning(wrnMsg, valsize, self._maxArgSize)
@@ -438,7 +439,6 @@ class ParallelMap(object):
         self.func = func
 
         # Get out
-        self.log.debug("%s Finished parsing inputs", self.objName)
         return
 
     def compute(self):
