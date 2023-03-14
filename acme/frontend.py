@@ -230,7 +230,7 @@ class ParallelMap(object):
         """
 
         # First and foremost, set up logging system (unless logger is already present)
-        self.log = acs.prepare_log(func, caller="ACME", logfile=logfile, verbose=verbose)
+        self.log = acs.prepare_log(caller="ACME", logfile=logfile, func=func, verbose=verbose)
 
         # Backwards compatibility: legacy keywords are converted to new nomenclature
         if any(kw in kwargs for kw in __deprecated__):

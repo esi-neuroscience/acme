@@ -42,7 +42,11 @@ from . import frontend, backend, shared, dask_helpers
 from .frontend import *
 from .backend import *
 from .shared import *
+from .logger import prepare_log
 from .dask_helpers import *
+
+# Set up module-wide logging
+prepare_log(caller="ACME")
 
 # Override default exception handler (take care of Jupyter's Exception handling)
 from .shared import ctrlc_catcher
