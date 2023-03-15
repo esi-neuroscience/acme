@@ -207,13 +207,13 @@ class ACMEdaemon(object):
                         getattr(pmap, "n_inputs", n_calls))
 
         # Set up output handler
-        self.log.debug("%s Calling `prepare_output`", self.objName)
-        self.prepare_output(write_worker_results,
-                            output_dir,
-                            result_shape,
-                            result_dtype,
-                            single_file,
-                            write_pickle)
+        self.log.debug("%s Calling `pre_process`", self.objName)
+        self.pre_process(write_worker_results,
+                         output_dir,
+                         result_shape,
+                         result_dtype,
+                         single_file,
+                         write_pickle)
 
         # If requested, perform single-worker dry-run (and quit if desired)
         if dryrun:
@@ -290,13 +290,13 @@ class ACMEdaemon(object):
         # Get out
         return
 
-    def prepare_output(self,
-                       write_worker_results,
-                       output_dir,
-                       result_shape,
-                       result_dtype,
-                       single_file,
-                       write_pickle):
+    def pre_process(self,
+                    write_worker_results,
+                    output_dir,
+                    result_shape,
+                    result_dtype,
+                    single_file,
+                    write_pickle):
         """
         If `write_*` is `True` set up directories for saving output HDF5 containers
         (or pickle files). Warn if results are to be collected in memory
@@ -354,9 +354,8 @@ class ACMEdaemon(object):
                 raise ValueError(msg%self.objName)
 
             self.result_shape = tuple(rShape)
-            self.log.debug("%s Found `result_shape = %s`. Set stacking " + \
-                           "dimension to %d", self.objName, str(result_shape),
-                           self.stacking_dim)
+            msg = "%s Found `result_shape = %s`. Set stacking dimension to %d"
+            self.log.debug(msg, self.objName, str(result_shape), self.stacking_dim)
 
             try:
                 self.result_dtype = np.dtype(result_dtype)
@@ -369,7 +368,7 @@ class ACMEdaemon(object):
         # If automatic saving of results is requested, make necessary preparations
         if write_worker_results:
             self.log.debug("%s Automatic output processing requested, calling `_output_setup`", self.objName)
-            self._output_setup(output_dir, result_shape, single_file, write_pickle)
+            self.setup_output(output_dir, result_shape, single_file, write_pickle)
         else:
 
             # If `taskID` is not an explicit kw-arg of `func` and `func` does not
@@ -394,13 +393,16 @@ class ACMEdaemon(object):
             self.log.debug("%s Not wrapping user-provided function but invoking it directly",
                            self.objName)
 
+        # Finally, attach verbosity flag to correctly set up logger for worker funcs
+        self.kwargv["logLevel"] = [self.log.level]
+
         return
 
-    def _output_setup(self,
-                      output_dir,
-                      result_shape,
-                      single_file,
-                      write_pickle):
+    def setup_output(self,
+                     output_dir,
+                     result_shape,
+                     single_file,
+                     write_pickle):
         """
         Local helper for creating output directories and preparing containers
         """
@@ -982,13 +984,13 @@ class ACMEdaemon(object):
             raise RuntimeError(msg)
 
         # Postprocessing of results
-        self.log.debug("%s Calling `postprocess`", self.objName)
-        values = self.postprocess(futures)
+        self.log.debug("%s Calling `post_process`", self.objName)
+        values = self.post_process(futures)
 
         # Either return collected by-worker results or the filepaths of results
         return values
 
-    def postprocess(self, futures):
+    def post_process(self, futures):
         """
         Local helper to post-process results on disk/in-memory
 
@@ -1147,7 +1149,6 @@ class ACMEdaemon(object):
         """
 
         # If `prepare_client` has not been launched yet, just get outta here
-        self.log.debug(msg, self.objName)
         if not hasattr(self, "client"):
             self.log.debug("%s Helper `prepare_client` not yet launched, exiting", self.objName)
             return
@@ -1176,11 +1177,17 @@ class ACMEdaemon(object):
         taskID = kwargs.pop("taskID")
         fname = kwargs.pop("outFile")
         logName = kwargs.pop("logName")
+        logLevel = kwargs.pop("logLevel")
         singleFile = kwargs.pop("singleFile", False)
         stackingDim = kwargs.pop("stackingDim", None)
         memEstRun = kwargs.pop("memEstRun", False)
-        log = logging.getLogger(logName)
         funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+
+        # Set up logger
+        log = logging.getLogger(logName)
+        log.setLevel(logLevel)
+        for h in log.handlers:
+            h.setLevel(logLevel)
 
         # Call user-provided function
         result = func(*args, **kwargs)
@@ -1197,12 +1204,6 @@ class ACMEdaemon(object):
                 lock = dd.lock.Lock(name=os.path.basename(fname))
                 lock.acquire()
                 grpName = "comp_{}/".format(taskID)
-                errName = pname = fname.rstrip(".h5") + ".failed"
-                err = "Could not write to %s. File potentially corrupted. "
-                if os.path.isfile(errName):
-                    log.error(err, fname)
-                    lock.release()
-                    raise IOError(err%fname)
 
             if not isinstance(result, (list, tuple)):
                 result = [result]

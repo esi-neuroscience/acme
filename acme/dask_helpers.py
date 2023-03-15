@@ -183,7 +183,7 @@ def esi_cluster_setup(partition="8GBXS",
 
     # Use default by-worker process count or extract it from anonymous keyword args (if provided)
     processes_per_worker = kwargs.pop("processes_per_worker", 1)
-    log.debug("%s Set `processes_per_worker` to %d", funcName, processes_per_worker)
+    log.debug("%s Found `sinfo`, set `processes_per_worker` to %d", funcName, processes_per_worker)
 
     # If partition is "auto" use `mem_per_worker` to pick pseudo-optimal partition
     # Note: the `np.where` gymnastic below is necessary since `argmin` refuses
@@ -246,7 +246,7 @@ def esi_cluster_setup(partition="8GBXS",
         log.debug("%s Setting `--output=%s`", funcName, out_files)
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
-    log.debug("%s Done parsing inputs, relaying control to `slurm_cluster_setup`", funcName)
+    log.debug("%s Calling `slurm_cluster_setup`", funcName)
     return slurm_cluster_setup(partition, n_cores, n_workers, processes_per_worker, mem_per_worker,
                                n_workers_startup, timeout, interactive, interactive_wait,
                                start_client, job_extra, invalid_partitions=["DEV", "PPC"], **kwargs)
@@ -508,7 +508,7 @@ def slurm_cluster_setup(partition="partition_name",
     log.debug("%s Using `local_directory = %s`", funcName, slurm_wdir)
 
     # Create `SLURMCluster` object using provided parameters
-    log.debug("%s Invoking dask_jobqueue's `SLURMCluster`", funcName)
+    log.debug("%s Instantiating `SLURMCluster` object", funcName)
     cluster = SLURMCluster(cores=n_cores,
                            memory=mem_per_worker,
                            processes=processes_per_worker,
@@ -544,9 +544,7 @@ def slurm_cluster_setup(partition="partition_name",
 
     # If client was requested, return that instead of the created cluster
     if start_client:
-        log.debug("%s Returning dask client", funcName)
         return Client(cluster)
-    log.debug("%s Returning dask cluster", funcName)
     return cluster
 
 
@@ -772,9 +770,7 @@ def local_cluster_setup(n_workers=None,
     msg = "%s Local parallel computing client ready, dashboard accessible at %s"
     log.info(msg, funcName, client.cluster.dashboard_link)
     if start_client:
-        log.debug("%s Returning dask client", funcName)
         return client
-    log.debug("%s Returning dask cluster", funcName)
     return client.cluster
 
 
@@ -833,9 +829,7 @@ def cluster_cleanup(client=None):
 
     # If connection was successful, first close the client, then the cluster
     client.close()
-    log.debug("%s Closed client", funcName)
     client.cluster.close()
-    log.debug("%s Closed associated cluster", funcName)
 
     # Communicate what just happened and get outta here
     msg = "%s Successfully shut down %s containing %d workers"

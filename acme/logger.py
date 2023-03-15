@@ -99,7 +99,7 @@ def prepare_log(caller=None, logfile=False, func=None, verbose=None):
     # as to a provided text file `logfile using a `FileHandler`.
     # Note: at import time (when logger is initially set up) no `logfile`
     # specification is provided, so `fileHandler`` can only be set up upon
-    # successive calls
+    # successive calls to `prepare_log`
     if len(log.handlers) == 0:
         initialRun = True
         stdoutHandler = logging.StreamHandler()

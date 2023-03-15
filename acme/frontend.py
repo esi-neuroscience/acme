@@ -351,7 +351,7 @@ class ParallelMap(object):
                 args[k] = arg
             acs.callCount = 0
             argsize = sizeOf(arg, "positional arguments")
-            self.log.debug("%s Computed size of %s as %4.2f bytes", self.objName, str(arg), argsize)
+            self.log.debug("%s Computed size of pos arg #%d as %4.2f bytes", self.objName, k, argsize)
             if argsize > self._maxArgSize:
                 self.log.warning(wrnMsg, argsize, self._maxArgSize)
             if isinstance(arg, (list, tuple)):
@@ -455,7 +455,7 @@ class ParallelMap(object):
         """
         self.log.debug("%s Invoking `cleanup` method", self.objName)
         if hasattr(self, "daemon"):
-            self.daemon.cleanup
+            self.daemon.cleanup()
 
     def __enter__(self):
         """

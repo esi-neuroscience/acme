@@ -108,7 +108,6 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
     # Get name of calling method/function
     log = logging.getLogger("ACME")
     funcName = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
-    log.debug("%s Parsing `%s`", funcName, varname)
 
     # Make sure `var` is a scalar-like number
     msg = "%s `%s` has to be %s between %s and %s, not %s"
@@ -133,7 +132,6 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
         msg = "%s `%s` has to be a scalar, not %s"
         raise TypeError(msg%(funcName, varname, str(type(var))))
 
-    log.debug("%s Successfully parsed `%s`", funcName, varname)
     return
 
 

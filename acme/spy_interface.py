@@ -17,6 +17,4 @@ if "syncopy" in sys.modules:
         spy.shared.parsers.scalar_parser(var, varname=varname, ntype=ntype, lims=lims)
 else:
     from .shared import _scalar_parser as scalar_parser
-    # from .logger import prepare_log
-    # log = prepare_log("ACME")
     log = logging.getLogger("ACME")
