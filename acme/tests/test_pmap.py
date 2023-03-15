@@ -25,7 +25,6 @@ from scipy import signal
 
 # Import main actors here
 from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
-from acme.dask_helpers import customIOError
 from conftest import skip_if_not_linux, useSLURM, onESI, defaultQ
 
 # Functions that act as stand-ins for user-funcs
@@ -1046,7 +1045,7 @@ class TestParallelMap():
 
             # Wait for ACME to start up (as soon as logging info is shown, `pmap.compute()` is running)
             # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
-            logStr = "<ParallelMap> INFO: Log information available at"
+            logStr = "This is ACME"
             buffer = bytearray()
             timeout = 30
             t0 = time.time()
@@ -1289,7 +1288,7 @@ class TestParallelMap():
         else:
 
             # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_worker!
-            with pytest.raises(customIOError):
+            with pytest.raises(IOError):
                 esi_cluster_setup(partition="auto", mem_per_worker="invalid")
 
             # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`

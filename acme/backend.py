@@ -393,9 +393,6 @@ class ACMEdaemon(object):
             self.log.debug("%s Not wrapping user-provided function but invoking it directly",
                            self.objName)
 
-        # Finally, attach verbosity flag to correctly set up logger for worker funcs
-        self.kwargv["logLevel"] = [self.log.level]
-
         return
 
     def setup_output(self,
@@ -532,6 +529,10 @@ class ACMEdaemon(object):
         self.acme_func = self.func_wrapper
         self.log.debug("%s Wrapping user-provided function inside func_wrapper",
                        self.objName)
+
+        # Finally, attach verbosity flag to enable logging inside wrapper
+        self.kwargv["logLevel"] = [self.log.level]
+
         return
 
     def perform_dryrun(self, setup_interactive):

@@ -9,7 +9,6 @@ import getpass
 import numpy as np
 
 # Import main actors here
-from acme.dask_helpers import customIOError
 from acme import cluster_cleanup, esi_cluster_setup, slurm_cluster_setup, local_cluster_setup
 from conftest import useSLURM, onESI, defaultQ
 
@@ -91,7 +90,7 @@ def test_cluster_setup():
     else:
 
         # Trigger an exception by invoking `slurm_cluster_setup`` on non-SLURM node
-        with pytest.raises(customIOError) as err:
+        with pytest.raises(IOError) as err:
             slurm_cluster_setup()
             assert "Cannot access SLURM queuing system" in str(err)
 
