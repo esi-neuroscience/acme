@@ -141,7 +141,7 @@ def esi_cluster_setup(partition="8GBXS",
     try:
         client = get_client()
         log.debug("%s Found existing client", funcName)
-        if count_online_workers(client) == 0:
+        if count_online_workers(client.cluster) == 0:
             log.debug("%s No active workers detected in %s", funcName, str(client))
             cluster_cleanup(client)
         else:
@@ -202,8 +202,8 @@ def esi_cluster_setup(partition="8GBXS",
         memDiff = np.abs(gbQueues - memEstimate)
         queueIdx = np.where(memDiff == memDiff.min())[0][-1]
         partition = "{}GBXS".format(gbQueues[queueIdx])
-        log.info("%s Picked partition %s based on estimated \
-                 memory consumption of %d GB", funcName, partition, memEstimate)
+        msg = "%s Picked partition %s based on estimated memory consumption of %d GB"
+        log.info(msg, funcName, partition, memEstimate)
 
     # Extract by-worker CPU core count from anonymous keyword args or...
     if kwargs.get("n_cores") is not None:
@@ -521,9 +521,9 @@ def slurm_cluster_setup(partition="partition_name",
 
     # Compute total no. of workers and up-scale cluster accordingly
     if n_workers_startup < n_workers:
-        msg = "%s Requested worker-count %d exceeds `n_workers_startup`: %d" +\
+        msg = "%s Requested worker-count %d exceeds `n_workers_startup = %d`, " +\
             "waiting for %d workers to come online"
-        log.debug(msg, funcName, n_workers_startup, n_workers_startup)
+        log.debug(msg, funcName, n_workers, n_workers_startup, n_workers_startup)
     cluster.scale(n_workers)
 
     # Fire up waiting routine to avoid returning an undercooked cluster

@@ -1045,7 +1045,7 @@ class TestParallelMap():
 
             # Wait for ACME to start up (as soon as logging info is shown, `pmap.compute()` is running)
             # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
-            logStr = "This is ACME"
+            logStr = "<ACMEdaemon> Preparing 2 parallel calls"
             buffer = bytearray()
             timeout = 30
             t0 = time.time()
