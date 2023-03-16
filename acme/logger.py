@@ -164,7 +164,7 @@ class AcmeFormatter(logging.Formatter):
         fmtWarn = fmtLvl[0] + self.bold + self.magenta + \
             "! " + fmtLvl[1] + " !" + self.reset + fmtLvl[2]
         fmtError = fmtLvl[0] + self.bold + self.red + \
-            "> " + fmtLvl[1] + " <" + self.reset + self.red + fmtLvl[2] + self.reset
+            "| " + fmtLvl[1] + " |" + self.reset + self.red + fmtLvl[2] + self.reset
 
         self.FORMATS = {
             logging.DEBUG: "".join(fmtDebug),
