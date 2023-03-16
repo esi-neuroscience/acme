@@ -5,9 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 ### NEW
 ### CHANGED
+- Overhauled ACME's logging facilities: many print messages have been
+  marked `"DEBUG"` to make ACME's default output less "noisy". To this
+  effect the Python `logging` module is now used more extensively than
+  before
+- Reworked ACME's SyNCoPy interface: a dedicated module `spy_interface.py`
+  is now managing ACME's I/O direction if ACME is called by SyNCoPy. This
+  allows for (much) cleaner exception handling in ACME's cluster helpers
+  (`esi_cluster_setup`, `cluster_cleanup` etc.) which ultimately permits
+  extending ACME to diverse HPC infrastructure
+
 ### REMOVED
 ### DEPRECATED
 ### FIXED
+- Prevented ACME from accidentally using a dysfunctional client (e.g., a
+  SLURM client with workers whose jobs have been externally cancelled).
+  Thanks to @KatharineShapcott, cf #47
 
 ## [2022.12] - 2022-12-15
 Bugfix release.
