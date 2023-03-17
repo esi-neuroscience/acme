@@ -1,3 +1,6 @@
+/* Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience in Cooperation with Max Planck Society
+
+SPDX-License-Identifier: CC0-1.0 */
 
 a.reference.internal {
     color: #25565E !important;
@@ -8,4 +11,8 @@ a.reference.external{
 
 p.rubric {
     font-size: 16px;
+}
+
+p {
+    font-size: 1.1em
 }

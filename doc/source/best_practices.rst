@@ -1,3 +1,7 @@
+.. Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience in Cooperation with Max Planck Society
+
+.. SPDX-License-Identifier: BSD-3-Clause
+
 Best Practices
 ==============
 Using ACME inside a Python script requires some precautions. Please follow this
@@ -17,7 +21,6 @@ inside a ``__main__`` block. Thus, if your script looks like this
 
 .. code-block:: python
 
-    # -*- coding: utf-8 -*-
     # Do something, then otherthing
 
     import package1
@@ -45,7 +48,6 @@ intended to be executed *just once*:
 
 .. code-block:: python
 
-    # -*- coding: utf-8 -*-
     # Do something, then otherthing
 
     import package1
@@ -85,7 +87,6 @@ single script
 
 .. code-block:: python
 
-    # -*- coding: utf-8 -*-
     # My processing script
 
     import numpy as np
@@ -107,7 +108,6 @@ split up the definition of `func` and its ACME parallelization:
 
 .. code-block:: python
 
-    # -*- coding: utf-8 -*-
     # My processing function
 
     import numpy as np
@@ -119,7 +119,6 @@ split up the definition of `func` and its ACME parallelization:
 
 .. code-block:: python
 
-    # -*- coding: utf-8 -*-
     # My ACME script for func
 
     import numpy as np
@@ -147,7 +146,6 @@ routines, they can all be migrated to ``my_func.py``. For instance:
 
 .. code-block:: python
 
-    # -*- coding: utf-8 -*-
     # My processing function
 
     import numpy as np

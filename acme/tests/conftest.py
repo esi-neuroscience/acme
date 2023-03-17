@@ -1,6 +1,9 @@
-# -*- coding: utf-8 -*-
 #
 # Central pytest configuration
+#
+# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: BSD-3-Clause
 #
 
 # Builtin/3rd party package imports

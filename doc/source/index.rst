@@ -3,6 +3,10 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+.. Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience in Cooperation with Max Planck Society
+
+.. SPDX-License-Identifier: BSD-3-Clause
+
 .. title:: ACME Documentation
 
 .. image:: https://raw.githubusercontent.com/esi-neuroscience/acme/master/doc/source/_static/acme_logo.png

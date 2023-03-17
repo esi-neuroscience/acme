@@ -1,4 +1,9 @@
+#
 # Minimal makefile for Sphinx documentation
+#
+# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: BSD-3-Clause
 #
 
 # You can set these variables from the command line, and also

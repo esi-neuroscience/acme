@@ -1,3 +1,7 @@
+.. Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience in Cooperation with Max Planck Society
+
+.. SPDX-License-Identifier: BSD-3-Clause
+
 User Guide
 ==========
 Learn how to get the most out of ACME for your own work by running through a

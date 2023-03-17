@@ -1,6 +1,11 @@
-# .readthedocs.yml
+#
+# Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: CC0-1.0
+#
 # Read the Docs configuration file
 # See https://docs.readthedocs.io/en/stable/config-file/v2.html for details
+#
 
 # Required
 version: 2

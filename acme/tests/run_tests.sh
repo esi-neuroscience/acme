@@ -1,4 +1,9 @@
 #!/bin/bash
+
+# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 # Some quick shortcuts to quickly test ACME's proper functionality
 
 # First and foremost, check if `srun` is available
