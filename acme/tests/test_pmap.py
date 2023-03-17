@@ -25,7 +25,6 @@ from scipy import signal
 
 # Import main actors here
 from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
-from acme.dask_helpers import customIOError
 from conftest import skip_if_not_linux, useSLURM, onESI, defaultQ
 
 # Functions that act as stand-ins for user-funcs
@@ -1046,7 +1045,7 @@ class TestParallelMap():
 
             # Wait for ACME to start up (as soon as logging info is shown, `pmap.compute()` is running)
             # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
-            logStr = "<ParallelMap> INFO: Log information available at"
+            logStr = "<ACMEdaemon> Preparing 2 parallel calls"
             buffer = bytearray()
             timeout = 30
             t0 = time.time()
@@ -1064,7 +1063,7 @@ class TestParallelMap():
             time.sleep(1)
             out = proc.stdout.read().decode()
             assert "ALL DONE" not in out
-            assert "INFO: <cluster_cleanup> Successfully shut down" in out
+            assert "<cluster_cleanup> Successfully shut down" in out
 
         # Almost identical script, this time use an externally started client
         scriptName = os.path.join(tempDir, "dummy2.py")
@@ -1076,7 +1075,7 @@ class TestParallelMap():
             "   return\n" +\
             "if __name__ == '__main__':\n" +\
             "   client = esi_cluster_setup(partition='8GBDEV',n_workers=1, interactive=False)\n" +\
-            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False) as pmap: \n" +\
+            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False, verbose=True) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
         with open(scriptName, "w") as f:
@@ -1087,7 +1086,7 @@ class TestParallelMap():
             proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
                                     shell=True, start_new_session=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
-            logStr = "<ParallelMap> INFO: Log information available at"
+            logStr = "This is ACME"
             buffer = bytearray()
             timeout = 60
             t0 = time.time()
@@ -1101,7 +1100,7 @@ class TestParallelMap():
             time.sleep(2)
             out = proc.stdout.read().decode()
             assert "ALL DONE" not in out
-            assert "<ParallelMap> INFO: <ACME> CTRL + C acknowledged, client and workers successfully killed" in out
+            assert "CTRL + C acknowledged, client and workers successfully killed" in out
 
         # Ensure random exception does not immediately kill an active client
         scriptName = os.path.join(tempDir, "dummy3.py")
@@ -1155,7 +1154,7 @@ class TestParallelMap():
         # Create tmp directory for logfile
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
         os.makedirs(tempDir, exist_ok=True)
-        customLog = os.path.join(tempDir, "acme_log.txt")
+        customLog = os.path.join(tempDir, "mem_log.txt")
         outDirs = []
 
         # Set `arrsize` depending on available runner hardware and prepare expected
@@ -1289,7 +1288,7 @@ class TestParallelMap():
         else:
 
             # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_worker!
-            with pytest.raises(customIOError):
+            with pytest.raises(IOError):
                 esi_cluster_setup(partition="auto", mem_per_worker="invalid")
 
             # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`

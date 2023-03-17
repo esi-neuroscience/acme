@@ -10,15 +10,14 @@ import socket
 import subprocess
 import inspect
 import logging
-import warnings
-import datetime
+import traceback
 import multiprocessing
 import time
 import numpy as np
 import dask.distributed as dd
 from tqdm import tqdm
 
-# from .dask_helpers import cluster_cleanup
+# Local imports
 from acme import __version__
 from . import dask_helpers as dh
 
@@ -53,12 +52,14 @@ def sizeOf(obj, varname):
     # Keep track of the no. of recursive calls
     global callCount
 
+    # For later reference: dynamically fetch name of current function
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+
     # Protect against circular object references
     callCount += 1
     if callCount >= callMax:
-        msgName = sys._getframe().f_back.f_code.co_name
-        msg = "{} maximum recursion depth {} exceeded when processing {}"
-        raise RecursionError(msg.format(msgName, callMax, varname))
+        msg = "%s maximum recursion depth %s exceeded while processing %s"
+        raise RecursionError(msg%(funcName, callMax, varname))
 
     # Use `sys.getsizeof` to estimate memory consumption of primitive objects
     objsize = sys.getsizeof(obj) / 1024**2
@@ -75,7 +76,12 @@ def is_slurm_node():
     otherwise
     """
 
+    # Fetch ACME logger and set up caller's name
+    log = logging.getLogger("ACME")
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+
     # Simply test if the srun command is available
+    log.debug("%s Test if `sinfo` is available", funcName)
     out, _ = subprocess.Popen("sinfo --version",
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               text=True, shell=True).communicate()
@@ -86,6 +92,11 @@ def is_esi_node():
     """
     Returns `True` if code is running on an ESI cluster node, `False` otherwise
     """
+
+    # Fetch ACME logger, set up caller's name and write debug message
+    log = logging.getLogger("ACME")
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+    log.debug("%s Test if hostname matches the pattern 'esi-sv*'", funcName)
     return socket.gethostname().startswith("esi-sv") and os.path.isdir("/cs")
 
 
@@ -95,10 +106,11 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
     """
 
     # Get name of calling method/function
-    caller = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
+    log = logging.getLogger("ACME")
+    funcName = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
 
     # Make sure `var` is a scalar-like number
-    msg = "{caller:s} `{varname:s}` has to be {scalartype:s} between {lower:s} and {upper:s}, not {var:s}"
+    msg = "%s `%s` has to be %s between %s and %s, not %s"
     if np.issubdtype(type(var), np.number):
         error = False
         if ntype == "int_like":
@@ -110,15 +122,15 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
         if var < lims[0] or var > lims[1]:
             error = True
         if error:
-            raise ValueError(msg.format(caller=caller,
-                                        varname=varname,
-                                        scalartype=scalartype,
-                                        lower=str(lims[0]),
-                                        upper=str(lims[1]),
-                                        var=str(var)))
+            raise ValueError(msg%(funcName,
+                                  varname,
+                                  scalartype,
+                                  str(lims[0]),
+                                  str(lims[1]),
+                                  str(var)))
     else:
-        msg = "{caller:s} `{varname:s}` has to be a scalar, not {var:s}"
-        raise TypeError(msg.format(caller=caller, varname=varname, var=str(var)))
+        msg = "%s `%s` has to be a scalar, not %s"
+        raise TypeError(msg%(funcName, varname, str(type(var))))
 
     return
 
@@ -217,106 +229,6 @@ def _queuing_input(procQueue, stdin_fd, query, valid, default):
     procQueue.put(_get_user_input(query, valid, default))
 
 
-def prepare_log(func, caller=None, logfile=False, verbose=None):
-    """
-    Convenience function to set up ACME logger
-
-    Parameters
-    ----------
-    func : callable
-        User-provided function to be called concurrently by ACME
-    caller : None or str
-        Routine/class that initiated logging (presumable :class:~`acme.ParallelMap`
-        or :class:~`acme.ACMEDaemon`)
-    logfile : None or bool or str
-        If `True` an auto-generated log-file is set up. If `logfile` is a string
-        it is interpreted as file-name for a new log-file (must not exist). If
-        `False` or `None` logging information is streamed to stdout only.
-    verbose : bool or None
-        If `None`, the logging-level only contains messages of `'INFO'` priority and
-        higher (`'WARNING'` and `'ERROR'`). If `verbose` is `True`, logging is
-        performed on ``DEBUG`', `'INFO`', `'WARNING'` and `'ERROR'` levels. If
-        `verbose` is `False` only `'WARNING'` and `'ERROR'` messages are propagated.
-
-    Returns
-    -------
-    log : logger object
-        A Python :class:`logging.Logger` instance
-    """
-
-    # If not provided, get name of calling method/function
-    if caller is None:
-        caller = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
-    elif not isinstance(caller, str):
-        msg = "{} `caller` has to be a string, not {}"
-        raise TypeError(msg.format(inspect.currentframe().f_back.f_code.co_name),
-                        str(caller))
-
-    # Basal sanity check for Boolean flag
-    if verbose is not None and not isinstance(verbose, bool):
-        msg = "{} `verbose` has to be `True`, `False` or `None`, not {}"
-        raise TypeError(msg.format(caller, str(verbose)))
-
-    # Either parse provided `logfile` or set up an auto-generated file
-    msg = "{} `logfile` has to be `None`, `True`, `False` or a valid file-name, not {}"
-    if logfile is None or isinstance(logfile, bool):
-        if logfile is True:
-            logfile = os.path.dirname(os.path.abspath(inspect.getfile(func)))
-            logfile = os.path.join(logfile, "ACME_{func:s}_{date:s}.log")
-            logfile = logfile.format(func=func.__name__,
-                                     date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
-        else:
-            logfile = None
-    elif isinstance(logfile, str):
-        if os.path.isdir(logfile):
-            raise IOError(msg.format(caller, "a directory"))
-        logfile = os.path.abspath(os.path.expanduser(logfile))
-    else:
-        raise TypeError(msg.format(caller, str(logfile)))
-    if logfile is not None and os.path.isfile(logfile):
-        msg = "{} log-file {} already exists, appending to it"
-        warnings.showwarning(msg.format(caller, logfile), RuntimeWarning,
-                             __file__, inspect.currentframe().f_lineno)
-
-    # Set logging verbosity based on `verbose` flag
-    if verbose is None:
-        loglevel = logging.INFO
-    elif verbose is True:
-        loglevel = logging.DEBUG
-    else:
-        loglevel = logging.WARNING
-    log = logging.getLogger(caller)
-    log.setLevel(loglevel)
-
-    # Create logging formatter
-    formatter = logging.Formatter("%(name)s %(levelname)s: %(message)s")
-
-    # Output handlers: print log messages to `stderr` via `StreamHandler` as well
-    # as to a provided text file `logfile using a `FileHandler`.
-    # Note: avoid adding the same log-file location as distinct handlers to the logger
-    # in case `ParallelMap` is executed repeatedly; also remove existing non-default
-    # logfile handlers to avoid generating multiple logs (and accidental writes to existing logs)
-    if len(log.handlers) == 0:
-        stdoutHandler = logging.StreamHandler()
-        stdoutHandler.setLevel(loglevel)
-        stdoutHandler.setFormatter(formatter)
-        log.addHandler(stdoutHandler)
-    if logfile is not None:
-        fHandlers = [h for h in log.handlers if isinstance(h, logging.FileHandler)]
-        for handler in fHandlers:
-            if handler.baseFilename == logfile:
-                break
-            else:
-                log.handlers.remove(handler)
-        fileHandler = logging.FileHandler(logfile)
-        fileHandler.setLevel(loglevel)
-        fileHandler.setFormatter(formatter)
-        log.addHandler(fileHandler)
-
-    # Start log w/version info
-    log.info("This is ACME v. %s", __version__)
-
-    return log
 
 
 def ctrlc_catcher(*excargs, **exckwargs):
@@ -341,7 +253,7 @@ def ctrlc_catcher(*excargs, **exckwargs):
             isipy = False
 
     # Prepare to log any uncaught exceptions
-    print, _ = dh._logging_setup()
+    log = logging.getLogger("ACME")
 
     # The only exception we really care about is a `KeyboardInterrupt`: if CTRL + C
     # is pressed, ensure graceful shutdown of any parallel processing clients
@@ -355,14 +267,23 @@ def ctrlc_catcher(*excargs, **exckwargs):
                 st.cancel()
             client.futures.clear()
             dh.cluster_cleanup(client)
-            print("<ACME> CTRL + C acknowledged, client and workers successfully killed")
-
-    # Log/print exception
-    print("<ACME> Exception received: {}: {}".format(str(etype), str(evalue)))
+            log.debug("CTRL + C acknowledged, client and workers successfully killed")
 
     # Relay exception handling back to appropriate system tools
     if isipy:
         shell.ipyTBshower(shell, exc_tuple=(etype, evalue, etb), **exckwargs)
     else:
         sys.__excepthook__(etype, evalue, etb)
+
+    # Write to all logging locations, manually print traceback to file (stdout
+    # printing was handled above)
+    log.error("Exception received.")
+    fHandlers = [h for h in log.handlers if isinstance(h, logging.FileHandler)]
+    for handler in fHandlers:
+        handler.acquire()
+        with open(handler.baseFilename, "a") as logfile:
+            logfile.write("".join(traceback.format_exception_only(etype, evalue)))
+            logfile.write("".join(traceback.format_tb(etb)))
+        handler.release()
+
     return
