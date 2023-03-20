@@ -87,6 +87,10 @@ exclude_patterns = []
 
 # -- Options for HTML output -------------------------------------------------
 
+# Custom sidebar templates, maps document names to template names.
+#html_sidebars = {}
+html_sidebars = {'sidebar': ['localtoc.html', 'sourcelink.html', 'searchbox.html']}
+
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
