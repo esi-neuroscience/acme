@@ -35,11 +35,11 @@ Please attach the generated logfile to this issue.
 **System Profile:**
 Please tell us a little bit about your computational working environment:
 
-- Are you using ACME locally or on HPC cluster hardware?
-  If your code is running on a cluster:
-  - which scheduling manager are you using (SLURM, PBS, etc.)?
-  - what architecture/OS version is your code running on (x86, ARM, etc.)?
-    On Linux, please simply paste the output of the command `uname -a` here:
+Are you using ACME locally or on HPC cluster hardware?
+If your code is running on a cluster:
+- which scheduling manager are you using (SLURM, PBS, etc.)?
+- what architecture/OS version is your code running on (x86, ARM, etc.)?
+  On Linux, please simply paste the output of the command `uname -a` here:
 
 **Additional Information**
 Anything else you feel might be important.

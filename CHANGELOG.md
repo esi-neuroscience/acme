@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 ### NEW
+- Created templates for filing issues and opening Pull Requests for ACME
+  on GitHub.
+
 ### CHANGED
 - Overhauled ACME's logging facilities: many print messages have been
   marked `"DEBUG"` to make ACME's default output less "noisy". To this
