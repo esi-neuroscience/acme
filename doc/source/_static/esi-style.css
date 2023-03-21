@@ -2,17 +2,60 @@
 
 SPDX-License-Identifier: CC0-1.0 */
 
-a.reference.internal {
-    color: #25565E !important;
-}
-a.reference.external{
-    color:#3572b0;
+/* Set general link colors ("Back To Top" etc.) */
+a {
+	color: #0c7869;
 }
 
-p.rubric {
-    font-size: 16px;
+/* Styling of hyperlinks */
+a.reference {
+    border-bottom: 1px dotted #0c7869;
+    color: #0c7869;
+    font-size: 1.1em;
 }
 
-p {
-    font-size: 1.1em
+/* Change color of links on hover */
+a:hover {
+    color: #084d43;
+    text-decoration: none;
+}
+
+/* Use same color for toc-links as for hyperlinks */
+a.toc-backref {
+    color: #0c7869;
+}
+
+/* Override font-size in dropdown menus */
+.dropdown-menu li a {
+    font-size: 1.3em !important;
+    border-bottom: none;
+}
+
+/* Font-size in code blocks */
+pre {
+	font-size: 1em;
+}
+
+/* Background colors in function headers of API docs */
+dt:target {
+    background-color: #0c786a2d;
+}
+
+/* Layout of "Note" admonitions */
+.alert-info {
+	color: #ffffff;
+    background-color: #0c786a62;
+	border-color: #0c7869;
+    font-weight: 500;
+}
+
+/* Tweak size of logo in navbar */
+.navbar-brand img {
+    height: 180%;
+    margin-top: -0.4em;
+}
+
+/* Global font-size  */
+body {
+    font-size: 1.7em;
 }
