@@ -5,6 +5,11 @@ title: ''
 labels: 'enhancement'
 assignees: ''
 ---
+<!--
+Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+in Cooperation with Max Planck Society
+SPDX-License-Identifier: CC-BY-NC-SA-1.0
+-->
 
 **Please provide a short description of the feature you'd like to see in ACME**
 Feel free to elaborate as much as you want. If possible it would be great

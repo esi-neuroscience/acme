@@ -1,7 +1,8 @@
 #
 # ACME's logging facilities
 #
-# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience in Cooperation with Max Planck Society
+# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# in Cooperation with Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #

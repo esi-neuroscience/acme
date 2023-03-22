@@ -5,6 +5,11 @@ title: ''
 labels: 'bug'
 assignees: ''
 ---
+<!--
+Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+in Cooperation with Max Planck Society
+SPDX-License-Identifier: CC-BY-NC-SA-1.0
+-->
 
 Thank you for taking the time to report an issue! We know that writing
 detailed error reports takes effort, and we appreciate you taking the time.

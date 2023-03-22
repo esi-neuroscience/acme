@@ -1,6 +1,8 @@
-<!-- Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience in Cooperation with Max Planck Society
-
- SPDX-License-Identifier: CC0-1.0 -->
+<!--
+Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+in Cooperation with Max Planck Society
+SPDX-License-Identifier: CC-BY-NC-SA-1.0
+-->
 
 ![ACME_logo](https://raw.githubusercontent.com/esi-neuroscience/acme/master/doc/source/_static/acme_logo.png)
 
