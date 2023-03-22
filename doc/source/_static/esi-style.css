@@ -13,7 +13,7 @@ a {
 a.reference {
     border-bottom: 1px dotted #0c7869;
     color: #0c7869;
-    font-size: 1.1em;
+    /* font-size: 1.1em; */
 }
 
 /* Change color of links on hover */
@@ -55,6 +55,20 @@ dt:target {
 .navbar-brand img {
     height: 180%;
     margin-top: -0.4em;
+}
+
+/* Sphinx Tab configuration */
+.sphinx-tabs-tab {
+	color: #0c7869 !important;
+	font-size: 1em;
+}
+
+.sphinx-tabs-panel {
+	width: 60%;
+}
+
+[role="tablist"] {
+	width: 60%;
 }
 
 /* Global font-size  */

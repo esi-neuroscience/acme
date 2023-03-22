@@ -44,7 +44,8 @@ To install the latest development version of ACME in a fresh conda environment
     conda env create -f acme.yml
     pip install -e .
 
-(note the dot "." at the end of the ``pip install`` command).
+(note the dot "." at the end of the ``pip install`` command). More details
+are provided in :doc:`Contributing to ACME <contributing>`.
 
 Using ACME
 ----------

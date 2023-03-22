@@ -50,6 +50,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.inheritance_diagram',
     'sphinx_automodapi.automodapi',
+    'sphinx_tabs.tabs',
 ]
 
 autodoc_default_options = {
