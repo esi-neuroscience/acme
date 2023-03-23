@@ -12,17 +12,21 @@ Installing ACME
 For Users
 ^^^^^^^^^
 
-ACME can be installed using `pip <https://pypi.org/project/pip/>`_:
+ACME can be installed using ``pip`` or ``conda``:
 
-.. code-block:: bash
+.. tabs::
 
-    pip install esi-acme
+    .. tab:: conda
 
-or via `conda <https://www.anaconda.com/products/individual>`_
+        .. code-block:: shell
 
-.. code-block:: bash
+            conda install -c conda-forge esi-acme
 
-    conda install -c conda-forge esi-acme
+    .. tab:: pip
+
+        .. code-block:: shell
+
+            pip install esi-acme
 
 ACME is the parallelization engine of `Syncopy <https://pypi.org/project/esi-syncopy/>`_.
 If you're working on the ESI HPC cluster installing ACME and/or SyNCoPy is only necessary if
