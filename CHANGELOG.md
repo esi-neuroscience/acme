@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### NEW
 - Created templates for filing issues and opening Pull Requests for ACME
   on GitHub.
+- Enabled private security reporting in ACME's GitHub repository and
+  added a security policy for ACME (in compliance with the OpenSSF Best
+  Practices Badge)
 
 ### CHANGED
 - Overhauled ACME's logging facilities: many print messages have been
