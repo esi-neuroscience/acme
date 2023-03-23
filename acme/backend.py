@@ -857,13 +857,13 @@ class ACMEdaemon(object):
         self.log.debug("%s Found %d workers in client %s", self.objName,
                        count_online_workers(self.client.cluster), str(self.client))
 
-        # Dask does not correctly forward the `sys.path` from the parent process
-        # to its workers. Fix this.
-        def init_acme(dask_worker, syspath):
-            sys.path = list(syspath)
-        self.client.register_worker_callbacks(setup=functools.partial(init_acme, syspath=sys.path))
-        self.log.debug("%s Registered worker callback to forward `sys.path`",
-                       self.objName)
+        # # Dask does not correctly forward the `sys.path` from the parent process
+        # # to its workers. Fix this.
+        # def init_acme(dask_worker, syspath):
+        #     sys.path = list(syspath)
+        # self.client.register_worker_callbacks(setup=functools.partial(init_acme, syspath=sys.path))
+        # self.log.debug("%s Registered worker callback to forward `sys.path`",
+        #                self.objName)
 
         # Format positional arguments for worker-distribution: broadcast all
         # inputs that are used by all workers and create a list of references
