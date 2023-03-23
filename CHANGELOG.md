@@ -23,6 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   allows for (much) cleaner exception handling in ACME's cluster helpers
   (`esi_cluster_setup`, `cluster_cleanup` etc.) which ultimately permits
   a more streamlined extension of ACME to more HPC infrastructure.
+- Redesigned ACME's online documentation: increased the font-size to enhance
+  readability, included a contribution guide and reworked the overall page
+  navigation + visual layout.
 
 ### REMOVED
 ### DEPRECATED
