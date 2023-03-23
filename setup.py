@@ -24,7 +24,7 @@ envFile = "acme.yml"
 setupOpts = read_configuration("setup.cfg")["options"]
 tomlPkgs = toml.load("pyproject.toml")["build-system"]["requires"]
 allPkgs = setupOpts["install_requires"] + setupOpts["extras_require"]["dev"] + tomlPkgs
-pipPkgs = ["dask-jobqueue", "sphinx_automodapi"]
+pipPkgs = ["sphinx_automodapi"]
 for k in range(len(pipPkgs)):
     pkg = pipPkgs[k]
     pipPkgs[k] = allPkgs.pop([allPkgs.index(dep) for dep in allPkgs if pkg in dep][0])

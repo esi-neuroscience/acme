@@ -28,4 +28,4 @@ dependencies:
 - pip
 - pip:
   - sphinx_automodapi
-name: acme-test-py11
+name: acme
