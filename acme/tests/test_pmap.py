@@ -365,9 +365,10 @@ class TestParallelMap():
         # Bonus: leave computing client alive and vet default SLURM settings
         if testclient is None:
             cluster_cleanup(pmap.client)
-        for handler in pmap.log.handlers:
+        log = logging.getLogger("ACME")
+        for handler in log.handlers:
             if isinstance(handler, logging.FileHandler):
-                pmap.log.handlers.remove(handler)
+                log.handlers.remove(handler)
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
@@ -377,7 +378,7 @@ class TestParallelMap():
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
-        logFileList = [handler.baseFilename for handler in pmap.log.handlers if isinstance(handler, logging.FileHandler)]
+        logFileList = [handler.baseFilename for handler in log.handlers if isinstance(handler, logging.FileHandler)]
         assert len(logFileList) == 1
         logFile = logFileList[0]
         assert os.path.dirname(os.path.realpath(__file__)) in logFile
@@ -417,7 +418,7 @@ class TestParallelMap():
             assert len(fl.readlines()) > 1
 
         # Ensure only single log file `customLog` is used
-        assert len([h for h in pmap.log.handlers if isinstance(h, logging.FileHandler)]) == 1
+        assert len([h for h in log.handlers if isinstance(h, logging.FileHandler)]) == 1
 
         # Ensure client has been stopped
         if testclient is None:
@@ -1351,7 +1352,8 @@ class TestParallelMap():
         outDirs.append(pmap.out_dir)
 
         # Ensure a deprecation warning was issued
-        for handler in pmap.log.handlers:
+        log = logging.getLogger("ACME")
+        for handler in log.handlers:
             if isinstance(handler, logging.FileHandler):
                 with open(handler.baseFilename, "r") as fl:
                     logTxt = fl.read()

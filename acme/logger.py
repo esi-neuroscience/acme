@@ -137,7 +137,7 @@ def prepare_log(caller=None, logfile=False, func=None, verbose=None):
     if initialRun:
         log.addHandler(stdoutHandler)
 
-    return log
+    return
 
 
 class AcmeFormatter(logging.Formatter):
