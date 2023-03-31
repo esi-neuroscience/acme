@@ -1,6 +1,10 @@
-# -*- coding: utf-8 -*-
 #
 # ACME's logging facilities
+#
+# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: BSD-3-Clause
 #
 
 # Builtin/3rd party package imports
@@ -133,7 +137,7 @@ def prepare_log(caller=None, logfile=False, func=None, verbose=None):
     if initialRun:
         log.addHandler(stdoutHandler)
 
-    return log
+    return
 
 
 class AcmeFormatter(logging.Formatter):

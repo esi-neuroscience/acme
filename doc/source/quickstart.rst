@@ -1,3 +1,8 @@
+.. Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+.. in Cooperation with Max Planck Society
+
+.. SPDX-License-Identifier: CC-BY-NC-SA-1.0
+
 Quickstart
 ==========
 
@@ -7,17 +12,21 @@ Installing ACME
 For Users
 ^^^^^^^^^
 
-ACME can be installed using `pip <https://pypi.org/project/pip/>`_:
+ACME can be installed using ``pip`` or ``conda``:
 
-.. code-block:: bash
+.. tabs::
 
-    pip install esi-acme
+    .. tab:: conda
 
-or via `conda <https://www.anaconda.com/products/individual>`_
+        .. code-block:: shell
 
-.. code-block:: bash
+            conda install -c conda-forge esi-acme
 
-    conda install -c conda-forge esi-acme
+    .. tab:: pip
+
+        .. code-block:: shell
+
+            pip install esi-acme
 
 ACME is the parallelization engine of `Syncopy <https://pypi.org/project/esi-syncopy/>`_.
 If you're working on the ESI HPC cluster installing ACME and/or SyNCoPy is only necessary if
@@ -39,7 +48,8 @@ To install the latest development version of ACME in a fresh conda environment
     conda env create -f acme.yml
     pip install -e .
 
-(note the dot "." at the end of the ``pip install`` command).
+(note the dot "." at the end of the ``pip install`` command). More details
+are provided in :doc:`Contributing to ACME <contributing>`.
 
 Using ACME
 ----------

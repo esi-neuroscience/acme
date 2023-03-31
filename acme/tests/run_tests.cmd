@@ -1,3 +1,10 @@
+::
+:: Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+:: in Cooperation with Max Planck Society
+::
+:: SPDX-License-Identifier: BSD-3-Clause
+::
+
 @echo off
 for %%I in ("%cd%\..\..") do set "PYTHONPATH=%%~fI"
 

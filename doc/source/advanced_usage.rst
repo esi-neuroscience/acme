@@ -1,3 +1,8 @@
+.. Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+.. in Cooperation with Max Planck Society
+
+.. SPDX-License-Identifier: CC-BY-NC-SA-1.0
+
 Advanced Usage and Customization
 ================================
 One of ACME's main objectives is to be as application-agnostic as possible

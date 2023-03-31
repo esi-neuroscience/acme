@@ -1,6 +1,10 @@
-# -*- coding: utf-8 -*-
 #
 # Configuration file for the Sphinx documentation builder.
+#
+# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: BSD-3-Clause
 #
 # This file only contains a selection of the most common options. For a full
 # list see the documentation:
@@ -13,15 +17,15 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 import os
 import sys
+import time
 sys.path.insert(0, os.path.abspath(".." + os.sep + ".." + os.sep))
 import sphinx_bootstrap_theme
 import acme
 
 # -- Project information -----------------------------------------------------
-
-project = 'ACME'
-copyright = '2020, Ernst Strüngmann Institute for Neuroscience in Cooperation with Max Planck Society'
+project = ''
 author = 'Ernst Strüngmann Institute for Neuroscience in Cooperation with Max Planck Society'
+copyright = f'2020-{time.strftime("%Y")}, {author}'
 
 # The short X.Y version
 version = acme.__version__
@@ -46,6 +50,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.inheritance_diagram',
     'sphinx_automodapi.automodapi',
+    'sphinx_tabs.tabs',
 ]
 
 autodoc_default_options = {
@@ -81,35 +86,44 @@ master_doc = 'index'
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
 
-
 # -- Options for HTML output -------------------------------------------------
+
+# Custom sidebar templates, maps document names to template names.
+#html_sidebars = {}
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
 html_theme = 'bootstrap'
 
-html_theme_path = sphinx_bootstrap_theme.get_html_theme_path()
+# Do not display permalink symbol next to headers
+html_permalinks = False
+
+# Path to favicon
+html_favicon = "_static/acme_icon.ico"
+
+# Logo displayed in navbar
+html_logo = "_static/acme_logo.png"
+
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-#
-# html_logo = "_static/syncopy_icon.png"
+html_theme_path = sphinx_bootstrap_theme.get_html_theme_path()
 html_theme_options = {
-    "navbar_title": "ACME",
+    "navbar_title": "",
     "navbar_site_name": "Documentation",
     # Render the next and previous page links in navbar. (Default: true)
-    'navbar_sidebarrel': False,
+    "navbar_sidebarrel": False,
     # Render the current pages TOC in the navbar. (Default: true)
-    'navbar_pagenav': False,
+    "navbar_pagenav": True,
     # Tab name for the current pages TOC. (Default: "Page")
-    'navbar_pagenav_name': "Current Page",
+    "navbar_pagenav_name": "On This Page",
 
     # Global TOC depth for "site" navbar tab. (Default: 1)
     # Switching to -1 shows all levels.
-    'globaltoc_depth': 2,
-    'bootswatch_theme': "lumen",
-    'navbar_links': [
+    "globaltoc_depth": 2,
+    "bootswatch_theme": "lumen",
+    "navbar_links": [
         ("GitHub", "https://www.github.com/esi-neuroscience/acme", True),
     ],
 }
@@ -120,13 +134,13 @@ html_theme_options = {
 html_static_path = ['_static']
 
 # If true, links to the reST sources are added to the pages.
-html_show_sourcelink = True
+html_show_sourcelink = False
 
 # If true, "Created using Sphinx" is shown in the HTML footer. Default is True.
-html_show_sphinx = True
+html_show_sphinx = False
 
 # If true, "(C) Copyright ..." is shown in the HTML footer. Default is True.
-html_show_copyright = False
+html_show_copyright = True
 
 # -- Options for intersphinx extension ---------------------------------------
 

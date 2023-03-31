@@ -1,9 +1,21 @@
+ <!--
+ Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+ in Cooperation with Max Planck Society
+ SPDX-License-Identifier: CC-BY-NC-SA-1.0
+ -->
+
 # Changelog of ACME
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 ### NEW
+- Created templates for filing issues and opening Pull Requests for ACME
+  on GitHub.
+- Enabled private security reporting in ACME's GitHub repository and
+  added a security policy for ACME (in compliance with the OpenSSF Best
+  Practices Badge)
+
 ### CHANGED
 - Overhauled ACME's logging facilities: many print messages have been
   marked `"DEBUG"` to make ACME's default output less "noisy". To this
@@ -14,6 +26,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   allows for (much) cleaner exception handling in ACME's cluster helpers
   (`esi_cluster_setup`, `cluster_cleanup` etc.) which ultimately permits
   a more streamlined extension of ACME to more HPC infrastructure.
+- Redesigned ACME's online documentation: increased the font-size to enhance
+  readability, included a contribution guide and reworked the overall page
+  navigation + visual layout.
 
 ### REMOVED
 ### DEPRECATED
