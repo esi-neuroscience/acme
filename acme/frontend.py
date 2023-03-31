@@ -174,12 +174,15 @@ class ParallelMap(object):
             as well as runtime of worker jobs prior to the actual concurrent
             computation. See [1]_ and [2]_ for more information.
         logfile : None or bool or str
-            If `None` (default) or `False`, all run-time information as well as errors and
-            warnings are printed to the command line only. If `True`, an auto-generated
-            log-file is set up that records run-time progress. Alternatively, the
-            name of a custom log-file can be provided (must not exist). The verbosity
-            of recorded information can be controlled via setting `verbose`.
-            See [2]_ for more details.
+            If `None` (default) and ``write_worker_results = True``,
+            a logfile is created alongside the auto-generated on-disk results.
+            If `None` and ``write_worker_results = False``, no logfile is
+            created. To override this mechanism, either explicitly set
+            `logfile` to `True` or `False` to enforce or suppress logfile
+            creation.
+            Alternatively, the name of a custom log-file can be provided.
+            The verbosity of recorded runtime information can be controlled
+            via setting `verbose`. See [2]_ for more details.
 
         Returns
         -------
@@ -234,8 +237,8 @@ class ParallelMap(object):
         .. [2] https://esi-acme.readthedocs.io/en/latest/advanced_usage.html
         """
 
-        # First and foremost, set up logging system (unless logger is already present)
-        prepare_log(caller="ACME", logfile=logfile, func=func, verbose=verbose)
+        # First and foremost, set up logging system - logfile is processed later
+        prepare_log(logname="ACME", verbose=verbose)
         log.info("\x1b[1mThis is ACME v. %s\x1b[0m", __version__)
 
         # Backwards compatibility: legacy keywords are converted to new nomenclature
@@ -266,7 +269,9 @@ class ParallelMap(object):
                                  mem_per_worker=mem_per_worker,
                                  setup_timeout=setup_timeout,
                                  setup_interactive=setup_interactive,
-                                 stop_client=stop_client)
+                                 stop_client=stop_client,
+                                 verbose=verbose,
+                                 logfile=logfile)
 
     def prepare_input(self, func, n_inputs, *args, **kwargs):
         """

@@ -20,6 +20,7 @@ import time
 import numpy as np
 import dask.distributed as dd
 from tqdm import tqdm
+from logging import handlers
 
 # Local imports
 from acme import __version__
@@ -282,12 +283,12 @@ def ctrlc_catcher(*excargs, **exckwargs):
     # Write to all logging locations, manually print traceback to file (stdout
     # printing was handled above)
     log.error("Exception received.")
-    fHandlers = [h for h in log.handlers if isinstance(h, logging.FileHandler)]
-    for handler in fHandlers:
-        handler.acquire()
-        with open(handler.baseFilename, "a") as logfile:
+    memHandler = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)][0]
+    if memHandler.target is not None:
+        memHandler.acquire()
+        with open(memHandler.target.baseFilename, "a") as logfile:
             logfile.write("".join(traceback.format_exception_only(etype, evalue)))
             logfile.write("".join(traceback.format_tb(etb)))
-        handler.release()
+        memHandler.release()
 
     return

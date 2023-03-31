@@ -59,6 +59,19 @@ errors. The root problem is of course completely unrelated to actual parallel
 execution of `f` but is instead actually caused by using the wrong input type for `x`.
 *Nail It Before You Scale It*.
 
+Once you have ensured that your function works fine in a sequential setting,
+you can try increasing ACME's logging verbosity to get a better understanding
+of what's happening under the hood:
+
+.. code-block:: python
+
+    with ParallelMap(myfunc, ..., logfile=True, verbose=True) as pmap:
+        results = pmap.compute()
+
+If your function works fine, but you think something's wrong with ACME,
+please let us know by opening a bug report in our
+`GitHub Issue Tracker <https://github.com/esi-neuroscience/acme/issues>`_.
+
 FAQ
 ^^^
 

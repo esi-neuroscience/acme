@@ -42,7 +42,7 @@ if __name__ == "__main__":
     # Test stuff within here...
     # pass
 
-    with ParallelMap(arr_test, [np.ones((20,)), 2 * np.ones((20,)), 3 * np.ones((20,))], 4, result_shape=(None, 20), verbose=True, logfile=True, single_file=True) as pmap:
+    with ParallelMap(arr_test, [np.ones((20,)), 2 * np.ones((20,)), 3 * np.ones((20,))], 4, result_shape=(None, 20), verbose=True, single_file=True) as pmap:
         results = pmap.compute()
 
     1/0

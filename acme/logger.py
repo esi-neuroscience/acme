@@ -9,29 +9,25 @@
 
 # Builtin/3rd party package imports
 import warnings
-import datetime
 import inspect
 import logging
 import os
+from logging import handlers
 
 __all__ = []
 
 
-def prepare_log(caller=None, logfile=False, func=None, verbose=None):
+def prepare_log(logname="ACME", logfile=None, verbose=None):
     """
     Convenience function to set up ACME logger
 
     Parameters
     ----------
-    caller : None or str
-        Routine/class that initiated logging (presumable :class:~`acme.ParallelMap`
-        or :class:~`acme.ACMEDaemon`)
-    logfile : None or bool or str
-        If `True` an auto-generated log-file is set up. If `logfile` is a string
-        it is interpreted as file-name for a new log-file (must not exist). If
-        `False` or `None` logging information is streamed to stdout only.
-    func : None or callable
-        User-provided function to be called concurrently by ACME (optional)
+    logname : str
+        Name of the logger to set up
+    logfile : None or str
+        If `None`, logging information is streamed to stdout only, otherwise
+        `logfile` is interpreted as path to a file used for logging.
     verbose : bool or None
         If `None`, the logging-level only contains messages of `'INFO'` priority and
         higher (`'WARNING'` and `'ERROR'`). If `verbose` is `True`, logging is
@@ -47,12 +43,10 @@ def prepare_log(caller=None, logfile=False, func=None, verbose=None):
     # For later reference: dynamically fetch name of current function
     funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
 
-    # If not provided, get name of calling method/function
-    if caller is None:
-        caller = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
-    elif not isinstance(caller, str):
+    # Ensure `logname` can be processed
+    if not isinstance(logname, str):
         msg = "%s `caller` has to be a string, not %s"
-        raise TypeError(msg%(funcName, str(type(caller))))
+        raise TypeError(msg%(funcName, str(type(logname))))
 
     # Basal sanity check for Boolean flag
     if verbose is not None and not isinstance(verbose, bool):
@@ -60,30 +54,9 @@ def prepare_log(caller=None, logfile=False, func=None, verbose=None):
         raise TypeError(msg%(funcName, str(type(verbose))))
 
     # Either parse provided `logfile` or set up an auto-generated file
-    msg = "%s `logfile` has to be `None`, `True`, `False` or a valid file-name, not %s"
-    if logfile is None or isinstance(logfile, bool):
-        if logfile is True:
-            if func is None:
-                msg = "%s cannot auto-create log-file if `func` is `None`. Skipping"
-                warnings.showwarning(msg%(caller), RuntimeWarning,
-                                    __file__, inspect.currentframe().f_lineno)
-                logfile = None
-            else:
-                logfile = os.path.dirname(os.path.abspath(inspect.getfile(func)))
-                logfile = os.path.join(logfile, "ACME_{func:s}_{date:s}.log")
-                logfile = logfile.format(func=func.__name__,
-                                        date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
-        else:
-            logfile = None
-    elif isinstance(logfile, str):
-        if os.path.isdir(logfile):
-            raise IOError(msg%(funcName, "a directory"))
-        logfile = os.path.abspath(os.path.expanduser(logfile))
-    else:
-        raise TypeError(msg%(funcName, str(type(logfile))))
     if logfile is not None and os.path.isfile(logfile):
         msg = "%s log-file %s already exists, appending to it"
-        warnings.showwarning(msg%(caller, logfile), RuntimeWarning,
+        warnings.showwarning(msg%(logname, logfile), RuntimeWarning,
                              __file__, inspect.currentframe().f_lineno)
 
     # Set logging verbosity based on `verbose` flag
@@ -93,49 +66,38 @@ def prepare_log(caller=None, logfile=False, func=None, verbose=None):
         loglevel = logging.DEBUG
     else:
         loglevel = logging.WARNING
-    log = logging.getLogger(caller)
+    log = logging.getLogger(logname)
     log.setLevel(loglevel)
 
-    # Create logging formatter
-    formatter = AcmeFormatter("%(name)s %(levelname)s %(message)s")
+    # Create logging formatters
+    streamFrmt = AcmeFormatter("%(name)s %(levelname)s %(message)s", color=True)
+    fileFrmt = AcmeFormatter("%(name)s %(levelname)s %(message)s", color=False)
 
-    # Output handlers: print log messages via `StreamHandler` as well
-    # as to a provided text file `logfile using a `FileHandler`.
-    # Note: at import time (when logger is initially set up) no `logfile`
-    # specification is provided, so `fileHandler`` can only be set up upon
-    # successive calls to `prepare_log`
+    # Upon package import, create stdout handler + memory handler for
+    # temporary buffering of all log messages
     if len(log.handlers) == 0:
-        initialRun = True
         stdoutHandler = logging.StreamHandler()
-    else:
-        # Note: avoid adding the same log-file location as distinct handlers to the logger
-        # in case `ParallelMap` is executed repeatedly; also remove existing non-default
-        # logfile handlers to avoid generating multiple logs (and accidental writes to existing logs)
-        initialRun = False
-        stdoutHandler = [h for h in log.handlers if isinstance(h, logging.StreamHandler)][0]
-        if logfile is not None:
-            fileHandler = None
-            fHandlers = [h for h in log.handlers if isinstance(h, logging.FileHandler)]
-            for handler in fHandlers:
-                if handler.baseFilename == logfile:
-                    fileHandler = handler
-                    break
-                log.handlers.remove(handler)
-            # No file-handler configured yet, create a new one
-            if fileHandler is None:
-                fileHandler = logging.FileHandler(logfile)
-                log.addHandler(fileHandler)
-
-    # Apply formatting to existing loggers as well as newly created ones
-    stdoutHandler.setLevel(loglevel)
-    stdoutHandler.setFormatter(formatter)
-    if logfile is not None:
-        fileHandler.setLevel(loglevel)
-        fileHandler.setFormatter(formatter)
-
-    # If this is round one, add stdout handler
-    if initialRun:
         log.addHandler(stdoutHandler)
+        memHandler = handlers.MemoryHandler(1000,
+                                            flushLevel=logging.ERROR,
+                                            target=None,
+                                            flushOnClose=True)
+        log.addHandler(memHandler)
+
+    # If log-file creation was requested, add a target to the initially
+    # created `MemoryHandler` (initiated by `ACMEdaemon`)
+    if logfile is not None:
+        memHandler = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)][0]
+        fileHandler = logging.FileHandler(logfile)
+        fileHandler.setLevel(loglevel)
+        fileHandler.setFormatter(fileFrmt)
+        memHandler.setTarget(fileHandler)
+
+    # No matter if called for the first or n-th time, (re)set log-level
+    # and formatter
+    for h in log.handlers:
+        h.setLevel(loglevel)
+        h.setFormatter(streamFrmt)
 
     return
 
@@ -145,30 +107,40 @@ class AcmeFormatter(logging.Formatter):
     Adapted from https://alexandra-zaharia.github.io/posts/make-your-own-custom-color-formatter-with-python-logging/
     """
 
-    green = "\x1b[92m"
-    gray = "\x1b[90m"
-    blue = "\x1b[38;5;39m"
-    magenta = "\x1b[35m"
-    red = "\x1b[38;5;196m"
-    bold = "\x1b[1m"
-    reset = "\x1b[0m"
+    def __init__(self, fmt, color=True):
 
-    def __init__(self, fmt):
         super().__init__()
 
+        if color:
+            green = "\x1b[92m"
+            gray = "\x1b[90m"
+            blue = "\x1b[38;5;39m"
+            magenta = "\x1b[35m"
+            red = "\x1b[38;5;196m"
+            bold = "\x1b[1m"
+            reset = "\x1b[0m"
+        else:
+            green = ""
+            gray = ""
+            blue = ""
+            magenta = ""
+            red = ""
+            bold = ""
+            reset = ""
+
         fmtName = fmt.partition("%(name)s")
-        fmtName = fmtName[0] + self.bold + fmtName[1] + self.reset + fmtName[2]
+        fmtName = fmtName[0] + bold + fmtName[1] + reset + fmtName[2]
         fmt = "".join(fmtName)
 
         fmtLvl = fmt.partition("%(levelname)s")
-        fmtDebug = fmtLvl[0] + self.bold + self.green + \
-            "# " + fmtLvl[1] + " #" + self.reset + self.gray + fmtLvl[2] + self.reset
-        fmtInfo = fmtLvl[0] + self.bold + self.blue + \
-            "- " + fmtLvl[1] + " -" + self.reset + fmtLvl[2]
-        fmtWarn = fmtLvl[0] + self.bold + self.magenta + \
-            "! " + fmtLvl[1] + " !" + self.reset + fmtLvl[2]
-        fmtError = fmtLvl[0] + self.bold + self.red + \
-            "| " + fmtLvl[1] + " |" + self.reset + self.red + fmtLvl[2] + self.reset
+        fmtDebug = fmtLvl[0] + bold + green + \
+            "# " + fmtLvl[1] + " #" + reset + gray + fmtLvl[2] + reset
+        fmtInfo = fmtLvl[0] + bold + blue + \
+            "- " + fmtLvl[1] + " -" + reset + fmtLvl[2]
+        fmtWarn = fmtLvl[0] + bold + magenta + \
+            "! " + fmtLvl[1] + " !" + reset + fmtLvl[2]
+        fmtError = fmtLvl[0] + bold + red + \
+            "| " + fmtLvl[1] + " |" + reset + red + fmtLvl[2] + reset
 
         self.FORMATS = {
             logging.DEBUG: "".join(fmtDebug),

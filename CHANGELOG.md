@@ -21,12 +21,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   marked `"DEBUG"` to make ACME's default output less "noisy". To this
   effect the Python `logging` module is now used more extensively than
   before. The canonical name of ACME's logger is simply "ACME".
+- By default, ACME now creates a log-file alongside any auto-generated
+  output files to keep a record of file creation and attribution.
 - Reworked ACME's SyNCoPy interface: a dedicated module `spy_interface.py`
   is now managing ACME's I/O direction if ACME is called by SyNCoPy. This
   allows for (much) cleaner exception handling in ACME's cluster helpers
   (`esi_cluster_setup`, `cluster_cleanup` etc.) which ultimately permits
   a more streamlined extension of ACME to more HPC infrastructure.
-- Redesigned ACME's online documentation: increased the font-size to enhance
+- Redesigned ACME's online documentation: increased font-size to enhance
   readability, included a contribution guide and reworked the overall page
   navigation + visual layout.
 

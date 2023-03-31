@@ -35,7 +35,7 @@ import numpy as np
 from . import __path__
 from .dask_helpers import (esi_cluster_setup, local_cluster_setup,
                            slurm_cluster_setup, cluster_cleanup, count_online_workers)
-from .shared import user_yesno, is_esi_node, _scalar_parser, is_slurm_node
+from .shared import user_yesno, is_esi_node, is_slurm_node
 from .logger import prepare_log
 isSpyModule = False
 if "syncopy" in sys.modules:
@@ -66,11 +66,7 @@ class ACMEdaemon(object):
 
     def __init__(
         self,
-        pmap=None,
-        func=None,
-        argv=None,
-        kwargv=None,
-        n_calls=None,
+        pmap,
         n_workers="auto",
         write_worker_results=True,
         output_dir=None,
@@ -85,34 +81,18 @@ class ACMEdaemon(object):
         setup_interactive=True,
         stop_client="auto",
         verbose=None,
-        logfile=None,
-        **kwargs):
+        logfile=None):
         """
         Manager class for performing concurrent user function calls
 
         Parameters
         ----------
-        pmap : :class:~`acme.ParallelMap` context manager or None
-            If `pmap` is not `None`, `:class:~`acme.ACMEDaemon` assumes
-            that that the provided :class:~`acme.ParallelMap` instance has already
+        pmap : :class:~`acme.ParallelMap` context manager
+            By default, `:class:~`acme.ACMEDaemon` assumes  that that
+            the provided :class:~`acme.ParallelMap` instance has already
             been properly set up to process `func` (all input arguments parsed and
             properly formatted). All other input arguments of `:class:~`acme.ACMEDaemon`
             are extracted from the provided :class:~`acme.ParallelMap` instance.
-            If `pmap` is `None`, `:class:~`acme.ACMEDaemon` runs in "stand-alone"
-            mode: all remaining arguments have to be manually supplied (in the
-            correct format)
-        func : callable
-            User-defined function to be executed concurrently. See :class:~`acme.ParallelMap`
-            for details.
-        argv : list of lists
-            Positional arguments of `func`: all elements of have to be list-like
-            with lengths `n_calls` or 1
-        kwargv : list of dicts
-            Keyword arguments of `func`: all values of have to be list-like with
-            lengths `n_calls` or 1
-        n_calls : int
-            Number of concurrent calls of `func` to perform. If `pmap` is not `None`,
-            then ``n_calls = pmap.n_inputs``
         n_workers : int or "auto"
             Number of SLURM workers (=jobs) to spawn. See :class:~`acme.ParallelMap`
             for details.
@@ -156,8 +136,9 @@ class ACMEdaemon(object):
             If `None` (default), general run-time information as well as warnings
             and errors are shown. See :class:~`acme.ParallelMap` for details.
         logfile : None or bool or str
-            If `None` (default) or `False`, all run-time information as well as errors and
-            warnings are printed to the command line only. See :class:~`acme.ParallelMap`
+            If `None` (default) or `True`, and `write_worker_results` is
+            `True`, all run-time information as well as errors and
+            warnings are tracked in a log-file. See :class:~`acme.ParallelMap`
             for details.
 
         Returns
@@ -174,14 +155,22 @@ class ACMEdaemon(object):
         ParallelMap : Context manager and main user interface
         """
 
-        # Allocate slots
-        self.func = None
-        self.argv = None
-        self.kwargv = None
-        self.n_calls = None
+        # The only error checking happening in `__init__`
+        try:
+            pClassName = pmap.__class__.__name__
+        except:
+            pClassName = "notParallelMap"
+        if pClassName != "ParallelMap":
+            msg = "%s `pmap` has to be a `ParallelMap` instance, not %s"
+            raise TypeError(msg%(self.objName, str(type(pmap))))
+
+        # Allocate first batch of slots
+        self.func = pmap.func
+        self.argv = pmap.argv
+        self.kwargv = pmap.kwargv
+        self.n_calls = pmap.n_inputs
         self.n_workers = None
         self.acme_func = None
-        self.task_ids = None
         self.out_dir = None
         self.collect_results = None
         self.results_container = None
@@ -190,27 +179,20 @@ class ACMEdaemon(object):
         self.stacking_dim = None
         self.client = None
         self.stop_client = None
-        self.has_slurm = None
 
-        # The only error checking happening in `__init__`
-        if pmap is not None:
-            if pmap.__class__.__name__ != "ParallelMap":
-                msg = "%s `pmap` has to be a `ParallelMap` instance, not %s"
-                raise TypeError(msg%(self.objName, str(type(pmap))))
-        else:
-            prepare_log(caller="ACME", logfile=logfile, func=func,
-                                       verbose=verbose)
+        # Define list of taskIDs for distribution across workers
+        self.task_ids = list(range(self.n_calls))
+        log.debug("%s Allocated `taskID` list: %s", self.objName, str(self.task_ids))
 
-        # Input pre-processed by a `ParallelMap` object takes precedence over keyword args
-        log.debug("%s Calling `initialize`", self.objName)
-        self.initialize(getattr(pmap, "func", func),
-                        getattr(pmap, "argv", argv),
-                        getattr(pmap, "kwargv", kwargv),
-                        getattr(pmap, "n_inputs", n_calls))
+        # Finally, determine if the code is executed on a SLURM-enabled node
+        self.has_slurm = is_slurm_node()
+        log.debug("%s Set `has_slurm = %s`", self.objName, str(self.has_slurm))
 
         # Set up output handler
         log.debug("%s Calling `pre_process`", self.objName)
-        self.pre_process(write_worker_results,
+        self.pre_process(verbose,
+                         logfile,
+                         write_worker_results,
                          output_dir,
                          result_shape,
                          result_dtype,
@@ -236,63 +218,9 @@ class ACMEdaemon(object):
                             setup_interactive=setup_interactive,
                             stop_client=stop_client)
 
-    def initialize(self, func, argv, kwargv, n_calls):
-        """
-        Parse (provided) inputs: make sure positional and keyword args are
-        properly formatted for concurrently calling `func`
-        """
-
-        # Ensure `func` is callable
-        if not callable(func):
-            msg = "%s first input has to be a callable function, not %s"
-            raise TypeError(msg%(self.objName, str(type(func))))
-
-        # Next, vet `n_calls` which is needed to validate `argv` and `kwargv`
-        try:
-            _scalar_parser(n_calls, varname="n_calls", ntype="int_like", lims=[1, np.inf])
-        except Exception as exc:
-            log.error("%s Error parsing `n_calls`", self.objName)
-            raise exc
-        log.debug("%s Using provided `n_calls = %d`", self.objName, n_calls)
-
-        # Ensure all elements of `argv` are list-like with lengths `n_calls` or 1
-        msg = "%s `argv` has to be a list with list-like elements of length 1 or %d"
-        if not isinstance(argv, (list, tuple)):
-            raise TypeError(msg%(self.objName, n_calls))
-        try:
-            validArgv = all(len(arg) == n_calls or len(arg) == 1 for arg in argv)
-        except TypeError:
-            raise TypeError(msg%(self.objName, n_calls))
-        if not validArgv:
-            raise ValueError(msg%(self.objName, n_calls))
-
-        # Ensure all values of `kwargv` are list-like with lengths `n_calls` or 1
-        msg = "%s `kwargv` has to be a dictionary with list-like elements of length %d"
-        try:
-            validKwargv = all(len(value) == n_calls or len(value) == 1 for value in kwargv.values())
-        except TypeError:
-            raise TypeError(msg%(self.objName, n_calls))
-        if not validKwargv:
-            raise ValueError(msg%(self.objName, n_calls))
-
-        # Basal sanity checks have passed, keep the provided input signature
-        self.func = func
-        self.argv = argv
-        self.kwargv = kwargv
-        self.n_calls = n_calls
-
-        # Define list of taskIDs for distribution across workers
-        self.task_ids = list(range(n_calls))
-        log.debug("%s Allocated `taskID` list: %s", self.objName, str(self.task_ids))
-
-        # Finally, determine if the code is executed on a SLURM-enabled node
-        self.has_slurm = is_slurm_node()
-        log.debug("%s Set `has_slurm = %s`", self.objName, str(self.has_slurm))
-
-        # Get out
-        return
-
     def pre_process(self,
+                    verbose,
+                    logfile,
                     write_worker_results,
                     output_dir,
                     result_shape,
@@ -394,6 +322,36 @@ class ACMEdaemon(object):
             self.acme_func = self.func
             log.debug("%s Not wrapping user-provided function but invoking it directly",
                            self.objName)
+
+        # Unless specifically disabled by the user, enable progress-tracking
+        # in a log-file if results are auto-generated
+        if logfile is None and write_worker_results is True:
+            logfile = True
+
+        # Either parse provided `logfile` or set up an auto-generated file;
+        # After this test, `logfile` is either a filename or `None`
+        msg = "%s `logfile` has to be `None`, `True`, `False` or a valid file-name, not %s"
+        if logfile is None or isinstance(logfile, bool):
+            if logfile is True:
+                if write_worker_results:
+                    logfile = self.out_dir
+                else:
+                    logfile = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
+                logfile = os.path.join(logfile, "ACME_{func:s}_{date:s}.log")
+                logfile = logfile.format(func=self.func.__name__,
+                                         date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
+            else:
+                logfile = None
+        elif isinstance(logfile, str):
+            if os.path.isdir(logfile):
+                raise IOError(msg%(self.objName, "a directory"))
+            logfile = os.path.abspath(os.path.expanduser(logfile))
+        else:
+            raise TypeError(msg%(self.objName, str(type(logfile))))
+
+        # If progress tracking in a log-file was requested, set it up now
+        prepare_log(logname="ACME", logfile=logfile, verbose=verbose)
+        log.debug("%s Set up logfile=%s", self.objName, str(logfile))
 
         return
 
@@ -1140,8 +1098,11 @@ class ACMEdaemon(object):
                         log.debug(msg, self.objName, payloadDir)
                         log.debug("%s Returning a list of file-names", self.objName)
 
-        # Print final triumphant output message
+        # Print final triumphant output message and force-flush all logging handlers
         log.info(finalMsg%(successMsg))
+        for h in log.handlers:
+            if hasattr(h, "flush"):
+                h.flush()
         return values
 
     def cleanup(self):
