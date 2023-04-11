@@ -239,7 +239,7 @@ class ParallelMap(object):
 
         # First and foremost, set up logging system - logfile is processed later
         prepare_log(logname="ACME", verbose=verbose)
-        log.info("\x1b[1mThis is ACME v. %s\x1b[0m", __version__)
+        log.announce("This is ACME v. %s", __version__)
 
         # Backwards compatibility: legacy keywords are converted to new nomenclature
         if any(kw in kwargs for kw in __deprecated__):

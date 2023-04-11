@@ -1002,21 +1002,20 @@ class ACMEdaemon(object):
             values = None
 
         # Prepare final output message
-        finalMsg = "%s Finished parallel computation. "
-        successMsg = "\x1b[1mSUCCESS!\x1b[0m"
+        successMsg = "SUCCESS!"
 
         # If automatic results writing was requested, perform some housekeeping
         if write_worker_results:
             if write_pickle:
                 log.debug("%s Saved results as pickle files", self.objName)
                 values = list(self.kwargv["outFile"])
-                finalMsg += "Results have been saved to %s"%(self.out_dir)
+                finalMsg = "Results have been saved to %s"%(self.out_dir)
                 log.debug("%s Returning a list of file-names", self.objName)
             else:
                 if single_file:
                     log.debug("%s Saved results to single shared container",
                               self.objName)
-                    finalMsg += "Results have been saved to %s"%(self.results_container)
+                    finalMsg = "Results have been saved to %s"%(self.results_container)
                     if values is None:
                         values = [self.results_container]
                         log.debug("%s Returning container name as single-element list",
@@ -1064,7 +1063,7 @@ class ACMEdaemon(object):
                         log.debug("%s Deleted payload directory %s",
                                   self.objName, payloadDir)
                         successMsg = ""
-                        finalMsg += "Results have been saved to %s"%(target)
+                        finalMsg = "Results have been saved to %s"%(target)
 
                     # All good, no pickle gymnastics was needed
                     else:
@@ -1092,14 +1091,15 @@ class ACMEdaemon(object):
                                             log.debug("%s Added return value via external link comp_%d/%s",
                                                       self.objName, i, retVal)
 
-                        msg = "Results have been saved to %s"
-                        finalMsg += msg%(self.results_container)
+                        finalMsg = "Results have been saved to %s"%(self.results_container)
                         msg = "%s Container ready, links to data payload located in %s"
                         log.debug(msg, self.objName, payloadDir)
                         log.debug("%s Returning a list of file-names", self.objName)
 
         # Print final triumphant output message and force-flush all logging handlers
-        log.info(finalMsg%(successMsg))
+        if len(successMsg) > 0:
+            log.announce(successMsg)
+        log.info(finalMsg)
         for h in log.handlers:
             if hasattr(h, "flush"):
                 h.flush()

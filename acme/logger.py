@@ -59,6 +59,29 @@ def prepare_log(logname="ACME", logfile=None, verbose=None):
         warnings.showwarning(msg%(logname, logfile), RuntimeWarning,
                              __file__, inspect.currentframe().f_lineno)
 
+    # Add custom "announce" level to logger
+    announceLvl = logging.INFO + 5
+    logging.addLevelName(announceLvl, "ANNOUNCE")
+    logging.ANNOUNCE = announceLvl
+
+    def announce(self, msg, *args, **kwargs):
+        """
+        Log 'msg % args' with severity 'ANNOUNCE'.
+
+        To pass exception information, use the keyword argument exc_info with
+        a true value, e.g.
+
+        logger.announce("Houston, we have a %s", "thorny problem", exc_info=1)
+        """
+        if self.isEnabledFor(announceLvl):
+            self._log(announceLvl, msg, args, **kwargs)
+
+    logging.getLoggerClass().announce = announce
+    logging.announce = announce
+
+    # Fetch/set up ACME logger
+    log = logging.getLogger(logname)
+
     # Set logging verbosity based on `verbose` flag
     if verbose is None:
         loglevel = logging.INFO
@@ -66,12 +89,12 @@ def prepare_log(logname="ACME", logfile=None, verbose=None):
         loglevel = logging.DEBUG
     else:
         loglevel = logging.WARNING
-    log = logging.getLogger(logname)
     log.setLevel(loglevel)
 
     # Create logging formatters
-    streamFrmt = AcmeFormatter("%(name)s %(levelname)s %(message)s", color=True)
-    fileFrmt = AcmeFormatter("%(name)s %(levelname)s %(message)s", color=False)
+    acmeFmt = "%(name)s %(levelname)s <%(funcName)s> %(message)s"
+    streamFrmt = AcmeFormatter(acmeFmt, color=True)
+    fileFrmt = AcmeFormatter(acmeFmt, color=False)
 
     # Upon package import, create stdout handler + memory handler for
     # temporary buffering of all log messages
@@ -137,14 +160,19 @@ class AcmeFormatter(logging.Formatter):
             "# " + fmtLvl[1] + " #" + reset + gray + fmtLvl[2] + reset
         fmtInfo = fmtLvl[0] + bold + blue + \
             "- " + fmtLvl[1] + " -" + reset + fmtLvl[2]
+        fmtAnnounce = fmtLvl[0] + bold + blue + \
+            "[ " + fmtLvl[1] + " ]" + reset + bold + fmtLvl[2] + reset
         fmtWarn = fmtLvl[0] + bold + magenta + \
             "! " + fmtLvl[1] + " !" + reset + fmtLvl[2]
         fmtError = fmtLvl[0] + bold + red + \
             "| " + fmtLvl[1] + " |" + reset + red + fmtLvl[2] + reset
 
+        fmtAnnounce = "".join(fmtAnnounce).replace("<%(funcName)s>", "")
+
         self.FORMATS = {
             logging.DEBUG: "".join(fmtDebug),
             logging.INFO: "".join(fmtInfo),
+            logging.ANNOUNCE: "".join(fmtAnnounce),
             logging.WARNING: "".join(fmtWarn),
             logging.ERROR: "".join(fmtError),
             logging.CRITICAL: "".join(fmtError),
