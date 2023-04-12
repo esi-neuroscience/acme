@@ -109,7 +109,6 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
     """
 
     # Get name of calling method/function
-    log = logging.getLogger("ACME")
     funcName = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
 
     # Make sure `var` is a scalar-like number
@@ -249,7 +248,7 @@ def ctrlc_catcher(*excargs, **exckwargs):
         shell, = excargs
         etype, evalue, etb = sys.exc_info()
         try:                            # careful: if iPython is used to launch a script, ``get_ipython`` is not defined
-            ipy = get_ipython()
+            get_ipython()
             isipy = True
             sys.last_traceback = etb    # smartify ``sys``
         except NameError:
@@ -284,7 +283,7 @@ def ctrlc_catcher(*excargs, **exckwargs):
     memHandler = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)][0]
     if memHandler.target is not None:
         memHandler.acquire()
-        with open(memHandler.target.baseFilename, "a") as logfile:
+        with open(memHandler.target.baseFilename, "a", encoding="utf-8") as logfile:
             logfile.write("".join(traceback.format_exception_only(etype, evalue)))
             logfile.write("".join(traceback.format_tb(etb)))
         memHandler.release()

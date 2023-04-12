@@ -251,7 +251,6 @@ class ParallelMap(object):
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`
-        log.debug("Calling `prepare_input`")
         self.prepare_input(func, n_inputs, *args, **kwargs)
 
         # Create an instance of `ACMEdaemon` that does the actual parallel computing work

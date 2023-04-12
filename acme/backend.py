@@ -630,7 +630,6 @@ class ACMEdaemon(object):
                 if is_esi_node():
                     msg = "Automatic SLURM partition selection is experimental"
                     log.warning(msg)
-                    log.debug("Calling `estimate_memuse`")
                     mem_per_worker = self.estimate_memuse()
                 else:
                     err = "Automatic SLURM partition selection currently only available " +\
@@ -1082,7 +1081,7 @@ class ACMEdaemon(object):
             log.debug("Helper `prepare_client` not yet launched, exiting")
             return
         if self.stop_client and self.client is not None:
-            log.debug("Found client %s, Calling `cluster_cleanup`", str(self.client))
+            log.debug("Found client %s, calling `cluster_cleanup`", str(self.client))
             cluster_cleanup(self.client)
             self.client = None
             return
