@@ -161,13 +161,14 @@ class AcmeFormatter(logging.Formatter):
         fmtInfo = fmtLvl[0] + bold + blue + \
             "- " + fmtLvl[1] + " -" + reset + fmtLvl[2]
         fmtAnnounce = fmtLvl[0] + bold + blue + \
-            "[ " + fmtLvl[1] + " ]" + reset + bold + fmtLvl[2] + reset
+            "> " + fmtLvl[1] + " <" + reset + bold + fmtLvl[2] + reset
         fmtWarn = fmtLvl[0] + bold + magenta + \
             "! " + fmtLvl[1] + " !" + reset + fmtLvl[2]
         fmtError = fmtLvl[0] + bold + red + \
             "| " + fmtLvl[1] + " |" + reset + red + fmtLvl[2] + reset
 
         fmtAnnounce = "".join(fmtAnnounce).replace("<%(funcName)s>", "")
+        fmtInfo = "".join(fmtInfo).replace("<%(funcName)s>", "")
 
         self.FORMATS = {
             logging.DEBUG: "".join(fmtDebug),

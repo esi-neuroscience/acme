@@ -81,12 +81,11 @@ def is_slurm_node():
     otherwise
     """
 
-    # Fetch ACME logger and set up caller's name
+    # Fetch ACME logger
     log = logging.getLogger("ACME")
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
 
     # Simply test if the srun command is available
-    log.debug("%s Test if `sinfo` is available", funcName)
+    log.debug("Test if `sinfo` is available")
     out, _ = subprocess.Popen("sinfo --version",
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               text=True, shell=True).communicate()
@@ -98,10 +97,9 @@ def is_esi_node():
     Returns `True` if code is running on an ESI cluster node, `False` otherwise
     """
 
-    # Fetch ACME logger, set up caller's name and write debug message
+    # Fetch ACME logger and write debug message
     log = logging.getLogger("ACME")
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
-    log.debug("%s Test if hostname matches the pattern 'esi-sv*'", funcName)
+    log.debug("Test if hostname matches the pattern 'esi-sv*'")
     return socket.gethostname().startswith("esi-sv") and os.path.isdir("/cs")
 
 
