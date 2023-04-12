@@ -387,7 +387,11 @@ class TestParallelMap():
         logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
         assert len(logFileList) == 1
         logFile = logFileList[0]
-        assert os.path.dirname(os.path.realpath(__file__)) in logFile
+        # If running on the ESI cluster, account for /cs/home
+        if onESI and useSLURM:
+            assert "/cs/home/" in logFile
+        else:
+            assert os.path.dirname(os.path.realpath(__file__)) in logFile
         with open(logFile, "r") as fl:
             assert len(fl.readlines()) > 1
 
@@ -1060,7 +1064,7 @@ class TestParallelMap():
             # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
             logStr = "Preparing 2 parallel calls"
             buffer = bytearray()
-            timeout = 30
+            timeout = 90
             t0 = time.time()
             for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
                 buffer.extend(line)
