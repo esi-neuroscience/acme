@@ -1058,7 +1058,7 @@ class TestParallelMap():
 
             # Wait for ACME to start up (as soon as logging info is shown, `pmap.compute()` is running)
             # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
-            logStr = "<ACMEdaemon> Preparing 2 parallel calls"
+            logStr = "Preparing 2 parallel calls"
             buffer = bytearray()
             timeout = 30
             t0 = time.time()
@@ -1076,7 +1076,7 @@ class TestParallelMap():
             time.sleep(1)
             out = proc.stdout.read().decode()
             assert "ALL DONE" not in out
-            assert "<cluster_cleanup> Successfully shut down" in out
+            assert "Successfully shut down" in out
 
         # Almost identical script, this time use an externally started client
         scriptName = os.path.join(tempDir, "dummy2.py")

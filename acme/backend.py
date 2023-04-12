@@ -978,15 +978,16 @@ class ACMEdaemon(object):
 
         # If automatic results writing was requested, perform some housekeeping
         if write_worker_results:
+            finalMsg = "Results have been saved to %s"
             if write_pickle:
                 log.debug("Saved results as pickle files")
                 values = list(self.kwargv["outFile"])
-                finalMsg = "Results have been saved to %s"%(self.out_dir)
+                finalMsg = finalMsg%(self.out_dir)
                 log.debug("Returning a list of file-names")
             else:
                 if single_file:
                     log.debug("Saved results to single shared container")
-                    finalMsg = "Results have been saved to %s"%(self.results_container)
+                    finalMsg = finalMsg%(self.results_container)
                     if values is None:
                         values = [self.results_container]
                         log.debug("Returning container name as single-element list")
@@ -1030,7 +1031,7 @@ class ACMEdaemon(object):
                         shutil.rmtree(payloadDir)
                         log.debug("Deleted payload directory %s", payloadDir)
                         successMsg = ""
-                        finalMsg = "Results have been saved to %s"%(target)
+                        finalMsg = finalMsg%(target)
 
                     # All good, no pickle gymnastics was needed
                     else:
@@ -1057,10 +1058,12 @@ class ACMEdaemon(object):
                                             h5r["comp_{}/{}".format(i, retVal)] = h5py.ExternalLink(relPath, retVal)
                                             log.debug("Added return value via external link comp_%d/%s", i, retVal)
 
-                        finalMsg = "Results have been saved to %s"%(self.results_container)
+                        finalMsg = finalMsg%(self.results_container)
                         msg = "Container ready, links to data payload located in %s"
                         log.debug(msg, payloadDir)
                         log.debug("Returning a list of file-names")
+        else:
+            finalMsg = "Finished parallel computation"
 
         # Print final triumphant output message and force-flush all logging handlers
         if len(successMsg) > 0:
