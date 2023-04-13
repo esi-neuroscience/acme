@@ -232,12 +232,15 @@ class ACMEdaemon(object):
         if not isinstance(write_worker_results, bool):
             msg = "%s `write_worker_results` has to be `True` or `False`, not %s"
             raise TypeError(msg%(self.objName, str(write_worker_results)))
+        log.debug("Found `write_worker_results = %s`", str(write_worker_results))
         if not isinstance(single_file, bool):
             msg = "%s `single_file` has to be `True` or `False`, not %s"
             raise TypeError(msg%(self.objName, str(single_file)))
+        log.debug("Found `single_file = %s`", str(single_file))
         if not isinstance(write_pickle, bool):
             msg = "%s `write_pickle` has to be `True` or `False`, not %s"
             raise TypeError(msg%(self.objName, str(write_pickle)))
+        log.debug("Found `write_pickle = %s`", str(write_pickle))
 
         # Check compatibility of provided optional args
         if not write_worker_results and write_pickle:
@@ -290,6 +293,9 @@ class ACMEdaemon(object):
                 msg += "Original error message below:\n%s"
                 raise TypeError(msg%(self.objName, str(exc)))
             log.debug("Set `result_dtype = %s`", self.result_dtype)
+        else:
+            log.debug("Found `result_shape = %s`", str(result_shape))
+            log.debug("Found `result_dtype = %s`", str(result_dtype))
 
         # If automatic saving of results is requested, make necessary preparations
         if write_worker_results:
@@ -362,6 +368,7 @@ class ACMEdaemon(object):
         if not isinstance(output_dir, (type(None), str)):
             msg = "%s `output_dir` has to be either `None` or str, not %s"
             raise TypeError(msg%(self.objName, str(type(output_dir))))
+        log.debug("Found `output_dir = %s`", str(output_dir))
 
         # If provided, standardize output dir spec, otherwise use default locations
         if output_dir is not None:
@@ -952,7 +959,7 @@ class ACMEdaemon(object):
             if not isSpyModule:
                 log.info("Gathering results in local memory")
             collected = self.client.gather(futures)
-            log.debug("Gathered results in a %d-element list", len(collected))
+            log.debug("Gathered results from client in a %d-element list", len(collected))
             if self.result_shape is not None:
                 log.debug("Returning single NumPy array of shape %s and type %s",
                           str(self.result_shape), str(self.result_dtype))
@@ -967,6 +974,9 @@ class ACMEdaemon(object):
                     for r in res[1:]:
                         values.append(r)
                 values.insert(0, arrVal)
+                # If `values` is a single array, don't wrap it inside a list
+                if len(values) == 1:
+                    values = values[0]
             else:
                 log.debug("Returning a list of values")
                 values = collected
@@ -1141,7 +1151,6 @@ class ACMEdaemon(object):
 
                 with h5py.File(fname, "a") as h5f:
                     if stackingDim is None:
-                        log.debug("Accessing container %s", fname)
                         if not all(isinstance(value, (numbers.Number, str)) for value in result):
                             for rk, res in enumerate(result):
                                 h5f.create_dataset(grpName + "result_{}".format(rk), data=res)

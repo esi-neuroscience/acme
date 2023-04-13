@@ -739,7 +739,7 @@ def local_cluster_setup(n_workers=None,
     # ...if not, print warning/info message
     if maybeScript:
         msg = """\
-        %s If you use a script to start a local parallel computing client, please ensure
+        If you use a script to start a local parallel computing client, please ensure
         the call to `local_cluster_setup` is wrapped inside a main module block, i.e.,
 
             if __name__ == "__main__":
