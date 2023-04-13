@@ -674,7 +674,7 @@ class TestParallelMap():
                          setup_interactive=False) as pmap:
             resInMem = pmap.compute()
         with h5py.File(colRes, "r") as h5col:
-            assert np.array_equal(h5col["result_0"][()], resInMem[0])
+            assert np.array_equal(h5col["result_0"][()], resInMem)
 
         # Ensure dtype is respected
         with ParallelMap(lowpass_simple,
