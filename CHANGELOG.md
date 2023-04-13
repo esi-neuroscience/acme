@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
+Re-designed ACME's logs and command line output.
+
 ### NEW
 - Created templates for filing issues and opening Pull Requests for ACME
   on GitHub.
