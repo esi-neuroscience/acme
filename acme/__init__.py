@@ -52,7 +52,7 @@ from .dask_helpers import *
 from .logger import prepare_log
 
 # Set up module-wide logging
-prepare_log(caller="ACME")
+prepare_log(logname="ACME")
 
 # Override default exception handler (take care of Jupyter's Exception handling)
 from .shared import ctrlc_catcher

@@ -24,6 +24,7 @@ import pytest
 import signal as sys_signal
 import numpy as np
 import dask.distributed as dd
+from logging import handlers
 from glob import glob
 from scipy import signal
 
@@ -229,6 +230,11 @@ class TestParallelMap():
         assert len(resFiles) == pmap.n_calls
         assert all(fle in resFiles for fle in resOnDisk)
         assert all(os.path.isfile(fle) for fle in resOnDisk)
+        log = logging.getLogger("ACME")
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        assert logFileList[0] in outDirContents
+        assert len(outDirContents) == 3 # results container, payload dir and log
 
         # Compare computed single-channel results to expected low-freq signal
         # and ensure collection container was assembled correctly
@@ -255,7 +261,7 @@ class TestParallelMap():
 
         # Ensure only one file was generated
         assert len(singleResOnDisk) == 1
-        outDirContents = glob(os.path.join(pmap.out_dir, "*"))
+        outDirContents = glob(os.path.join(pmap.out_dir, "*.h5"))
         assert outDirContents == singleResOnDisk
         assert pmap.results_container in outDirContents[0]
         assert os.path.isfile(singleResOnDisk[0])
@@ -378,10 +384,14 @@ class TestParallelMap():
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
-        logFileList = [handler.baseFilename for handler in log.handlers if isinstance(handler, logging.FileHandler)]
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
         assert len(logFileList) == 1
         logFile = logFileList[0]
-        assert os.path.dirname(os.path.realpath(__file__)) in logFile
+        # If running on the ESI cluster, account for /cs/home
+        if onESI and useSLURM:
+            assert "/cs/home/" in logFile
+        else:
+            assert os.path.dirname(os.path.realpath(__file__)) in logFile
         with open(logFile, "r") as fl:
             assert len(fl.readlines()) > 1
 
@@ -418,7 +428,9 @@ class TestParallelMap():
             assert len(fl.readlines()) > 1
 
         # Ensure only single log file `customLog` is used
-        assert len([h for h in log.handlers if isinstance(h, logging.FileHandler)]) == 1
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        assert logFileList[0] == customLog
 
         # Ensure client has been stopped
         if testclient is None:
@@ -553,8 +565,8 @@ class TestParallelMap():
             pmap.compute()
         outDirs.append(pmap.out_dir)
 
-        # Ensure only one file was generated
-        assert glob(os.path.join(pmap.out_dir, "*")) == [pmap.results_container]
+        # Ensure only one (data) file was generated
+        assert glob(os.path.join(pmap.out_dir, "*.h5")) == [pmap.results_container]
 
         # Compare single file to link collection computed above
         with h5py.File(colRes, "r") as h5col:
@@ -642,8 +654,8 @@ class TestParallelMap():
             pmap.compute()
         outDirs.append(pmap.out_dir)
 
-        # Ensure only one file was generated
-        assert glob(os.path.join(pmap.out_dir, "*")) == [pmap.results_container]
+        # Ensure only one (data) file was generated
+        assert glob(os.path.join(pmap.out_dir, "*.h5")) == [pmap.results_container]
 
         # Compare single file to virtual dataset
         with h5py.File(colRes, "r") as h5col:
@@ -662,7 +674,7 @@ class TestParallelMap():
                          setup_interactive=False) as pmap:
             resInMem = pmap.compute()
         with h5py.File(colRes, "r") as h5col:
-            assert np.array_equal(h5col["result_0"][()], resInMem[0])
+            assert np.array_equal(h5col["result_0"][()], resInMem)
 
         # Ensure dtype is respected
         with ParallelMap(lowpass_simple,
@@ -1050,9 +1062,9 @@ class TestParallelMap():
 
             # Wait for ACME to start up (as soon as logging info is shown, `pmap.compute()` is running)
             # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
-            logStr = "<ACMEdaemon> Preparing 2 parallel calls"
+            logStr = "Preparing 2 parallel calls"
             buffer = bytearray()
-            timeout = 30
+            timeout = 90
             t0 = time.time()
             for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
                 buffer.extend(line)
@@ -1068,7 +1080,7 @@ class TestParallelMap():
             time.sleep(1)
             out = proc.stdout.read().decode()
             assert "ALL DONE" not in out
-            assert "<cluster_cleanup> Successfully shut down" in out
+            assert "Successfully shut down" in out
 
         # Almost identical script, this time use an externally started client
         scriptName = os.path.join(tempDir, "dummy2.py")
@@ -1200,6 +1212,12 @@ class TestParallelMap():
             assert toc - tic < 30
 
         # Check that for 2 parallel calls only 2 workers were memory-profiled
+        # (we need to flush `MemoryHandler` manually so that its contents
+        # is actually written to `customLog`)
+        log = logging.getLogger("ACME")
+        for h in log.handlers:
+            if hasattr(h, "flush"):
+                h.flush()
         with open(customLog, "r", encoding="utf8") as f:
             logTxt = f.read()
         assert "Estimated memory consumption across 2 runs" in logTxt
@@ -1259,6 +1277,12 @@ class TestParallelMap():
             assert 140 < toc - tic < 200
 
         # Check that for max 5 workers were memory-profiled
+        # (we need to flush `MemoryHandler` manually so that its contents
+        # is actually written to `customLog`)
+        log = logging.getLogger("ACME")
+        for h in log.handlers:
+            if hasattr(h, "flush"):
+                h.flush()
         with open(customLog2, "r", encoding="utf8") as f:
             logTxt = f.read()
         assert "Estimated memory consumption across 5 runs" in logTxt

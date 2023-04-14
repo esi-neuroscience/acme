@@ -546,23 +546,27 @@ which yields
 Note that internally ACME keeps track of computational runs by injecting the
 keyword ``taskID`` into user-provided functions.
 
-Non-Interactive Logging (``logfile``)
--------------------------------------
+Messaging verbosity and logging (``verbose`` and ``logfile``)
+-------------------------------------------------------------
 Suppose some function ``f`` has to be called for 20000 different values of ``z``.
 Under the assumption that this computation takes a while, any run-time
-messages are to be written to a an auto-generated log-file:
-
-.. code-block:: python
-
-    z = rng.integers(low=1, high=10, size=20000, endpoint=True)
-    with ParallelMap(f, x, y, z=z, logfile=True) as pmap:
-        results = pmap.compute()
-
-Alternatively, logging information may be written to a file ``my_log.txt`` instead
+messages are to be written to a file ``my_log.txt``
 
 .. code-block:: python
 
     z = rng.integers(low=1, high=10, size=20000, endpoint=True)
     with ParallelMap(f, x, y, z=z, logfile="my_log.txt") as pmap:
         results = pmap.compute()
+
+To make ACME less "chatty" in its output, decrease the employed verbosity level:
+
+.. code-block:: python
+
+    z = rng.integers(low=1, high=10, size=20000, endpoint=True)
+    with ParallelMap(f, x, y, z=z, logfile="my_log.txt", verbose=False) as pmap:
+        results = pmap.compute()
+
+Conversely, by setting ``verbose`` to ``True`` all internal debug messages
+are logged alongside standard output.
+
 

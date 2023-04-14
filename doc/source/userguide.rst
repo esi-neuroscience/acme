@@ -437,6 +437,14 @@ of the global status of the concurrent processing task started by :class:`~acme.
 .. image:: _static/dashboard.gif
    :alt: dask-dashboard
 
+Non-Interactive Logging
+-----------------------
+In addition, if ACME's automatic result management is used (i.e., if
+``write_worker_results`` is ``True``), a log-file is created alongside
+the files generated on disk. Depending on the chosen verbosity level of
+ACME's messaging system (i.e., if ``verbose`` is either ``False``, ``None`` or
+``True``), the generated log-file contains (very) detailed runtime
+information of the performed computation.
 
 Wait, There's More...
 ---------------------

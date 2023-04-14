@@ -20,6 +20,7 @@ import time
 import numpy as np
 import dask.distributed as dd
 from tqdm import tqdm
+from logging import handlers
 
 # Local imports
 from acme import __version__
@@ -80,12 +81,11 @@ def is_slurm_node():
     otherwise
     """
 
-    # Fetch ACME logger and set up caller's name
+    # Fetch ACME logger
     log = logging.getLogger("ACME")
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
 
     # Simply test if the srun command is available
-    log.debug("%s Test if `sinfo` is available", funcName)
+    log.debug("Test if `sinfo` is available")
     out, _ = subprocess.Popen("sinfo --version",
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               text=True, shell=True).communicate()
@@ -97,10 +97,9 @@ def is_esi_node():
     Returns `True` if code is running on an ESI cluster node, `False` otherwise
     """
 
-    # Fetch ACME logger, set up caller's name and write debug message
+    # Fetch ACME logger and write debug message
     log = logging.getLogger("ACME")
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
-    log.debug("%s Test if hostname matches the pattern 'esi-sv*'", funcName)
+    log.debug("Test if hostname matches the pattern 'esi-sv*'")
     return socket.gethostname().startswith("esi-sv") and os.path.isdir("/cs")
 
 
@@ -110,7 +109,6 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
     """
 
     # Get name of calling method/function
-    log = logging.getLogger("ACME")
     funcName = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
 
     # Make sure `var` is a scalar-like number
@@ -250,7 +248,7 @@ def ctrlc_catcher(*excargs, **exckwargs):
         shell, = excargs
         etype, evalue, etb = sys.exc_info()
         try:                            # careful: if iPython is used to launch a script, ``get_ipython`` is not defined
-            ipy = get_ipython()
+            get_ipython()
             isipy = True
             sys.last_traceback = etb    # smartify ``sys``
         except NameError:
@@ -282,12 +280,12 @@ def ctrlc_catcher(*excargs, **exckwargs):
     # Write to all logging locations, manually print traceback to file (stdout
     # printing was handled above)
     log.error("Exception received.")
-    fHandlers = [h for h in log.handlers if isinstance(h, logging.FileHandler)]
-    for handler in fHandlers:
-        handler.acquire()
-        with open(handler.baseFilename, "a") as logfile:
+    memHandler = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)][0]
+    if memHandler.target is not None:
+        memHandler.acquire()
+        with open(memHandler.target.baseFilename, "a", encoding="utf-8") as logfile:
             logfile.write("".join(traceback.format_exception_only(etype, evalue)))
             logfile.write("".join(traceback.format_tb(etb)))
-        handler.release()
+        memHandler.release()
 
     return
