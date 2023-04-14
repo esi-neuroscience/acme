@@ -1,3 +1,10 @@
+#
+# Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: CC0-1.0
+#
+
 authors:
 - affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
     \ Max Planck Society"
@@ -12,7 +19,7 @@ authors:
 - affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
     \ Max Planck Society"
   family-names: Schmiedt
-  given-names: Joscha
+  given-names: Joscha Tapani
   orcid: https://orcid.org/0000-0001-6233-1866
 cff-version: 1.1.0
 date-released: '2022-12-15'

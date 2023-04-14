@@ -1,6 +1,10 @@
-# -*- coding: utf-8 -*-
 #
 # Main package initializer
+#
+# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: BSD-3-Clause
 #
 
 # Builtin/3rd party package imports
@@ -37,12 +41,18 @@ __deprecation_wrng__ = \
     "`workers_per_job` are DEPRECATED. Please use `n_workers`, `mem_per_worker`, " +\
     "`n_workers_startup` and `processes_per_worker`, respectively."
 
+# Remove dask-jobqueue's FutureWarnings about tmpfile (which we don't use)
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 # Import local modules
-from . import frontend, backend, shared, dask_helpers
 from .frontend import *
 from .backend import *
 from .shared import *
 from .dask_helpers import *
+from .logger import prepare_log
+
+# Set up module-wide logging
+prepare_log(logname="ACME")
 
 # Override default exception handler (take care of Jupyter's Exception handling)
 from .shared import ctrlc_catcher

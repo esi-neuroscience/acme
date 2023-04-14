@@ -1,6 +1,10 @@
-# -*- coding: utf-8 -*-
 #
 # Testing module for ACME's `ParallelMap` interface
+#
+# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: BSD-3-Clause
 #
 
 # Builtin/3rd party package imports
@@ -20,12 +24,12 @@ import pytest
 import signal as sys_signal
 import numpy as np
 import dask.distributed as dd
+from logging import handlers
 from glob import glob
 from scipy import signal
 
 # Import main actors here
 from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
-from acme.dask_helpers import customIOError
 from conftest import skip_if_not_linux, useSLURM, onESI, defaultQ
 
 # Functions that act as stand-ins for user-funcs
@@ -226,6 +230,11 @@ class TestParallelMap():
         assert len(resFiles) == pmap.n_calls
         assert all(fle in resFiles for fle in resOnDisk)
         assert all(os.path.isfile(fle) for fle in resOnDisk)
+        log = logging.getLogger("ACME")
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        assert logFileList[0] in outDirContents
+        assert len(outDirContents) == 3 # results container, payload dir and log
 
         # Compare computed single-channel results to expected low-freq signal
         # and ensure collection container was assembled correctly
@@ -252,7 +261,7 @@ class TestParallelMap():
 
         # Ensure only one file was generated
         assert len(singleResOnDisk) == 1
-        outDirContents = glob(os.path.join(pmap.out_dir, "*"))
+        outDirContents = glob(os.path.join(pmap.out_dir, "*.h5"))
         assert outDirContents == singleResOnDisk
         assert pmap.results_container in outDirContents[0]
         assert os.path.isfile(singleResOnDisk[0])
@@ -362,9 +371,10 @@ class TestParallelMap():
         # Bonus: leave computing client alive and vet default SLURM settings
         if testclient is None:
             cluster_cleanup(pmap.client)
-        for handler in pmap.log.handlers:
+        log = logging.getLogger("ACME")
+        for handler in log.handlers:
             if isinstance(handler, logging.FileHandler):
-                pmap.log.handlers.remove(handler)
+                log.handlers.remove(handler)
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
@@ -374,10 +384,14 @@ class TestParallelMap():
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
-        logFileList = [handler.baseFilename for handler in pmap.log.handlers if isinstance(handler, logging.FileHandler)]
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
         assert len(logFileList) == 1
         logFile = logFileList[0]
-        assert os.path.dirname(os.path.realpath(__file__)) in logFile
+        # If running on the ESI cluster, account for /cs/home
+        if onESI and useSLURM:
+            assert "/cs/home/" in logFile
+        else:
+            assert os.path.dirname(os.path.realpath(__file__)) in logFile
         with open(logFile, "r") as fl:
             assert len(fl.readlines()) > 1
 
@@ -414,7 +428,9 @@ class TestParallelMap():
             assert len(fl.readlines()) > 1
 
         # Ensure only single log file `customLog` is used
-        assert len([h for h in pmap.log.handlers if isinstance(h, logging.FileHandler)]) == 1
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        assert logFileList[0] == customLog
 
         # Ensure client has been stopped
         if testclient is None:
@@ -549,8 +565,8 @@ class TestParallelMap():
             pmap.compute()
         outDirs.append(pmap.out_dir)
 
-        # Ensure only one file was generated
-        assert glob(os.path.join(pmap.out_dir, "*")) == [pmap.results_container]
+        # Ensure only one (data) file was generated
+        assert glob(os.path.join(pmap.out_dir, "*.h5")) == [pmap.results_container]
 
         # Compare single file to link collection computed above
         with h5py.File(colRes, "r") as h5col:
@@ -638,8 +654,8 @@ class TestParallelMap():
             pmap.compute()
         outDirs.append(pmap.out_dir)
 
-        # Ensure only one file was generated
-        assert glob(os.path.join(pmap.out_dir, "*")) == [pmap.results_container]
+        # Ensure only one (data) file was generated
+        assert glob(os.path.join(pmap.out_dir, "*.h5")) == [pmap.results_container]
 
         # Compare single file to virtual dataset
         with h5py.File(colRes, "r") as h5col:
@@ -658,7 +674,7 @@ class TestParallelMap():
                          setup_interactive=False) as pmap:
             resInMem = pmap.compute()
         with h5py.File(colRes, "r") as h5col:
-            assert np.array_equal(h5col["result_0"][()], resInMem[0])
+            assert np.array_equal(h5col["result_0"][()], resInMem)
 
         # Ensure dtype is respected
         with ParallelMap(lowpass_simple,
@@ -1046,9 +1062,9 @@ class TestParallelMap():
 
             # Wait for ACME to start up (as soon as logging info is shown, `pmap.compute()` is running)
             # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
-            logStr = "<ParallelMap> INFO: Log information available at"
+            logStr = "Preparing 2 parallel calls"
             buffer = bytearray()
-            timeout = 30
+            timeout = 90
             t0 = time.time()
             for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
                 buffer.extend(line)
@@ -1064,7 +1080,7 @@ class TestParallelMap():
             time.sleep(1)
             out = proc.stdout.read().decode()
             assert "ALL DONE" not in out
-            assert "INFO: <cluster_cleanup> Successfully shut down" in out
+            assert "Successfully shut down" in out
 
         # Almost identical script, this time use an externally started client
         scriptName = os.path.join(tempDir, "dummy2.py")
@@ -1076,7 +1092,7 @@ class TestParallelMap():
             "   return\n" +\
             "if __name__ == '__main__':\n" +\
             "   client = esi_cluster_setup(partition='8GBDEV',n_workers=1, interactive=False)\n" +\
-            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False) as pmap: \n" +\
+            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False, verbose=True) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
         with open(scriptName, "w") as f:
@@ -1087,7 +1103,7 @@ class TestParallelMap():
             proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
                                     shell=True, start_new_session=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
-            logStr = "<ParallelMap> INFO: Log information available at"
+            logStr = "This is ACME"
             buffer = bytearray()
             timeout = 60
             t0 = time.time()
@@ -1101,7 +1117,7 @@ class TestParallelMap():
             time.sleep(2)
             out = proc.stdout.read().decode()
             assert "ALL DONE" not in out
-            assert "<ParallelMap> INFO: <ACME> CTRL + C acknowledged, client and workers successfully killed" in out
+            assert "CTRL + C acknowledged, client and workers successfully killed" in out
 
         # Ensure random exception does not immediately kill an active client
         scriptName = os.path.join(tempDir, "dummy3.py")
@@ -1155,7 +1171,7 @@ class TestParallelMap():
         # Create tmp directory for logfile
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
         os.makedirs(tempDir, exist_ok=True)
-        customLog = os.path.join(tempDir, "acme_log.txt")
+        customLog = os.path.join(tempDir, "mem_log.txt")
         outDirs = []
 
         # Set `arrsize` depending on available runner hardware and prepare expected
@@ -1196,6 +1212,12 @@ class TestParallelMap():
             assert toc - tic < 30
 
         # Check that for 2 parallel calls only 2 workers were memory-profiled
+        # (we need to flush `MemoryHandler` manually so that its contents
+        # is actually written to `customLog`)
+        log = logging.getLogger("ACME")
+        for h in log.handlers:
+            if hasattr(h, "flush"):
+                h.flush()
         with open(customLog, "r", encoding="utf8") as f:
             logTxt = f.read()
         assert "Estimated memory consumption across 2 runs" in logTxt
@@ -1255,6 +1277,12 @@ class TestParallelMap():
             assert 140 < toc - tic < 200
 
         # Check that for max 5 workers were memory-profiled
+        # (we need to flush `MemoryHandler` manually so that its contents
+        # is actually written to `customLog`)
+        log = logging.getLogger("ACME")
+        for h in log.handlers:
+            if hasattr(h, "flush"):
+                h.flush()
         with open(customLog2, "r", encoding="utf8") as f:
             logTxt = f.read()
         assert "Estimated memory consumption across 5 runs" in logTxt
@@ -1289,7 +1317,7 @@ class TestParallelMap():
         else:
 
             # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_worker!
-            with pytest.raises(customIOError):
+            with pytest.raises(IOError):
                 esi_cluster_setup(partition="auto", mem_per_worker="invalid")
 
             # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`
@@ -1348,7 +1376,8 @@ class TestParallelMap():
         outDirs.append(pmap.out_dir)
 
         # Ensure a deprecation warning was issued
-        for handler in pmap.log.handlers:
+        log = logging.getLogger("ACME")
+        for handler in log.handlers:
             if isinstance(handler, logging.FileHandler):
                 with open(handler.baseFilename, "r") as fl:
                     logTxt = fl.read()

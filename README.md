@@ -1,3 +1,9 @@
+<!--
+Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+in Cooperation with Max Planck Society
+SPDX-License-Identifier: CC-BY-NC-SA-1.0
+-->
+
 ![ACME_logo](https://raw.githubusercontent.com/esi-neuroscience/acme/master/doc/source/_static/acme_logo.png)
 
 # ACME: Asynchronous Computing Made ESI
@@ -6,6 +12,7 @@
 [![pypi](https://badge.fury.io/py/esi-acme.svg)](https://badge.fury.io/py/esi-acme)
 [![license](https://img.shields.io/github/license/esi-neuroscience/acme)](https://github.com/esi-neuroscience/acme/blob/main/LICENSE)
 [![Open in Visual Studio Code](https://img.shields.io/badge/-Open_in_VS_Code-007ACC?logo=visual%20studio%20code&logoColor=ffffff)](https://github.dev/esi-neuroscience/acme)
+[![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/projects/7144/badge)](https://bestpractices.coreinfrastructure.org/projects/7144)
 
 main: [![tests](https://github.com/esi-neuroscience/acme/actions/workflows/tests_workflow.yml/badge.svg?branch=main)](https://github.com/esi-neuroscience/acme/actions/workflows/tests_workflow.yml)
 [![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/main/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
@@ -67,6 +74,8 @@ with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
   pmap.compute()
 ```
 
+See also our [Quickstart Guide](https://esi-acme.readthedocs.io/en/latest/quickstart.html).
+
 ### Intermediate Examples
 
 Set number of function calls via `n_inputs`
@@ -83,6 +92,9 @@ pmap = ParallelMap(f, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)
 with pmap as p:
   p.compute()
 ```
+
+More details in
+[Override Automatic Input Argument Distribution](https://esi-acme.readthedocs.io/en/latest/userguide.html#override-automatic-input-argument-distribution)
 
 ### Advanced Use
 
@@ -116,6 +128,8 @@ with pmap as p:
     p.compute()
 ```
 
+For more information see [Reuse Worker Clients](https://esi-acme.readthedocs.io/en/latest/userguide.html#reuse-worker-clients)
+
 ## Handling results
 
 ### Load results from files
@@ -124,6 +138,9 @@ By default, results are saved to disk in HDF5 format and can be accessed using
 the `results_container` attribute of `ParallelMap`:
 
 ```python
+def f(x, y, z=3):
+  return (x + y) * z
+
 with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
   filenames = pmap.compute()
 ```
@@ -133,20 +150,56 @@ Example loading code:
 ```python
 import h5py
 import numpy as np
-out = np.zeros((4))
+out = np.zeros((4,))
 
 with h5py.File(pmap.results_container, "r") as h5f:
   for k, key in enumerate(h5f.keys()):
-    out[k] = h5f[key]["result_0"]
+    out[k] = h5f[key]["result_0"][()]
 ```
+
+See also [Where Are My Results?](https://esi-acme.readthedocs.io/en/latest/userguide.html#where-are-my-results)
+
+### Collect results in single HDF5 dataset
+
+If possible, results can be slotted into a single HDF5 dataset:
+
+```python
+def f(x, y, z=3):
+  return (x + y) * z
+
+with ParallelMap(f, [2, 4, 6, 8], 4, result_shape=(None,)) as pmap:
+  pmap.compute()
+```
+
+Example loading code:
+
+```python
+import h5py
+
+with h5py.File(pmap.results_container, "r") as h5f:
+  out = h5f["result_0"][()] # returns a NumPy array of shape (4,)
+```
+
+More examples can be found in
+[Collect Results in Single Dataset](https://esi-acme.readthedocs.io/en/latest/userguide.html#collect-results-in-single-dataset)
 
 ### Collect results in local memory
 
 This is possible but not recommended.
 
 ```python
+def f(x, y, z=3):
+  return (x + y) * z
+
 with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
-  results = pmap.compute() # returns a list of outputs
+  result = pmap.compute() # returns a 4-element list
+```
+
+Alternatively, create an in-memory NumPy array
+
+```python
+with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False, result_shape=(None,)) as pmap:
+  result = pmap.compute() # returns a NumPy array of shape (4,)
 ```
 
 ## Debugging
@@ -155,11 +208,15 @@ Use the `debug` keyword to perform all function calls in the local thread of
 the active Python interpreter
 
 ```python
+def f(x, y, z=3):
+  return (x + y) * z
+
 with ParallelMap(f, [2, 4, 6, 8], 4, z=None) as pmap:
     results = pmap.compute(debug=True)
 ```
 
 This way tools like `pdb` or ``%debug`` IPython magics can be used.
+More information can be found in the `FAQ`[https://esi-acme.readthedocs.io/en/latest/troubleshooting_faq.html]
 
 ## Documentation and Contact
 

@@ -1,6 +1,10 @@
-# -*- coding: utf-8 -*-
 #
 # Simple script for testing acme w/o pip-installing it
+#
+# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: BSD-3-Clause
 #
 
 # Builtin/3rd party package imports
@@ -38,8 +42,10 @@ if __name__ == "__main__":
     # Test stuff within here...
     # pass
 
-    with ParallelMap(arr_test, [np.ones((20,)), 2 * np.ones((20,)), 3 * np.ones((20,))], 4, result_shape=(None, 20)) as pmap:
+    with ParallelMap(arr_test, [np.ones((20,)), 2 * np.ones((20,)), 3 * np.ones((20,))], 4, result_shape=(None, 20), verbose=True, single_file=True) as pmap:
         results = pmap.compute()
+
+    1/0
 
     # pmap = ParallelMap(g, np.arange(100), 2)
     # pmap.daemon.estimate_memuse()

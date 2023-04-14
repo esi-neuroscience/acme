@@ -1,5 +1,12 @@
 #!/bin/bash
+#
 # Some quick shortcuts to quickly test ACME's proper functionality
+#
+# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
 
 # First and foremost, check if `srun` is available
 _useSLURM=$(command -v srun)

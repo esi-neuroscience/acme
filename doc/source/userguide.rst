@@ -1,5 +1,10 @@
-User Guide
-==========
+.. Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+.. in Cooperation with Max Planck Society
+
+.. SPDX-License-Identifier: CC-BY-NC-SA-1.0
+
+Walkthrough
+===========
 Learn how to get the most out of ACME for your own work by running through a
 quick but (hopefully) illustrative example that starts simple and subsequently
 turns on ACME's bells and whistles.
@@ -7,8 +12,8 @@ turns on ACME's bells and whistles.
 .. contents:: Quick Links
     :depth: 3
 
-Walkthrough
------------
+Setup
+-----
 Assume the function defined below is supposed to be run multiple times
 in parallel for different values of ``x``, ``y`` and ``z``
 
@@ -37,7 +42,7 @@ concurrently:
 * **Computation #3**: 36 = (8 + 4) * 3 (``x = 8``, ``y = 4``, ``z = 3``)
 
 Where Are My Results?
-^^^^^^^^^^^^^^^^^^^^^
+---------------------
 By default results are saved to disk in HDF5 format and ``results`` is a list
 of the corresponding filenames:
 
@@ -161,7 +166,7 @@ Now ``results`` is a list of integers:
     [18, 24, 30, 36]
 
 Override Automatic Input Argument Distribution
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+----------------------------------------------
 Next, suppose ``f`` has to be evaluated for the same values of ``x`` (again
 2, 4, 6 and 8), but ``y`` is not a number but a NumPy array:
 
@@ -217,7 +222,7 @@ This functionality is sometimes useful for routines that randomize their
 in- and/or outputs. An example and more information is provided in :ref:`taskIDex`
 
 Collect Results in Single Dataset
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------------
 When evaluating functions that return a NumPy array (like in the example above),
 it is sometimes beneficial to aggregate results in a single dataset. Assume
 the four 1d-arrays of the above parallel evaluation of ``f`` are to be
@@ -277,7 +282,7 @@ contain four (3,)-arrays, but one (4, 3)-array. More information and additional
 control options are discussed in :doc:`Advanced Usage and Customization <advanced_usage>`.
 
 Reuse Worker Clients
-^^^^^^^^^^^^^^^^^^^^^
+--------------------
 Instead of letting ACME automatically start and stop parallel worker clients
 witch each invocation of :class:`~acme.ParallelMap`, a dask :class:`distributed.Client`
 can be customized and set up manually **before** launching the actual concurrent
@@ -341,7 +346,7 @@ Note the info message:
     <ParallelMap> INFO: Attaching to global parallel computing client <Client: 'tcp://10.100.32.5:39747' processes=50 threads=50, memory=400.00 GB>
 
 Debugging And Estimating Resource Consumption
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------------------------
 Debugging programs running in parallel can be quite tricky.
 For instance, assume the function ``f`` is (erroneously) called with ``z``
 set to ``None``. In a regular sequential setting, identifying the problem
@@ -411,7 +416,7 @@ to :class:`~acme.ParallelMap` works as intended in a sequential setting prior to
 it in parallel.
 
 Interactive Monitoring
-^^^^^^^^^^^^^^^^^^^^^^
+----------------------
 When ACME starts a :class:`distributed.Client`, dask automatically sets up
 a `diagnostic dashboard <https://docs.dask.org/en/stable/dashboard.html>`_
 for the client. The dashboard is a web interface that allows live monitoring
@@ -432,6 +437,14 @@ of the global status of the concurrent processing task started by :class:`~acme.
 .. image:: _static/dashboard.gif
    :alt: dask-dashboard
 
+Non-Interactive Logging
+-----------------------
+In addition, if ACME's automatic result management is used (i.e., if
+``write_worker_results`` is ``True``), a log-file is created alongside
+the files generated on disk. Depending on the chosen verbosity level of
+ACME's messaging system (i.e., if ``verbose`` is either ``False``, ``None`` or
+``True``), the generated log-file contains (very) detailed runtime
+information of the performed computation.
 
 Wait, There's More...
 ---------------------

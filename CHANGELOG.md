@@ -1,6 +1,45 @@
+ <!--
+ Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+ in Cooperation with Max Planck Society
+ SPDX-License-Identifier: CC-BY-NC-SA-1.0
+ -->
+
 # Changelog of ACME
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+
+## [2023.4] - 2023-04-14
+Re-designed ACME's logs and command line output.
+
+### NEW
+- Created templates for filing issues and opening Pull Requests for ACME
+  on GitHub.
+- Enabled private security reporting in ACME's GitHub repository and
+  added a security policy for ACME (in compliance with the OpenSSF Best
+  Practices Badge)
+
+### CHANGED
+- Overhauled ACME's logging facilities: many print messages have been
+  marked `"DEBUG"` to make ACME's default output less "noisy". To this
+  effect the Python `logging` module is now used more extensively than
+  before. The canonical name of ACME's logger is simply "ACME".
+- By default, ACME now creates a log-file alongside any auto-generated
+  output files to keep a record of file creation and attribution.
+- Reworked ACME's SyNCoPy interface: a dedicated module `spy_interface.py`
+  is now managing ACME's I/O direction if ACME is called by SyNCoPy. This
+  allows for (much) cleaner exception handling in ACME's cluster helpers
+  (`esi_cluster_setup`, `cluster_cleanup` etc.) which ultimately permits
+  a more streamlined extension of ACME to more HPC infrastructure.
+- Redesigned ACME's online documentation: increased font-size to enhance
+  readability, included a contribution guide and reworked the overall page
+  navigation + visual layout.
+
+### REMOVED
+### DEPRECATED
+### FIXED
+- Prevented ACME from accidentally using a dysfunctional client (e.g., a
+  SLURM client with workers whose jobs have been externally cancelled).
+  Thanks to @KatharineShapcott, cf #47
 
 ## [2022.12] - 2022-12-15
 Bugfix release.

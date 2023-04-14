@@ -1,34 +1,38 @@
-# -*- coding: utf-8 -*-
 #
 # User-exposed interface of acme
+#
+# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# in Cooperation with Max Planck Society
+#
+# SPDX-License-Identifier: BSD-3-Clause
 #
 
 # Builtin/3rd party package imports
 import inspect
-import sys
 import numpy as np
+import logging
 
 # Local imports
-from acme import __deprecated__, __deprecation_wrng__
+from acme import __deprecated__, __deprecation_wrng__, __version__
 from .backend import ACMEdaemon
+from .logger import prepare_log
+from .shared import _scalar_parser, sizeOf
 from . import shared as acs
-isSpyModule = False
-if "syncopy" in sys.modules:
-    isSpyModule = True
 
 __all__ = ["ParallelMap"]
+
+# Fetch logger
+log = logging.getLogger("ACME")
 
 
 # Main context manager for parallel execution of user-defined functions
 class ParallelMap(object):
 
-    msgName = "{pre:s}<{pkg:s}ParallelMap>".format(pre="Syncopy " if isSpyModule else "",
-                                                   pkg="ACME: " if isSpyModule else "")
+    objName = "<ParallelMap>"
     argv = None
     kwargv = None
     func = None
     n_inputs = None
-    log = None
     _maxArgSize = 1024
 
     def __init__(
@@ -170,12 +174,15 @@ class ParallelMap(object):
             as well as runtime of worker jobs prior to the actual concurrent
             computation. See [1]_ and [2]_ for more information.
         logfile : None or bool or str
-            If `None` (default) or `False`, all run-time information as well as errors and
-            warnings are printed to the command line only. If `True`, an auto-generated
-            log-file is set up that records run-time progress. Alternatively, the
-            name of a custom log-file can be provided (must not exist). The verbosity
-            of recorded information can be controlled via setting `verbose`.
-            See [2]_ for more details.
+            If `None` (default) and ``write_worker_results = True``,
+            a logfile is created alongside the auto-generated on-disk results.
+            If `None` and ``write_worker_results = False``, no logfile is
+            created. To override this mechanism, either explicitly set
+            `logfile` to `True` or `False` to enforce or suppress logfile
+            creation.
+            Alternatively, the name of a custom log-file can be provided.
+            The verbosity of recorded runtime information can be controlled
+            via setting `verbose`. See [2]_ for more details.
 
         Returns
         -------
@@ -230,20 +237,24 @@ class ParallelMap(object):
         .. [2] https://esi-acme.readthedocs.io/en/latest/advanced_usage.html
         """
 
-        # First and foremost, set up logging system (unless logger is already present)
-        self.log = acs.prepare_log(func, caller=self.msgName, logfile=logfile, verbose=verbose)
+        # First and foremost, set up logging system - logfile is processed later
+        prepare_log(logname="ACME", verbose=verbose)
+        log.announce("This is ACME v. %s", __version__)
 
         # Backwards compatibility: legacy keywords are converted to new nomenclature
         if any(kw in kwargs for kw in __deprecated__):
-            self.log.warning(__deprecation_wrng__)
+            log.warning(__deprecation_wrng__)
             n_workers = kwargs.pop("n_jobs", n_workers)
             mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
+            log.debug("Set `n_workers = n_jobs` and \
+                       mem_per_worker = mem_per_job`")
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`
         self.prepare_input(func, n_inputs, *args, **kwargs)
 
         # Create an instance of `ACMEdaemon` that does the actual parallel computing work
+        log.debug("Instantiating `ACMEdaemon`")
         self.daemon = ACMEdaemon(self,
                                  n_workers=n_workers,
                                  write_worker_results=write_worker_results,
@@ -257,7 +268,9 @@ class ParallelMap(object):
                                  mem_per_worker=mem_per_worker,
                                  setup_timeout=setup_timeout,
                                  setup_interactive=setup_interactive,
-                                 stop_client=stop_client)
+                                 stop_client=stop_client,
+                                 verbose=verbose,
+                                 logfile=logfile)
 
     def prepare_input(self, func, n_inputs, *args, **kwargs):
         """
@@ -271,19 +284,22 @@ class ParallelMap(object):
 
         # Ensure `func` really is a function and `n_inputs` makes sense
         if not callable(func):
-            msg = "{} first input has to be a callable function, not {}"
-            raise TypeError(msg.format(self.msgName, str(type(func))))
-        msg = "{} `n_inputs` has to be 'auto' or an integer >= 2, not {}"
+            msg = "%s first input has to be a callable function, not %s"
+            raise TypeError(msg%(self.objName, str(type(func))))
         if isinstance(n_inputs, str):
             if n_inputs != "auto":
-                raise ValueError(msg.format(self.msgName, n_inputs))
+                msg = "%s `n_inputs` has to be 'auto' or an integer >= 2, not %s"
+                raise ValueError(msg%(self.objName, n_inputs))
             guessInputs = True
+            log.debug("Using `n_inputs = 'auto'`")
         else:
             try:
-                acs._scalar_parser(n_inputs, varname="n_inputs", ntype="int_like", lims=[1, np.inf])
+                _scalar_parser(n_inputs, varname="n_inputs", ntype="int_like", lims=[1, np.inf])
             except Exception as exc:
+                log.error("Error parsing `n_inputs`")
                 raise exc
             guessInputs = False
+            log.debug("Using provided `n_inputs = %d`", n_inputs)
 
         # Get `func`'s signature to extract its positional/keyword arguments
         funcSignature = inspect.signature(func)
@@ -301,34 +317,36 @@ class ParallelMap(object):
                 posArgNames.append(name)
         for name in posArgNames:
             kwargs.pop(name)
+            log.debug("Moved %s from `kwargs` to positional args", name)
 
         # If "taskID" is a keyword arg, include/overwrite it in `kwargs` - the rest
         # is done by `ACMEdaemon`
         if "taskID" in funcKwargs:
             kwargs["taskID"] = None
+            log.debug("Found `taskID` in kwargs - overriding it")
 
         # Compare provided `args`/`kwargs` to actually defined quantities in `func`
         if len(args) != len(funcPosArgs):
-            msg = "{} {} expects {} positional arguments ({}), found {}"
+            msg = "%s %s expects %d positional arguments (%s), found %d"
             validArgs = "'" + "'".join(arg + "', " for arg in funcPosArgs)[:-2]
-            raise ValueError(msg.format(self.msgName,
-                                        func.__name__,
-                                        len(funcPosArgs),
-                                        validArgs,
-                                        len(args)))
+            raise ValueError(msg%(self.objName,
+                                  func.__name__,
+                                  len(funcPosArgs),
+                                  validArgs,
+                                  len(args)))
         if len(kwargs) > len(funcKwargs):
-            msg = "{} {} accepts at maximum {} keyword arguments ({}), found {}"
+            msg = "%s %s accepts at maximum %d keyword arguments (%s), found %d"
             validArgs = "'" + "'".join(arg + "', " for arg in funcKwargs)[:-2]
-            raise ValueError(msg.format(self.msgName,
-                                        func.__name__,
-                                        len(funcKwargs),
-                                        validArgs,
-                                        len(kwargs)))
+            raise ValueError(msg%(self.objName,
+                                  func.__name__,
+                                  len(funcKwargs),
+                                  validArgs,
+                                  len(kwargs)))
 
         # Prepare argument parsing: collect the the length of anything 1D-array-like
         # in `argLens` and check the size of all provided positional and keyword args
         argLens = []
-        wrnMsg = "argument size {0:4.2f} MB exceeds recommended limit of {1} MB. " +\
+        wrnMsg = "argument size %4.2f MB exceeds recommended limit of %d MB. " +\
             "Distributing large variables across workers may result in poor performance. "
 
         # Cycle through positional args
@@ -337,9 +355,10 @@ class ParallelMap(object):
                 arg = list(arg)
                 args[k] = arg
             acs.callCount = 0
-            argsize = acs.sizeOf(arg, "positional arguments")
+            argsize = sizeOf(arg, "positional arguments")
+            log.debug("Computed size of pos arg #%d as %4.2f bytes", k, argsize)
             if argsize > self._maxArgSize:
-                self.log.warning(wrnMsg.format(argsize, self._maxArgSize))
+                log.warning(wrnMsg, argsize, self._maxArgSize)
             if isinstance(arg, (list, tuple)):
                 argLens.append(len(arg))
             elif isinstance(arg, np.ndarray):
@@ -354,9 +373,10 @@ class ParallelMap(object):
                 value = list(value)
                 kwargs[name] = value
             acs.callCount = 0
-            valsize = acs.sizeOf(value, "keyword arguments")
+            valsize = sizeOf(value, "keyword arguments")
+            log.debug("Computed size of %s as %4.2f bytes", name, valsize)
             if valsize > self._maxArgSize:
-                self.log.warning(wrnMsg.format(valsize, self._maxArgSize))
+                log.warning(wrnMsg, valsize, self._maxArgSize)
             if isinstance(value, (list, tuple)):
                 if isinstance(defaultValue, (list, tuple)):
                     if len(defaultValue) != len(value):
@@ -374,18 +394,19 @@ class ParallelMap(object):
         # or at at least one input argument actually contains `n_input` elements
         if guessInputs:
             if len(set(argLens)) > 1 or len(argLens) == 0:
-                msg = "{} automatic input distribution failed: found {} objects " +\
-                    "containing {} to {} elements. Please specify `n_inputs` manually. "
-                raise ValueError(msg.format(self.msgName,
-                                            len(argLens),
-                                            min(argLens, default=0),
-                                            max(argLens, default=0)))
+                msg = "%s automatic input distribution failed: found %d objects " +\
+                    "containing %d to %d elements. Please specify `n_inputs` manually. "
+                raise ValueError(msg%(self.objName,
+                                      len(argLens),
+                                      min(argLens, default=0),
+                                      max(argLens, default=0)))
             n_inputs = argLens[0]
         else:
             if n_inputs not in set(argLens) and not all(arglen == 1 for arglen in argLens):
-                msg = "{} No object has required length of {} matching `n_inputs`. "
-                raise ValueError(msg.format(self.msgName, n_inputs))
+                msg = "%s No object has required length of %d matching `n_inputs`. "
+                raise ValueError(msg%(self.objName, n_inputs))
         self.n_inputs = int(n_inputs)
+        log.debug("Inferred `n_inputs = %d`", n_inputs)
 
         # Anything that does not contain `n_input` elements is converted to a one-element list
         wrnMsg = "Found a single callable object in positional arguments. " +\
@@ -399,12 +420,12 @@ class ParallelMap(object):
                 if len(arg.squeeze().shape) == 1 and arg.squeeze().size == self.n_inputs:
                     continue
             elif callable(arg):
-                self.log.warning(wrnMsg)
+                log.warning(wrnMsg)
             self.argv[ak] = [arg]
 
         # Same for keyword arguments with the caveat that default values have to
         # be taken into account (cf. above)
-        wrnMsg = "Found a single callable object in keyword arguments: {}. " +\
+        wrnMsg = "Found a single callable object in keyword arguments: %s. " +\
             "It will be executed just once and shared by all workers"
         self.kwargv = dict(kwargs)
         for name, value in kwargs.items():
@@ -416,16 +437,20 @@ class ParallelMap(object):
                 if len(value.squeeze().shape) == 1 and value.squeeze().size == self.n_inputs:
                     continue
             elif callable(value):
-                self.log.warning(wrnMsg.format(name))
+                log.warning(wrnMsg, name)
             self.kwargv[name] = [value]
 
         # Finally, attach user-provided function to class instance
         self.func = func
 
+        # Get out
+        return
+
     def compute(self):
         """
         Shortcut to launch parallel computation via `ACMEdaemon`
         """
+        log.debug("Invoking `compute` method")
         if hasattr(self, "daemon"):
             self.daemon.compute()
 
@@ -433,13 +458,15 @@ class ParallelMap(object):
         """
         Shortcut to corresponding cleanup-routine provided by `ACMEdaemon`
         """
+        log.debug("Invoking `cleanup` method")
         if hasattr(self, "daemon"):
-            self.daemon.cleanup
+            self.daemon.cleanup()
 
     def __enter__(self):
         """
         If `ParallelMap` is used as context manager, launch `ACMEdaemon`
         """
+        log.debug("Entering `ACMEdaemon` context")
         return self.daemon
 
     def __exit__(self, exception_type, exception_value, exception_traceback):
@@ -447,4 +474,5 @@ class ParallelMap(object):
         If `ParallelMap` is used as context manager, close any ad-hoc computing
         clients created by `ACMEdaemon`
         """
+        log.debug("Exiting `ACMEdaemon` context")
         self.daemon.cleanup()
