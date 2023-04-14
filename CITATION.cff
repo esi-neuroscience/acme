@@ -22,7 +22,7 @@ authors:
   given-names: Joscha Tapani
   orcid: https://orcid.org/0000-0001-6233-1866
 cff-version: 1.1.0
-date-released: '2022-11-11'
+date-released: '2022-12-15'
 keywords:
 - high-performance computing
 - parallel computing
@@ -32,4 +32,4 @@ message: If you use this software, please cite it based on metadata found in thi
   itself used as the parallelization engine of SyNCoPy.
 repository-code: https://github.com/esi-neuroscience/acme
 title: 'ACME: Asynchronous Computing Made ESI'
-version: '2022.11'
+version: '2022.12'
