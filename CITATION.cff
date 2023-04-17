@@ -1,10 +1,3 @@
-#
-# Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
-# in Cooperation with Max Planck Society
-#
-# SPDX-License-Identifier: CC0-1.0
-#
-
 authors:
 - affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
     \ Max Planck Society"
@@ -22,7 +15,7 @@ authors:
   given-names: Joscha Tapani
   orcid: https://orcid.org/0000-0001-6233-1866
 cff-version: 1.1.0
-date-released: '2022-12-15'
+date-released: '2023-04-17'
 keywords:
 - high-performance computing
 - parallel computing
@@ -32,4 +25,4 @@ message: If you use this software, please cite it based on metadata found in thi
   itself used as the parallelization engine of SyNCoPy.
 repository-code: https://github.com/esi-neuroscience/acme
 title: 'ACME: Asynchronous Computing Made ESI'
-version: '2022.12'
+version: '2023.4'
