@@ -216,7 +216,7 @@ with ParallelMap(f, [2, 4, 6, 8], 4, z=None) as pmap:
 ```
 
 This way tools like `pdb` or ``%debug`` IPython magics can be used.
-More information can be found in the `FAQ`[https://esi-acme.readthedocs.io/en/latest/troubleshooting_faq.html]
+More information can be found in the [FAQ](https://esi-acme.readthedocs.io/en/latest/troubleshooting_faq.html).
 
 ## Documentation and Contact
 
