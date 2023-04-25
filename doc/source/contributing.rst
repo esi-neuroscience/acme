@@ -56,7 +56,7 @@ you want to set up a Windows environment )
 
 5. If everything looks fine, install ACME in "editable" mode. This creates
    a symlink to your local git repo in your environment's ``site-packages``
-   directory (so you can import acme is if it was statically installed via
+   directory (so you can import acme as if it was statically installed via
    pip)
 
    .. code-block:: shell
