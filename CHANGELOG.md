@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 ### NEW
+- Added new tutorial on using ACME for parallel evaluation of classifier 
+  accuracy
+- Added new tutorial on using ACME for parallel neural net model evaluation
 ### CHANGED
 ### REMOVED
 ### DEPRECATED
