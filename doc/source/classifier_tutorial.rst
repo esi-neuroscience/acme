@@ -6,6 +6,11 @@
 Parallel Bootstrap Tutorial
 ---------------------------
 
+.. note::
+    These examples were run on the ESI HPC cluster. This is why we have to use the `esi_cluster_setup` function to set up the cluster.
+    They are perfectly reproducable on any other cluster or local machine by using the `local_cluster_setup` or `slurm_cluster_setup` function instead.
+
+
 The following Python code demonstrates how to use ACME to perform a parallel bootstrap of the classification accuracy of three different scikit-learn classifiers.
 
 We start by loading the wine dataset from scikit-learn and splitting it into training and testing sets using the `train_test_split` function from `sklearn.model_selection`.
@@ -45,7 +50,7 @@ We train each of them on the training set and evaluate their accuracy on the tes
 
 Because we evaluated the accuracy on the test data, we only get one accuracy measure per classifier.
 However, we would like to have a distribution of accuracies to later compare the confidence intervals.
-To achieve this, we can use `bootstrapping <https://en.wikipedia.org/wiki/Bootstrapping_(statistics)/>_`.
+To achieve this, we can use `bootstrapping <https://en.wikipedia.org/wiki/Bootstrapping_(statistics)/>`_.
 
 Bootstrapping and confidence intervals
 -----------------------------------------
@@ -67,8 +72,8 @@ We will use ACME to parallelize the bootstrapping process for efficiency.
     nboot = 100
     seeds = np.linspace(0, nboot, nboot, dtype=int)
 
-    with ParallelMap(bootstrap_model_accuracy, X_test, y_test, seeds, n_inputs=nboot, write_worker_results=False) as pmap:
-        results = np.array(pmap.compute())
+    with ParallelMap(bootstrap_model_accuracy, X_test, y_test, seeds, n_inputs=nboot, write_worker_results=False,result_shape=(None,3)) as pmap:
+        results = pmap.compute()
 
     cluster_cleanup(client) # close the cluster if you dont need it anymore
 

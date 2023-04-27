@@ -6,6 +6,10 @@
 Deep Learning Tutorial
 ---------------------------
 
+.. note::
+    These examples were run on the ESI HPC cluster. This is why we have to use the `esi_cluster_setup` function to set up the cluster.
+    They are perfectly reproducable on any other cluster or local machine by using the `local_cluster_setup` or `slurm_cluster_setup` function instead.
+
 The following Python code demonstrates how to use ACME to perform parallel deep learning model fitting with `PyTorch <https://pytorch.org/>`_ to evaluate the best model for a dataset.
 This is a somewhat toy example, in which we will vary the model architecture randomly. Nevertheless, this general approach can be used to perform a grid search over a set of parameters.
 This problem is inspired by some fantastic DeepLearning course from `Mike X. Cohen <https://www.mikexcohen.com/>`_.
@@ -28,7 +32,7 @@ First, we import the necessary packages:
     import itertools
 
 
-Building the Network & related functions
+Building the network & related functions
 -----------------------------------------
 
 Next, we define our NeuralNet model. We will use a simple fully connected network with 5 hidden layers and vary the number of units in each layer.
@@ -108,7 +112,7 @@ It is also possible that ACME return the model itself, since it is pickable. How
 
 Getting the data ready
 -----------------------
-We will parse the PyTorch dataloaders along with the model parameters to the :class:`~acme.ParallelMap` class.
+We will pass the PyTorch dataloaders along with the model parameters to the :class:`~acme.ParallelMap` class.
 
 .. code-block:: python
 
