@@ -28,7 +28,7 @@ author = 'Ernst Strüngmann Institute for Neuroscience in Cooperation with Max P
 copyright = f'2020-{time.strftime("%Y")}, {author}'
 
 # The short X.Y version
-version = acme.__version__
+version = acme.__version__.partition("-")[0]
 # The full version, including alpha/beta/rc tags
 release = acme.__version__
 
