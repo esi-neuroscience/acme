@@ -44,9 +44,12 @@ Getting Started
 ---------------
 Please have a look at the :doc:`Quickstart Guide <quickstart>`.
 
-Examples
---------
+Examples + Tutorials
+--------------------
 Simple to advanced usage examples are collected on our `GitHub Page <https://github.com/esi-neuroscience/acme#usage>`_.
+
+Our :doc:`Tutorial Collection <tutorials>` illustrates how ACME has been
+used in real-world applications.
 
 User Guide
 ----------

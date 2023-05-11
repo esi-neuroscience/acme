@@ -4,7 +4,7 @@
 .. SPDX-License-Identifier: CC-BY-NC-SA-1.0
 
 Deep Learning Tutorial
----------------------------
+----------------------
 
 .. note::
     These examples were run on the ESI HPC cluster. This is why we have to use the `esi_cluster_setup` function to set up the cluster.
@@ -91,7 +91,7 @@ We need to define a function that trains the network:
             losses[epochi] = np.mean(batchLoss)
 
             model.eval()
-            X,y = next(iter(testLoader)) 
+            X,y = next(iter(testLoader))
             with torch.no_grad(): # deactivates autograd
             yHat = model.forward(X,param)
             testAcc.append( 100*torch.mean(((yHat>0) == y).float()).item() )
@@ -154,8 +154,8 @@ it is highly recommended to save to disk and not collect in local memory.
 
 After the computation is done, we can inspect the different outcome parameters that were returned:
 - test set accuracy time courses (as a function of epochs)
-- train set accuracy time courses 
-- losses 
+- train set accuracy time courses
+- losses
 
 .. code-block:: python
 
