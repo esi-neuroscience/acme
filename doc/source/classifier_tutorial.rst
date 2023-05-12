@@ -3,17 +3,25 @@
 
 .. SPDX-License-Identifier: CC-BY-NC-SA-1.0
 
+:orphan:
+
 Parallel Bootstrap Tutorial
 ---------------------------
 
 .. note::
-    These examples were run on the ESI HPC cluster. This is why we have to use the `esi_cluster_setup` function to set up the cluster.
-    They are perfectly reproducable on any other cluster or local machine by using the `local_cluster_setup` or `slurm_cluster_setup` function instead.
+    These examples were run on the ESI HPC cluster. This is why we use
+    :func:`~acme.esi_cluster_setup` to set up a parallel computing client.
+    They are perfectly reproducible on any other cluster or local machine
+    by instead using :func:`~acme.slurm_cluster_setup` or :func:`~acme.local_cluster_setup`
+    respectively.
 
+The following Python code demonstrates how to use ACME to perform a
+parallel bootstrap of the classification accuracy of three different
+`scikit-learn <https://scikit-learn.org/stable/>`_ classifiers.
 
-The following Python code demonstrates how to use ACME to perform a parallel bootstrap of the classification accuracy of three different scikit-learn classifiers.
-
-We start by loading the wine dataset from scikit-learn and splitting it into training and testing sets using the `train_test_split` function from `sklearn.model_selection`.
+We start by loading the `wine dataset <https://archive.ics.uci.edu/ml/datasets/wine>`_
+from scikit-learn and splitting it into training and testing sets using the
+:func:`~sklearn.model_selection.train_test_split` function from :mod:`sklearn.model_selection`.
 
 .. code-block:: python
 
@@ -24,11 +32,15 @@ We start by loading the wine dataset from scikit-learn and splitting it into tra
     X_train, X_test, y_train, y_test = train_test_split(data.data, data.target, test_size=0.5, random_state=42)
 
 
-Training and evaluating the classifiers
+Training and Evaluating The Classifiers
 ---------------------------------------
 
-Next, we define three scikit-learn classifiers: K nearest neighbors, a NeuralNet, and support vector machine. 
-We train each of them on the training set and evaluate their accuracy on the test set using the `score` method.
+Next, we define three scikit-learn classifiers: K nearest neighbors
+(:class:`~sklearn.neighbors.KNeighborsClassifier`), a neural network model
+(:class:`~sklearn.neural_network.MLPClassifier`), and a support vector machine
+(:class:`~sklearn.svm.SVC`). We train each of them on the training set and
+evaluate their accuracy on the test set using the respective ``score``
+methods.
 
 .. code-block:: python
 
@@ -48,15 +60,18 @@ We train each of them on the training set and evaluate their accuracy on the tes
     print(f"Naive Bayes  accuracy: {NeuralNet.score(X_test, y_test):.3f}")
     print(f"Support Vector Machine accuracy: {SVM.score(X_test, y_test):.3f}")
 
-Because we evaluated the accuracy on the test data, we only get one accuracy measure per classifier.
-However, we would like to have a distribution of accuracies to later compare the confidence intervals.
-To achieve this, we can use `bootstrapping <https://en.wikipedia.org/wiki/Bootstrapping_(statistics)/>`_.
+Because we evaluated the accuracy on the test data, we only get one
+accuracy measure per classifier. However, we would like to have a
+distribution of accuracies to later compare the confidence intervals. To
+achieve this, we can use `bootstrapping <https://en.wikipedia.org/wiki/Bootstrapping_(statistics)/>`_.
 
-Bootstrapping and confidence intervals
------------------------------------------
+Bootstrapping and Confidence Intervals
+--------------------------------------
 
-We define a function `bootstrap_model_accuracy` that resamples the test set *with* replacement and calculates the accuracy of each classifier on the resampled data.
-We will use ACME to parallelize the bootstrapping process for efficiency.
+We define a function ``bootstrap_model_accuracy`` that resamples the test
+set *with* replacement and calculates the accuracy of each classifier on
+the resampled data. We will use ACME to parallelize the bootstrapping
+process for efficiency.
 
 .. code-block:: python
 
@@ -75,9 +90,10 @@ We will use ACME to parallelize the bootstrapping process for efficiency.
     with ParallelMap(bootstrap_model_accuracy, X_test, y_test, seeds, n_inputs=nboot, write_worker_results=False,result_shape=(None,3)) as pmap:
         results = pmap.compute()
 
-    cluster_cleanup(client) # close the cluster if you dont need it anymore
+    cluster_cleanup(client) # close the cluster if you don't need it anymore
 
-We now have a distribution of accuracies for each classifier. This means we can calculate a confidence interval for each classifier.
+We now have a distribution of accuracies for each classifier. This means
+we can calculate a confidence interval for each classifier.
 
 .. code-block:: python
 
@@ -113,9 +129,13 @@ We can now go ahead and also plot our bootstrapped results as histograms.
     :align: center
     :alt: Classifier Tutorial
     :target: ../../_static/images/classifier_tutorial.png
-    
-This is a simple procedure to compare the performance of different classifiers and we could have also achieved the same using a for loop. However,
-the advantage of using ACME becomes apparent when we are using larger data sets and more complex models. In this case, the bootstrapping process can take a long time and
-parallelization is necessary to speed up the process. ACME allows us to parallelize the bootstrapping process with just a few lines of code.
+
+This is a simple procedure to compare the performance of different
+classifiers and we could have also achieved the same using a for loop.
+However, the advantage of using ACME becomes apparent when we are using
+larger data sets and more complex models. In this case, the bootstrapping
+process can take a long time and parallelization is necessary to speed up
+the process. ACME allows us to parallelize the bootstrapping process with
+just a few lines of code.
 
 

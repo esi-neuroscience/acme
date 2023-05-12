@@ -171,5 +171,11 @@ intersphinx_mapping = {
     ),
     "h5py": ("https://docs.h5py.org/en/latest/",
              "https://docs.h5py.org/en/latest/objects.inv"
+    ),
+    "sklearn": ("https://scikit-learn.org/stable/",
+                "https://scikit-learn.org/stable/objects.inv"
+    ),
+    "torch": ("https://pytorch.org/docs/stable/",
+              "https://pytorch.org/docs/stable/objects.inv"
     )
 }
