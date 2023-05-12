@@ -116,6 +116,27 @@ by their number prepended with the "#" symbol. Here's an example:
         modified:   path/to/file1
         modified:   path/to/file2
 
+Documentation
+-------------
+
+To build ACME's HTML documentation, activate the development environment
+created above, navigate to the ``doc`` folder of the main repository and
+run `Sphinx <https://www.sphinx-doc.org/en/master/>`_:
+
+.. code-block:: bash
+
+    conda activate acme
+    cd doc/
+    make html
+
+The generated output is found in ``doc/build/html``. Opening the file
+``index.html`` in a web browser opens the documentation's landing page.
+Click on links to navigate to other sections or simply use the search box.
+For more information about Sphinx and reStructuredText see
+`Using Sphinx <https://www.sphinx-doc.org/en/master/usage/index.html>`_
+and its
+`reStructuredText Primer <https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html>`_.
+
 Changelog
 ---------
 
