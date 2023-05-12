@@ -391,7 +391,7 @@ which yields
 Alternative Storage Format: Pickle (``write_pickle``)
 -----------------------------------------------------
 In some cases it might be necessary to work with objects that are not
-HDF5 compatible, e.g., sparse matrices created by ``scipy.sparse``. Consider
+HDF5 compatible, e.g., sparse matrices created by :mod:`scipy.sparse`. Consider
 
 .. code-block:: python
 

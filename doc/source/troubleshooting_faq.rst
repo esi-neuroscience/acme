@@ -46,8 +46,8 @@ works as expected. However,
 
     AttributeError: 'list' object has no attribute 'sum'
 
-fails, since the Python list `[1,1,1]` does not support summing its components via
-the method `.sum()` as NumPy arrays do. Thus, invoking :class:`~acme.ParallelMap` like this:
+fails, since the Python list ``[1,1,1]`` does not support summing its components via
+the method ``.sum()`` as NumPy arrays do. Thus, invoking :class:`~acme.ParallelMap` like this:
 
 .. code-block:: python
 
@@ -56,7 +56,7 @@ the method `.sum()` as NumPy arrays do. Thus, invoking :class:`~acme.ParallelMap
 
 will similarly make any spawned distributed workers crash with ``Compute Failed``
 errors. The root problem is of course completely unrelated to actual parallel
-execution of `f` but is instead actually caused by using the wrong input type for `x`.
+execution of `f` but is instead actually caused by using the wrong input type for ``x``.
 *Nail It Before You Scale It*.
 
 Once you have ensured that your function works fine in a sequential setting,
@@ -83,11 +83,11 @@ a strategy to circumvent this problem.
 
 Q: I try to run ACME locally on my machine but I always get a ``RuntimeError``
 ******************************************************************************
-If you call :class:`~acme.ParallelMap` (or `local_cluster_setup`) inside a script that does not
+If you call :class:`~acme.ParallelMap` (or :func:`~acme.local_cluster_setup`) inside a script that does not
 contain a ``if __name__ == "__main__"`` block, starting parallel workers results
 in an infinite recursion triggered by new processes being started before the calling
 process can finish its bootstrapping phase. Thus, try wrapping :class:`~acme.ParallelMap`
-(or `local_cluster_setup`) inside a main module block, i.e.,
+(or :func:`~acme.local_cluster_setup`) inside a main module block, i.e.,
 
 .. code-block:: python
 

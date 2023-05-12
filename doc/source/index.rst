@@ -85,6 +85,7 @@ Navigation
 
    quickstart
    userguide
+   tutorials
    best_practices
    troubleshooting_faq
    advanced_usage
