@@ -28,7 +28,7 @@ author = 'Ernst Strüngmann Institute for Neuroscience in Cooperation with Max P
 copyright = f'2020-{time.strftime("%Y")}, {author}'
 
 # The short X.Y version
-version = acme.__version__
+version = acme.__version__.partition("-")[0]
 # The full version, including alpha/beta/rc tags
 release = acme.__version__
 
@@ -171,5 +171,11 @@ intersphinx_mapping = {
     ),
     "h5py": ("https://docs.h5py.org/en/latest/",
              "https://docs.h5py.org/en/latest/objects.inv"
+    ),
+    "sklearn": ("https://scikit-learn.org/stable/",
+                "https://scikit-learn.org/stable/objects.inv"
+    ),
+    "torch": ("https://pytorch.org/docs/stable/",
+              "https://pytorch.org/docs/stable/objects.inv"
     )
 }

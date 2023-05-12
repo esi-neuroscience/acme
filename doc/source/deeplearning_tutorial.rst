@@ -3,16 +3,25 @@
 
 .. SPDX-License-Identifier: CC-BY-NC-SA-1.0
 
+:orphan:
+
 Deep Learning Tutorial
----------------------------
+----------------------
 
 .. note::
-    These examples were run on the ESI HPC cluster. This is why we have to use the `esi_cluster_setup` function to set up the cluster.
-    They are perfectly reproducable on any other cluster or local machine by using the `local_cluster_setup` or `slurm_cluster_setup` function instead.
+    These examples were run on the ESI HPC cluster. This is why we use
+    :func:`~acme.esi_cluster_setup` to set up a parallel computing client.
+    They are perfectly reproducible on any other cluster or local machine
+    by instead using :func:`~acme.slurm_cluster_setup` or :func:`~acme.local_cluster_setup`
+    respectively.
 
-The following Python code demonstrates how to use ACME to perform parallel deep learning model fitting with `PyTorch <https://pytorch.org/>`_ to evaluate the best model for a dataset.
-This is a somewhat toy example, in which we will vary the model architecture randomly. Nevertheless, this general approach can be used to perform a grid search over a set of parameters.
-This problem is inspired by some fantastic DeepLearning course from `Mike X. Cohen <https://www.mikexcohen.com/>`_.
+The following Python code demonstrates how to use ACME to perform parallel
+deep learning model fitting with `PyTorch <https://pytorch.org/>`_ to
+evaluate the best model for a dataset. This is a somewhat toy example, in
+which we will vary the model architecture randomly. Nevertheless, this
+general approach can be used to perform a grid search over a set of
+parameters. This problem is inspired by some fantastic DeepLearning course
+from `Mike X. Cohen <https://www.mikexcohen.com/>`_.
 
 First, we import the necessary packages:
 
@@ -32,11 +41,14 @@ First, we import the necessary packages:
     import itertools
 
 
-Building the network & related functions
------------------------------------------
+Building the Network & Related Runctions
+----------------------------------------
 
-Next, we define our NeuralNet model. We will use a simple fully connected network with 5 hidden layers and vary the number of units in each layer.
-The goal of the model is to binary classify if a wine was rated good or bad. This classification is based on some chemical compound analysis of the wine.
+Next, we define our ``NeuralNet`` model. We will use a simple fully connected
+network with 5 hidden layers and vary the number of units in each layer.
+The goal of the model is to binary classify if a wine was rated good or
+bad. This classification is based on some chemical compound analysis of the
+wine.
 
 We define our model as follows:
 
@@ -61,7 +73,8 @@ We define our model as follows:
             return self.layers['output'](x)
 
 
-We can observe that we construct the number of units in each layer based some input into the model.
+We can observe that we construct the number of units in each layer based
+on some input into the model.
 
 We need to define a function that trains the network:
 
@@ -91,7 +104,7 @@ We need to define a function that trains the network:
             losses[epochi] = np.mean(batchLoss)
 
             model.eval()
-            X,y = next(iter(testLoader)) 
+            X,y = next(iter(testLoader))
             with torch.no_grad(): # deactivates autograd
             yHat = model.forward(X,param)
             testAcc.append( 100*torch.mean(((yHat>0) == y).float()).item() )
@@ -99,20 +112,25 @@ We need to define a function that trains the network:
 
 
     def parallel_model_eval(param,trainLoader,testLoader,nepochs=500):
-        # this function is called by the parallel map function
+        # this function is called by ParallelMap
         model = NeuralNet(param)
         trainAcc,testAcc,losses = trainTheModel(model=model,nepochs=nepochs,trainLoader=trainLoader,testLoader=testLoader,param=param)
         return trainAcc,testAcc,losses
 
 
-The second function `parallel_model_eval` is later called by the :class:`~acme.ParallelMap` class. Within `parallel_model_eval`, we first build our model based on the
-parameters and then train and evaluate the model. The function returns the training and test accuracy as well as the loss function over the epochs.
-It is also possible that ACME return the model itself, since it is pickable. However, this is not necessary here.
+The second function ``parallel_model_eval`` is later called by
+:class:`~acme.ParallelMap`. Within ``parallel_model_eval``, we first
+build our model based on the parameters and then train and evaluate the
+model. The function returns the training and test accuracy as well as the
+loss function over the epochs. It is also possible that ACME returns the
+model itself, since the model itself is pickable. However, this is not
+necessary here.
 
 
-Getting the data ready
+Getting the Data Ready
 -----------------------
-We will pass the PyTorch dataloaders along with the model parameters to the :class:`~acme.ParallelMap` class.
+We pass each PyTorch :class:`~torch.utils.data.DataLoader` along with the
+model parameters to :class:`~acme.ParallelMap`.
 
 .. code-block:: python
 
@@ -135,7 +153,9 @@ We will pass the PyTorch dataloaders along with the model parameters to the :cla
     testLoader  = DataLoader(TensorDataset(X_test,y_test),batch_size=X_test.shape[0],shuffle=True)
 
 
-Here we generate the inputs to our parallel function. We vary the number of units for each layer as powers of 2 from 16 to 512 and use all possible permuations of this set.
+Here we generate the inputs to our parallel function. We vary the number of
+units for each layer as powers of 2 from 16 to 512 and use all possible
+permutations of this set.
 
 .. code-block:: python
 
@@ -149,13 +169,17 @@ Here we generate the inputs to our parallel function. We vary the number of unit
     with ParallelMap(parallel_model_eval, params, trainLoader, testLoader, n_inputs=len(params), write_worker_results=False) as pmap:
         results = pmap.compute()
 
-NOTE: In this example we do not write the results to disk, because `write_worker_results=False`. If we want to save the models however, or if the output becomes larger,
-it is highly recommended to save to disk and not collect in local memory.
+.. note::
+    In this example we do not write the results to disk, because ``write_worker_results = False``.
+    If we want to save the models however, or if the output becomes large,
+    it is highly recommended to save to disk and not collect in local memory.
 
-After the computation is done, we can inspect the different outcome parameters that were returned:
+After the computation is done, we can inspect the different outcome
+parameters that were returned:
+
 - test set accuracy time courses (as a function of epochs)
-- train set accuracy time courses 
-- losses 
+- train set accuracy time courses
+- losses
 
 .. code-block:: python
 
