@@ -10,14 +10,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 ### NEW
-- Added new tutorial on using ACME for parallel evaluation of classifier 
-  accuracy
+- Added new "Tutorials" section in documentation
+- Added new tutorial on using ACME for parallel evaluation of classifier
+  accuracy (Thanks to @timnaher, cf #53)
 - Added new tutorial on using ACME for parallel neural net model evaluation
+  (Thanks to @timnaher, cf #53)
+
 ### CHANGED
 ### REMOVED
 ### DEPRECATED
 ### FIXED
-- fixed partition bug `run_tests.sh`
+- fixed partition bug ``run_tests.sh`` (Thanks to @timnaher, cf #53)
 
 ## [2023.4] - 2023-04-14
 Re-designed ACME's logs and command line output.
@@ -45,8 +48,6 @@ Re-designed ACME's logs and command line output.
   readability, included a contribution guide and reworked the overall page
   navigation + visual layout.
 
-### REMOVED
-### DEPRECATED
 ### FIXED
 - Prevented ACME from accidentally using a dysfunctional client (e.g., a
   SLURM client with workers whose jobs have been externally cancelled).
