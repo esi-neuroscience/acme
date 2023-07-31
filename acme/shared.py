@@ -11,15 +11,13 @@
 import os
 import sys
 import socket
+import select
 import subprocess
 import inspect
 import logging
 import traceback
-import multiprocessing
-import time
 import numpy as np
 import dask.distributed as dd
-from tqdm import tqdm
 from logging import handlers
 
 # Local imports
@@ -162,10 +160,13 @@ def user_yesno(msg, default=None):
             print("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
 
 
-def user_input(msg, valid, default=None, timeout=None):
+def user_input(msg, valid=None, default=None, timeout=None):
     """
     ACME specific version of user-input query
     """
+
+    # Prepare to log any uncaught exceptions
+    log = logging.getLogger("ACME")
 
     # Add trailing whitespace to `msg` if not already present and append
     # default reply (if provided)
@@ -173,64 +174,38 @@ def user_input(msg, valid, default=None, timeout=None):
     if default is not None:
         default = default.replace("[", "").replace("]","")
         assert default in valid
-        suffix = "[Default: '{}'] ".format(default)
+        suffix = f"[Default: '{default}'] "
     query = msg + suffix
 
-    if timeout is None:
-        return _get_user_input(query, valid, default)
-    else:
-        procQueue = multiprocessing.Queue()
-        proc = multiprocessing.Process(target=_queuing_input,
-                                       args=(procQueue,
-                                             sys.stdin.fileno(),
-                                             query,
-                                             valid,
-                                             default)
-                                       )
-        proc.start()
-        countdown = tqdm(desc="Time remaining", leave=True, bar_format="{desc}: {n}  ",
-                         initial=timeout, position=1)
-        ticker = 0
-        while procQueue.empty() and ticker < timeout:
-            time.sleep(1)
-            ticker += 1
-            countdown.n = timeout - ticker
-            countdown.refresh()   # force refresh to display elapsed time every second
-        countdown.close()
-        proc.terminate()
+    # Jupyter only supports hard-blocking `input` fields
+    if is_jupyter():
+        log.debug("Running inside Jupyter notebook, deactivating timeout")
+        timeout = None
 
-        if not procQueue.empty():
-            choice = procQueue.get()
-        else:
-            choice = default
-        return choice
-
-
-def _get_user_input(query, valid, default):
-    """
-    Performs the actual input query
-    """
-
-    # Wait for valid user input and return choice upon receipt
+    # Wait for user I/O
+    print(query)
     while True:
-        choice = input(query)
+        if timeout is None:
+            choice = input()
+        else:
+            stdin, _, _ = select.select([sys.stdin], [], [], timeout)
+            if stdin:
+                choice = sys.stdin.readline().strip()
+            else:
+                return default
         if default is not None and choice == "":
             return default
-        elif choice in valid:
-            return choice
+        elif valid is not None and choice not in valid:
+            print("Please respond with " + " or ".join(valid))
         else:
-            print("Please respond with '" + \
-                "or '".join(opt + "' " for opt in valid) + "\n")
+            return choice
 
 
-def _queuing_input(procQueue, stdin_fd, query, valid, default):
-    """
-    Target routine to tie subprocess to (in case input-query is time-restricted)
-    """
-    sys.stdin = os.fdopen(stdin_fd)
-    procQueue.put(_get_user_input(query, valid, default))
-
-
+def is_jupyter():
+    try:
+        return get_ipython().__class__.__name__ == "ZMQInteractiveShell"
+    except NameError:
+        return False
 
 
 def ctrlc_catcher(*excargs, **exckwargs):

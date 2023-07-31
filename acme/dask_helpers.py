@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 
 # Local imports
 from acme import __deprecated__, __deprecation_wrng__
-from .shared import user_input, user_yesno
+from .shared import user_input, user_yesno, is_jupyter
 from .spy_interface import scalar_parser, log
 
 __all__ = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm_cluster_setup"]
@@ -723,21 +723,8 @@ def local_cluster_setup(n_workers=None,
         raise TypeError("%s %s"%(funcName, msg%(str(type(start_client)))))
     log.debug("Using `start_client = %s`", str(start_client))
 
-    # Check, if we're running inside a Jupyter notebook...
-    try:
-        ipy = get_ipython()
-        if ipy.__class__.__name__ == "ZMQInteractiveShell":
-            maybeScript = False # Jupyter Notebook
-            log.debug("Running in a Jupyter Notebook")
-        else:
-            maybeScript = True  # iPython shell
-            log.debug("Running in an iPython shell")
-    except NameError:
-        maybeScript = True      # Python shell
-        log.debug("Running in a standard Python shell")
-
     # ...if not, print warning/info message
-    if maybeScript:
+    if not is_jupyter():
         msg = """\
         If you use a script to start a local parallel computing client, please ensure
         the call to `local_cluster_setup` is wrapped inside a main module block, i.e.,
