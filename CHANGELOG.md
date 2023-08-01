@@ -21,6 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### DEPRECATED
 ### FIXED
 - fixed partition bug ``run_tests.sh`` (Thanks to @timnaher, cf #53)
+- simplified and fixed interactive user queries: use the builtin `select`
+  module in everything but Jupyter and rely on the `input` module inside
+  notebooks.
 
 ## [2023.4] - 2023-04-14
 Re-designed ACME's logs and command line output.
