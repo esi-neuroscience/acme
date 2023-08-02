@@ -11,7 +11,7 @@
 import inspect
 import numpy as np
 import logging
-from typing import Any, Self, Callable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 # Local imports
 from acme import __deprecated__, __deprecation_wrng__, __version__
@@ -245,8 +245,8 @@ class ParallelMap(object):
         # Backwards compatibility: legacy keywords are converted to new nomenclature
         if any(kw in kwargs for kw in __deprecated__):
             log.warning(__deprecation_wrng__)
-            n_workers = kwargs.pop("n_jobs", n_workers)
-            mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
+            n_workers = kwargs.pop("n_jobs", n_workers)                 # type: ignore
+            mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)  # type: ignore
             log.debug("Set `n_workers = n_jobs` and \
                        mem_per_worker = mem_per_job`")
 
@@ -273,7 +273,12 @@ class ParallelMap(object):
                                  verbose=verbose,
                                  logfile=logfile)
 
-    def prepare_input(self, func, n_inputs, *args, **kwargs):
+    def prepare_input(
+            self,
+            func: Callable,
+            n_inputs: Union[int, str],
+            *args: Any,
+            **kwargs: Optional[Any]) -> None:
         """
         User input parser
 
@@ -447,33 +452,40 @@ class ParallelMap(object):
         # Get out
         return
 
-    def compute(self):
+    def compute(self) -> None:
         """
         Shortcut to launch parallel computation via `ACMEdaemon`
         """
         log.debug("Invoking `compute` method")
         if hasattr(self, "daemon"):
             self.daemon.compute()
+        return
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """
         Shortcut to corresponding cleanup-routine provided by `ACMEdaemon`
         """
         log.debug("Invoking `cleanup` method")
         if hasattr(self, "daemon"):
             self.daemon.cleanup()
+        return
 
-    def __enter__(self):
+    def __enter__(self) -> ACMEdaemon:
         """
         If `ParallelMap` is used as context manager, launch `ACMEdaemon`
         """
         log.debug("Entering `ACMEdaemon` context")
         return self.daemon
 
-    def __exit__(self, exception_type, exception_value, exception_traceback):
+    def __exit__(
+            self,
+            exception_type,
+            exception_value,
+            exception_traceback) -> None:
         """
         If `ParallelMap` is used as context manager, close any ad-hoc computing
         clients created by `ACMEdaemon`
         """
         log.debug("Exiting `ACMEdaemon` context")
         self.daemon.cleanup()
+        return

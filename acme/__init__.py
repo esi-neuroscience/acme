@@ -10,7 +10,6 @@
 # Builtin/3rd party package imports
 import subprocess
 import warnings
-import inspect
 import sys
 from pkg_resources import get_distribution, DistributionNotFound
 
@@ -30,7 +29,7 @@ except DistributionNotFound:
         if proc.returncode != 0:
             msg = "<ACME> Package is not installed in site-packages nor cloned via git. " +\
                 "Please consider obtaining ACME sources from supported channels. "
-            warnings.showwarning(msg, ImportWarning, __file__, inspect.currentframe().f_lineno)
+            warnings.warn(msg)
             out = "-999"
     __version__ = out.rstrip("\n")
 
@@ -57,10 +56,10 @@ prepare_log(logname="ACME")
 # Override default exception handler (take care of Jupyter's Exception handling)
 from .shared import ctrlc_catcher
 try:
-    ipy = get_ipython()
+    ipy = get_ipython()                                                             # type: ignore
     import IPython
     ipy.ipyTBshower = IPython.core.interactiveshell.InteractiveShell.showtraceback
-    IPython.core.interactiveshell.InteractiveShell.showtraceback = ctrlc_catcher
+    IPython.core.interactiveshell.InteractiveShell.showtraceback = ctrlc_catcher    # type: ignore
 except NameError:
     sys.excepthook = ctrlc_catcher
 
