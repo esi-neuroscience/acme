@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   accuracy (Thanks to @timnaher, cf #53)
 - Added new tutorial on using ACME for parallel neural net model evaluation
   (Thanks to @timnaher, cf #53)
+- Added type-hints following PEP 484 to support static code analyzers
+  (e.g., `mypy`) and clarify type conventions in internal functions with
+  "sparse" docstrings.
 
 ### CHANGED
 ### REMOVED
@@ -24,6 +27,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - simplified and fixed interactive user queries: use the builtin `select`
   module in everything but Jupyter and rely on the `input` module inside
   notebooks.
+- clarified docstring discussing `result_dtype`: must not be `None` but
+  `str` (still defaults to "float")
 
 ## [2023.4] - 2023-04-14
 Re-designed ACME's logs and command line output.
