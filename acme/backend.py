@@ -105,9 +105,9 @@ class ACMEdaemon(object):
         result_shape : tuple or None
             If provided, results are slotted into a dataset/array with layout `result_shape`. See
             :class:~`acme.ParallelMap` for details.
-        result_dtype : str or None
-            If provided, determines numerical datatype of dataset laid out
-            by `result_shape`. See :class:~`acme.ParallelMap` for details.
+        result_dtype : str
+            Determines numerical datatype of dataset laid out by `result_shape`.
+            See :class:~`acme.ParallelMap` for details.
         single_file : bool
             If `True`, parallel workers write to the same results container. See
             :class:~`acme.ParallelMap` for details.

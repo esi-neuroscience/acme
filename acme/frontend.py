@@ -11,6 +11,7 @@
 import inspect
 import numpy as np
 import logging
+from typing import Any, Self, Callable, Optional, Union
 
 # Local imports
 from acme import __deprecated__, __deprecation_wrng__, __version__
@@ -37,25 +38,25 @@ class ParallelMap(object):
 
     def __init__(
         self,
-        func,
-        *args,
-        n_inputs="auto",
-        write_worker_results=True,
-        output_dir=None,
-        result_shape=None,
-        result_dtype="float",
-        single_file=False,
-        write_pickle=False,
-        partition="auto",
-        n_workers="auto",
-        mem_per_worker="auto",
-        setup_timeout=60,
-        setup_interactive=True,
-        stop_client="auto",
-        verbose=None,
-        dryrun=False,
-        logfile=None,
-        **kwargs):
+        func: Callable,
+        *args: Any,
+        n_inputs: Union[int, str] = "auto",
+        write_worker_results: bool = True,
+        output_dir: Optional[str],
+        result_shape: Optional[tuple[int, ...]],
+        result_dtype: str = "float",
+        single_file: bool = False,
+        write_pickle: bool = False,
+        partition: str = "auto",
+        n_workers: Union[int, str] = "auto",
+        mem_per_worker: str = "auto",
+        setup_timeout: int = 60,
+        setup_interactive: bool = True,
+        stop_client: Union[bool, str] = "auto",
+        verbose: Optional[bool],
+        dryrun: bool = False,
+        logfile: Optional[Union[bool, str]],
+        **kwargs: Optional[Any]):
         """
         Context manager that executes user-defined functions in parallel
 
@@ -103,8 +104,8 @@ class ParallelMap(object):
             resulting in a ``(n_inputs, 100)`` dataset or array. See Notes
             and Examples for details. See Examples as well as [1]_ and [2]_
             for more information.
-        result_dtype : str or None
-            Only relevant if `result_shape` is not `None`. If provided, determines
+        result_dtype : str
+            Only relevant if `result_shape` is not `None`. Determines
             the numerical datatype of the dataset laid out by `result_shape`.
             By default, results are stored in `float64` format. See [2]_ for
             more details.
