@@ -19,6 +19,7 @@ import traceback
 import numpy as np
 import dask.distributed as dd
 from logging import handlers
+from typing import List
 
 # Local imports
 from acme import __version__
@@ -27,7 +28,7 @@ from . import dask_helpers as dh
 callCount = 0
 callMax = 1000000
 
-__all__ = []
+__all__: List["str"] = []
 
 
 def sizeOf(obj, varname):

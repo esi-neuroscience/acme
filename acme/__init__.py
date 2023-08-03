@@ -12,6 +12,7 @@ import subprocess
 import warnings
 import sys
 from pkg_resources import get_distribution, DistributionNotFound
+from typing import List
 
 # Get package version: either via meta-information from egg or via latest git commit
 try:
@@ -44,6 +45,7 @@ __deprecation_wrng__ = \
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 # Import local modules
+from . import frontend, backend, shared, dask_helpers
 from .frontend import *
 from .backend import *
 from .shared import *
@@ -64,7 +66,7 @@ except NameError:
     sys.excepthook = ctrlc_catcher
 
 # Manage user-exposed namespace imports
-__all__ = []
+__all__: List[str] = []
 __all__.extend(frontend.__all__)
 __all__.extend(backend.__all__)
 __all__.extend(shared.__all__)

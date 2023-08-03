@@ -11,7 +11,7 @@
 import inspect
 import numpy as np
 import logging
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Union, List
 
 # Local imports
 from acme import __deprecated__, __deprecation_wrng__, __version__
@@ -20,7 +20,7 @@ from .logger import prepare_log
 from .shared import _scalar_parser, sizeOf
 from . import shared as acs
 
-__all__ = ["ParallelMap"]
+__all__: List["str"] = ["ParallelMap"]
 
 # Fetch logger
 log = logging.getLogger("ACME")
@@ -42,8 +42,8 @@ class ParallelMap(object):
         *args: Any,
         n_inputs: Union[int, str] = "auto",
         write_worker_results: bool = True,
-        output_dir: Optional[str],
-        result_shape: Optional[tuple[int, ...]],
+        output_dir: Optional[str] = None,
+        result_shape: Optional[tuple[int, ...]] = None,
         result_dtype: str = "float",
         single_file: bool = False,
         write_pickle: bool = False,
@@ -53,10 +53,10 @@ class ParallelMap(object):
         setup_timeout: int = 60,
         setup_interactive: bool = True,
         stop_client: Union[bool, str] = "auto",
-        verbose: Optional[bool],
+        verbose: Optional[bool] = None,
         dryrun: bool = False,
-        logfile: Optional[Union[bool, str]],
-        **kwargs: Optional[Any]):
+        logfile: Optional[Union[bool, str]] = None,
+        **kwargs: Optional[Any]) -> None:
         """
         Context manager that executes user-defined functions in parallel
 
@@ -240,7 +240,7 @@ class ParallelMap(object):
 
         # First and foremost, set up logging system - logfile is processed later
         prepare_log(logname="ACME", verbose=verbose)
-        log.announce("This is ACME v. %s", __version__)
+        log.announce("This is ACME v. %s", __version__)                 # type: ignore
 
         # Backwards compatibility: legacy keywords are converted to new nomenclature
         if any(kw in kwargs for kw in __deprecated__):

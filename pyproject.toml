@@ -8,3 +8,13 @@
 [build-system]
 requires = ["pyyaml", "setuptools", "setuptools_scm", "toml", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[[tool.mypy.overrides]]
+module = [
+    "psutil",
+    "tqdm",
+    "h5py",
+    "dask_jobqueue",
+    "frontend"
+]
+ignore_missing_imports = true

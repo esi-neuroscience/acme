@@ -13,11 +13,15 @@ import inspect
 import logging
 import os
 from logging import handlers
+from typing import Optional, Any, List
 
-__all__ = []
+__all__: List[str] = []
 
 
-def prepare_log(logname="ACME", logfile=None, verbose=None):
+def prepare_log(
+        logname: str = "ACME",
+        logfile: Optional[str] = None,
+        verbose: Optional[bool] = None) -> None:
     """
     Convenience function to set up ACME logger
 
@@ -41,7 +45,7 @@ def prepare_log(logname="ACME", logfile=None, verbose=None):
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
 
     # Ensure `logname` can be processed
     if not isinstance(logname, str):
@@ -56,15 +60,18 @@ def prepare_log(logname="ACME", logfile=None, verbose=None):
     # Either parse provided `logfile` or set up an auto-generated file
     if logfile is not None and os.path.isfile(logfile):
         msg = "%s log-file %s already exists, appending to it"
-        warnings.showwarning(msg%(logname, logfile), RuntimeWarning,
-                             __file__, inspect.currentframe().f_lineno)
+        warnings.warn(msg%(logname, logfile))
 
     # Add custom "announce" level to logger
     announceLvl = logging.INFO + 5
     logging.addLevelName(announceLvl, "ANNOUNCE")
-    logging.ANNOUNCE = announceLvl
+    logging.ANNOUNCE = announceLvl                                      # type: ignore
 
-    def announce(self, msg, *args, **kwargs):
+    def announce(
+            self,
+            msg: str,
+            *args: Any,
+            **kwargs: Optional[Any]) -> None:
         """
         Log 'msg % args' with severity 'ANNOUNCE'.
 
@@ -76,8 +83,8 @@ def prepare_log(logname="ACME", logfile=None, verbose=None):
         if self.isEnabledFor(announceLvl):
             self._log(announceLvl, msg, args, **kwargs)
 
-    logging.getLoggerClass().announce = announce
-    logging.announce = announce
+    logging.getLoggerClass().announce = announce                        # type: ignore
+    logging.announce = announce                                         # type: ignore
 
     # Fetch/set up ACME logger
     log = logging.getLogger(logname)
@@ -130,7 +137,10 @@ class AcmeFormatter(logging.Formatter):
     Adapted from https://alexandra-zaharia.github.io/posts/make-your-own-custom-color-formatter-with-python-logging/
     """
 
-    def __init__(self, fmt, color=True):
+    def __init__(
+            self,
+            fmt: str,
+            color: bool = True):
 
         super().__init__()
 
@@ -152,7 +162,7 @@ class AcmeFormatter(logging.Formatter):
             reset = ""
 
         fmtName = fmt.partition("%(name)s")
-        fmtName = fmtName[0] + bold + fmtName[1] + reset + fmtName[2]
+        fmtName = fmtName[0] + bold + fmtName[1] + reset + fmtName[2]   # type: ignore
         fmt = "".join(fmtName)
 
         fmtLvl = fmt.partition("%(levelname)s")
@@ -173,13 +183,15 @@ class AcmeFormatter(logging.Formatter):
         self.FORMATS = {
             logging.DEBUG: "".join(fmtDebug),
             logging.INFO: "".join(fmtInfo),
-            logging.ANNOUNCE: "".join(fmtAnnounce),
+            logging.ANNOUNCE: "".join(fmtAnnounce),                     # type: ignore
             logging.WARNING: "".join(fmtWarn),
             logging.ERROR: "".join(fmtError),
             logging.CRITICAL: "".join(fmtError),
         }
 
-    def format(self, record):
+    def format(
+            self,
+            record: logging.LogRecord):
         logFmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(logFmt)
         return formatter.format(record)
