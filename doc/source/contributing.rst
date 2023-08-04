@@ -95,7 +95,7 @@ ACME's proper functionality:
 
 Similarly, please use a static code checker to verify ACME's source code integrity.
 By default, our development environment comes with `mypy`. To perform
-the static code analysis, open a terminal, go to the root directory of
+the static code analysis with `mypy`, open a terminal, go to the root directory of
 your local ACME repository and run:
 
 .. code-block:: shell
