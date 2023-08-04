@@ -19,7 +19,7 @@ import traceback
 import numpy as np
 import dask.distributed as dd
 from logging import handlers
-from typing import List
+from typing import Any, Optional, List
 
 # Local imports
 from acme import __version__
@@ -31,7 +31,9 @@ callMax = 1000000
 __all__: List["str"] = []
 
 
-def sizeOf(obj, varname):
+def sizeOf(
+        obj: Any,
+        varname: str) -> float:
     """
     Estimate memory consumption of Python objects
 
@@ -39,6 +41,8 @@ def sizeOf(obj, varname):
     ----------
     obj : Python object
         Any valid Python object whose memory footprint is of interest.
+    varname : str
+        Assigned name of `obj`
 
     Returns
     -------
@@ -57,7 +61,7 @@ def sizeOf(obj, varname):
     global callCount
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
 
     # Protect against circular object references
     callCount += 1
@@ -74,7 +78,7 @@ def sizeOf(obj, varname):
     return objsize
 
 
-def is_slurm_node():
+def is_slurm_node() -> bool:
     """
     Returns `True` if code is running on a SLURM-managed cluster node, `False`
     otherwise
@@ -91,7 +95,7 @@ def is_slurm_node():
     return len(out) > 0
 
 
-def is_esi_node():
+def is_esi_node() -> bool:
     """
     Returns `True` if code is running on an ESI cluster node, `False` otherwise
     """
@@ -102,13 +106,17 @@ def is_esi_node():
     return socket.gethostname().startswith("esi-sv") and os.path.isdir("/cs")
 
 
-def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.inf]):
+def _scalar_parser(
+        var: Any,
+        varname: str = "varname",
+        ntype: str = "int_like",
+        lims: List = [-np.inf, np.inf]) -> None:
     """
     ACME-specific version of Syncopy's `scalar_parser` (used for cross-compatibility)
     """
 
     # Get name of calling method/function
-    funcName = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)      # type: ignore
 
     # Make sure `var` is a scalar-like number
     msg = "%s `%s` has to be %s between %s and %s, not %s"
@@ -136,7 +144,9 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
     return
 
 
-def user_yesno(msg, default=None):
+def user_yesno(
+        msg: str,
+        default: Optional[str] = None) -> bool:
     """
     ACME specific version of user-input query
     """
@@ -161,7 +171,11 @@ def user_yesno(msg, default=None):
             print("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
 
 
-def user_input(msg, valid=None, default=None, timeout=None):
+def user_input(
+        msg: str,
+        valid: Optional[List] = None,
+        default: Optional[str] = None,
+        timeout: Optional[float] = None) -> str:
     """
     ACME specific version of user-input query
     """
@@ -174,7 +188,8 @@ def user_input(msg, valid=None, default=None, timeout=None):
     suffix = "" + " " * (not msg.endswith(" "))
     if default is not None:
         default = default.replace("[", "").replace("]","")
-        assert default in valid
+        if valid is not None:
+            assert default in valid
         suffix = f"[Default: '{default}'] "
     query = msg + suffix
 
@@ -193,7 +208,9 @@ def user_input(msg, valid=None, default=None, timeout=None):
             if stdin:
                 choice = sys.stdin.readline().strip()
             else:
-                return default
+                if default is None:
+                    err = f"No response received within the given timeout of {timeout} seconds. "
+                    raise TimeoutError(err)
         if default is not None and choice == "":
             return default
         elif valid is not None and choice not in valid:
@@ -202,14 +219,16 @@ def user_input(msg, valid=None, default=None, timeout=None):
             return choice
 
 
-def is_jupyter():
+def is_jupyter() -> bool:
     try:
-        return get_ipython().__class__.__name__ == "ZMQInteractiveShell"
+        return get_ipython().__class__.__name__ == "ZMQInteractiveShell"    # type: ignore
     except NameError:
         return False
 
 
-def ctrlc_catcher(*excargs, **exckwargs):
+def ctrlc_catcher(
+        *excargs: Any,
+        **exckwargs: Optional[Any]) -> None:
     """
     Custom Traceback for properly handling CTRL + C interrupts while parallel
     computations are running
@@ -224,7 +243,7 @@ def ctrlc_catcher(*excargs, **exckwargs):
         shell, = excargs
         etype, evalue, etb = sys.exc_info()
         try:                            # careful: if iPython is used to launch a script, ``get_ipython`` is not defined
-            get_ipython()
+            get_ipython()               # type: ignore
             isipy = True
             sys.last_traceback = etb    # smartify ``sys``
         except NameError:
@@ -259,7 +278,7 @@ def ctrlc_catcher(*excargs, **exckwargs):
     memHandler = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)][0]
     if memHandler.target is not None:
         memHandler.acquire()
-        with open(memHandler.target.baseFilename, "a", encoding="utf-8") as logfile:
+        with open(memHandler.target.baseFilename, "a", encoding="utf-8") as logfile:    # type: ignore
             logfile.write("".join(traceback.format_exception_only(etype, evalue)))
             logfile.write("".join(traceback.format_tb(etb)))
         memHandler.release()

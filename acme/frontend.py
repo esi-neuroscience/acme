@@ -43,7 +43,7 @@ class ParallelMap(object):
         n_inputs: Union[int, str] = "auto",
         write_worker_results: bool = True,
         output_dir: Optional[str] = None,
-        result_shape: Optional[tuple[int, ...]] = None,
+        result_shape: Optional[tuple[Optional[int], ...]] = None,
         result_dtype: str = "float",
         single_file: bool = False,
         write_pickle: bool = False,
@@ -479,9 +479,9 @@ class ParallelMap(object):
 
     def __exit__(
             self,
-            exception_type,
-            exception_value,
-            exception_traceback) -> None:
+            exception_type: Any,
+            exception_value: Any,
+            exception_traceback: Any) -> None:
         """
         If `ParallelMap` is used as context manager, close any ad-hoc computing
         clients created by `ACMEdaemon`

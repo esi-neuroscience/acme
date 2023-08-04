@@ -27,22 +27,42 @@ import dask.distributed as dd
 from logging import handlers
 from glob import glob
 from scipy import signal
+from numpy.typing import NDArray
+from typing import Any, Optional, Union, Dict
 
 # Import main actors here
 from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
 from conftest import skip_if_not_linux, useSLURM, onESI, defaultQ
 
+# Define custom types
+realArrayLike = Union[float, NDArray[np.float64]]
+realArray = NDArray[np.float64]
+
 # Functions that act as stand-ins for user-funcs
-def simple_func(x, y, z=3):
+def simple_func(
+        x: float,
+        y: float,
+        z: float = 3) -> float:
     return (x + y) * z
 
-def medium_func(x, y, z=3, w=np.ones((3, 3))):
+def medium_func(
+        x: realArray,
+        y: realArrayLike,
+        z: realArrayLike = 3,
+        w: NDArray = np.ones((3, 3))) -> realArrayLike:
     return (sum(x) + y) * z * w.max()
 
-def hard_func(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+def hard_func(
+        x: realArray,
+        y: realArrayLike,
+        z: realArrayLike = 3,
+        w: realArray = np.zeros((3, 1)),
+        **kwargs: Optional[Any]) -> tuple[realArrayLike, realArray]:
     return sum(x) + y,  z * w
 
-def lowpass_simple(h5name, channel_no):
+def lowpass_simple(
+        h5name: str,
+        channel_no: int) -> realArray:
     with h5py.File(h5name, "r") as h5f:
         channel = h5f["data"][:, channel_no]
         b = h5f["data"].attrs["b"]
@@ -50,7 +70,9 @@ def lowpass_simple(h5name, channel_no):
     res = signal.filtfilt(b, a, channel, padlen=200)
     return res
 
-def lowpass_medium(h5name, channel_no):
+def lowpass_medium(
+        h5name: str,
+        channel_no: int) -> tuple[realArray, int, float, float]:
     with h5py.File(h5name, "r") as h5f:
         channel = h5f["data"][:, channel_no]
         b = h5f["data"].attrs["b"]
@@ -58,7 +80,15 @@ def lowpass_medium(h5name, channel_no):
     res = signal.filtfilt(b, a, channel, padlen=200)
     return res, channel_no, b, a
 
-def lowpass_hard(arr_like, b, a, res_dir, res_base="lowpass_hard_", dset_name="custom_dset_name", padlen=200, taskID=None):
+def lowpass_hard(
+        arr_like: realArray,
+        b: float,
+        a: float,
+        res_dir: str,
+        res_base: str = "lowpass_hard_",
+        dset_name: str = "custom_dset_name",
+        padlen: int = 200,
+        taskID: Optional[int] = None) -> None:
     channel = arr_like[:, taskID]
     res = signal.filtfilt(b, a, channel, padlen=padlen)
     h5name = os.path.join(res_dir, res_base +"{}.h5".format(taskID))
@@ -66,14 +96,24 @@ def lowpass_hard(arr_like, b, a, res_dir, res_base="lowpass_hard_", dset_name="c
         h5f.create_dataset(dset_name, data=res)
     return
 
-def pickle_func(arr, b, a, channel_no, sabotage_hdf5=False):
+def pickle_func(
+        arr: realArray,
+        b: float,
+        a: float,
+        channel_no: int,
+        sabotage_hdf5: bool = False) -> Union[Dict[str, float], realArray]:
     res = signal.filtfilt(b, a, arr[:, channel_no], padlen=200)
     if sabotage_hdf5:
         if channel_no % 2 == 0:
             return {"b" : b}
     return res
 
-def memtest_func(x, y, z=3, arrsize=2, sleeper=300):
+def memtest_func(
+        x: float,
+        y: float,
+        z: float = 3,
+        arrsize: float = 2,
+        sleeper: int = 300) -> float:
     fSize = np.dtype("float").itemsize
     time.sleep(2)
     arr = np.ones((int(arrsize * 1024**3 / fSize), ))   # `arrsize` denotes array size in GB

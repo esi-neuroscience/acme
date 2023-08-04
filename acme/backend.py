@@ -74,7 +74,7 @@ class ACMEdaemon(object):
         n_workers: Union[int, str] = "auto",
         write_worker_results: bool = True,
         output_dir: Optional[str] = None,
-        result_shape: Optional[tuple[int, ...]] = None,
+        result_shape: Optional[tuple[Optional[int], ...]] = None,
         result_dtype: str = "float",
         single_file: bool = False,
         write_pickle: bool = False,
@@ -224,7 +224,7 @@ class ACMEdaemon(object):
             logfile: Union[bool, str, None],
             write_worker_results: bool,
             output_dir: Union[str, None],
-            result_shape: Union[tuple[int, ...], None],
+            result_shape: Optional[tuple[Optional[int], ...]],
             result_dtype: str,
             single_file: bool,
             write_pickle: bool) -> None:
@@ -283,7 +283,7 @@ class ACMEdaemon(object):
             if not all(isinstance(spec, numbers.Number) for spec in rShape):
                 msg = "%s `result_shape` must only contain numerical values"
                 raise ValueError(msg%self.objName)
-            if any(spec < 0 or int(spec) != spec for spec in rShape):
+            if any(spec < 0 or int(spec) != spec for spec in rShape):   # type: ignore
                 msg = "%s `result_shape` must only contain non-negative integers"
                 raise ValueError(msg%self.objName)
 
@@ -363,7 +363,7 @@ class ACMEdaemon(object):
     def setup_output(
             self,
             output_dir: Union[str, None],
-            result_shape: Union[tuple[int, ...], None],
+            result_shape: Optional[tuple[Optional[int], ...]],
             single_file: bool,
             write_pickle: bool) -> None:
         """
@@ -633,7 +633,7 @@ class ACMEdaemon(object):
         # otherwise go through the motions of preparing a full worker cluster
         if not self.has_slurm:
             log.debug("SLURM not found, Calling `local_cluster_setup`")
-            self.client = local_cluster_setup(interactive=False)
+            self.client = local_cluster_setup(interactive=False)        # type: ignore
 
         else:
 
@@ -677,9 +677,9 @@ class ACMEdaemon(object):
                 log.warning(wrng%(socket.getfqdn()))
                 processes_per_worker = 1
                 n_cores = 1
-                self.client = slurm_cluster_setup(partition=partition,
+                self.client = slurm_cluster_setup(partition=partition,                                  # type: ignore
                                                   n_cores=n_cores,
-                                                  n_workers=n_workers,
+                                                  n_workers=n_workers,                                  # type: ignore
                                                   processes_per_worker=processes_per_worker,
                                                   mem_per_worker=mem_per_worker,
                                                   n_workers_startup=1,
