@@ -25,6 +25,6 @@ onESI = is_esi_node()
 
 # Use a default partition if running on the ESI cluster
 if onESI:
-    defaultQ ="8GBXS"
+    defaultQ = "8GBXS"
 else:
-    defaultQ ="auto"
+    defaultQ = "auto"
