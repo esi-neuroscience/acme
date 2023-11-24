@@ -124,7 +124,7 @@ We can now go ahead and also plot our bootstrapped results as histograms.
     plt.title("Distributions of model accuracy for different models")
     plt.legend()
 
-.. image:: images/classifier_tutorial.png
+.. image:: _static/classifier_tutorial.png
     :width: 600
     :align: center
     :alt: Classifier Tutorial
