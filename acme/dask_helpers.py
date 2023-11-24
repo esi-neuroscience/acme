@@ -26,26 +26,28 @@ if sys.platform == "win32":
 from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, get_client, LocalCluster
 from datetime import datetime, timedelta
+from typing import List, Optional, Any, Union
 
 # Local imports
 from acme import __deprecated__, __deprecation_wrng__
 from .shared import user_input, user_yesno, is_jupyter
 from .spy_interface import scalar_parser, log
 
-__all__ = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm_cluster_setup"]
+__all__: List["str"] = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm_cluster_setup"]
 
 
 # Setup SLURM workers on the ESI HPC cluster
-def esi_cluster_setup(partition="8GBXS",
-                      n_workers=2,
-                      mem_per_worker="auto",
-                      n_workers_startup=1,
-                      timeout=60,
-                      interactive=True,
-                      interactive_wait=120,
-                      start_client=True,
-                      job_extra=[],
-                      **kwargs):
+def esi_cluster_setup(
+        partition: str = "8GBXS",
+        n_workers: int = 2,
+        mem_per_worker: Optional[str] = "auto",
+        n_workers_startup: int = 1,
+        timeout: int = 60,
+        interactive: bool = True,
+        interactive_wait: int = 120,
+        start_client: bool =True,
+        job_extra: List = [],
+        **kwargs: Optional[Any]) -> Union[Client, SLURMCluster, LocalCluster]:
     """
     Start a Dask distributed SLURM worker cluster on the ESI HPC infrastructure
     (or local multi-processing)
@@ -130,14 +132,14 @@ def esi_cluster_setup(partition="8GBXS",
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
 
     # Backwards compatibility: legacy keywords are converted to new nomenclature
     if any(kw in kwargs for kw in __deprecated__):
         log.warning(__deprecation_wrng__)
-        n_workers = kwargs.pop("n_jobs", n_workers)
+        n_workers = kwargs.pop("n_jobs", n_workers)                             # type: ignore
         mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
-        n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)
+        n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)     # type: ignore
         log.debug("Set `n_workers = n_jobs`, `mem_per_worker = mem_per_job`\
                   and `n_workers_startup = n_jobs_startup`")
 
@@ -250,25 +252,26 @@ def esi_cluster_setup(partition="8GBXS",
         log.debug("Setting `--output=%s`", out_files)
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
-    return slurm_cluster_setup(partition, n_cores, n_workers, processes_per_worker, mem_per_worker,
+    return slurm_cluster_setup(partition, n_cores, n_workers, processes_per_worker, mem_per_worker,     # type: ignore
                                n_workers_startup, timeout, interactive, interactive_wait,
                                start_client, job_extra, invalid_partitions=["DEV", "PPC"], **kwargs)
 
 
 # Setup SLURM cluster
-def slurm_cluster_setup(partition="partition_name",
-                        n_cores=1,
-                        n_workers=1,
-                        processes_per_worker=1,
-                        mem_per_worker="1GB",
-                        n_workers_startup=1,
-                        timeout=60,
-                        interactive=True,
-                        interactive_wait=10,
-                        start_client=True,
-                        job_extra=[],
-                        invalid_partitions=[],
-                        **kwargs):
+def slurm_cluster_setup(
+        partition: str = "partition_name",
+        n_cores: int = 1,
+        n_workers: int = 1,
+        processes_per_worker: int = 1,
+        mem_per_worker: str = "1GB",
+        n_workers_startup: int = 1,
+        timeout: int = 60,
+        interactive: bool = True,
+        interactive_wait: int = 10,
+        start_client: bool = True,
+        job_extra: List = [],
+        invalid_partitions: List = [],
+        **kwargs: Optional[Any]) -> Union[Client, SLURMCluster, None]:
     """
     Start a distributed Dask cluster of parallel processing workers using SLURM
 
@@ -319,9 +322,11 @@ def slurm_cluster_setup(partition="partition_name",
 
     Returns
     -------
-    proc : object
+    proc : object or None
         A distributed computing client (if ``start_client = True``) or
-        a distributed computing cluster (otherwise).
+        a distributed computing cluster (otherwise). If no SLURM workers
+        can be started within the given timeout interval, `proc` is set
+        to `None`.
 
     See also
     --------
@@ -332,15 +337,15 @@ def slurm_cluster_setup(partition="partition_name",
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
 
     # Backwards compatibility: legacy keywords are converted to new nomenclature
     if any(kw in kwargs for kw in __deprecated__):
         log.warning(__deprecation_wrng__)
-        n_workers = kwargs.pop("n_jobs", n_workers)
-        processes_per_worker = kwargs.pop("workers_per_job", processes_per_worker)
-        mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
-        n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)
+        n_workers = kwargs.pop("n_jobs", n_workers)                                 # type: ignore
+        processes_per_worker = kwargs.pop("workers_per_job", processes_per_worker)  # type: ignore
+        mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)                  # type: ignore
+        n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)         # type: ignore
         log.debug("Set `n_workers = n_jobs`, `processes_per_worker = workers_per_job`, \
                   `mem_per_worker = mem_per_job` \
                   and `n_workers_startup = n_jobs_startup`")
@@ -368,7 +373,7 @@ def slurm_cluster_setup(partition="partition_name",
     # Get requested memory per worker
     if isinstance(mem_per_worker, str):
         if mem_per_worker == "auto":
-            mem_per_worker = None
+            mem_per_worker = None                                       # type: ignore
             log.debug("Using auto-memory selection")
     if mem_per_worker is not None:
         msg = "`mem_per_worker` has to be a valid memory specifier (e.g., '8GB', '12000MB'), not %s"
@@ -407,7 +412,7 @@ def slurm_cluster_setup(partition="partition_name",
         try:
             mem_lim = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
         except IndexError:
-            mem_lim = np.inf
+            mem_lim = np.inf                                            # type: ignore
     log.debug("Found a limit of  %s MB", str(mem_lim))
 
     # Consolidate requested memory with chosen partition (or assign default memory)
@@ -531,7 +536,7 @@ def slurm_cluster_setup(partition="partition_name",
 
     # Fire up waiting routine to avoid returning an undercooked cluster
     if _cluster_waiter(cluster, funcName, n_workers, timeout, interactive, interactive_wait):
-        return
+        return None
 
     # Kill a zombie cluster in non-interactive mode
     if not interactive and count_online_workers(cluster) == 0:
@@ -551,13 +556,13 @@ def slurm_cluster_setup(partition="partition_name",
     return cluster
 
 
-def _get_slurm_partitions():
+def _get_slurm_partitions() -> List:
     """
     Local helper to fetch all partitions defined in SLURM
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
 
     # Retrieve all partitions currently available in SLURM
     log.debug("Use `sinfo` to fetch available partitions")
@@ -577,7 +582,13 @@ def _get_slurm_partitions():
     return out.split()
 
 
-def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, interactive_wait):
+def _cluster_waiter(
+        cluster: SLURMCluster,
+        funcName: str,
+        total_workers: int,
+        timeout: int,
+        interactive: bool,
+        interactive_wait: int) -> bool:
     """
     Local helper that can be called recursively
     """
@@ -629,10 +640,11 @@ def _cluster_waiter(cluster, funcName, total_workers, timeout, interactive, inte
     return False
 
 
-def local_cluster_setup(n_workers=None,
-                        mem_per_worker=None,
-                        interactive=True,
-                        start_client=True):
+def local_cluster_setup(
+        n_workers: Optional[int] = None,
+        mem_per_worker: Optional[str] = None,
+        interactive: bool = True,
+        start_client: bool = True) -> Union[Client, LocalCluster, None]:
     """
     Start a local distributed Dask multi-processing cluster
 
@@ -657,7 +669,8 @@ def local_cluster_setup(n_workers=None,
     -------
     proc : object
         A distributed computing client (if ``start_client = True``) or
-        a distributed computing cluster (otherwise).
+        a distributed computing cluster (otherwise). If a client cannot
+        be started, `proc` is set to `None`.
 
     Notes
     -----
@@ -707,7 +720,7 @@ def local_cluster_setup(n_workers=None,
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
 
     # Determine if cluster allocation is happening interactively
     if not isinstance(interactive, bool):
@@ -747,7 +760,7 @@ def local_cluster_setup(n_workers=None,
         msg = "{name:s} If launched from a script, did you wrap your code " +\
             "inside a __main__ module block?"
         if not user_yesno(msg.format(name=funcName), default="no"):
-            return
+            return None
 
     # Start the actual distributed client
     if n_workers is not None or mem_per_worker is not None:
@@ -764,7 +777,7 @@ def local_cluster_setup(n_workers=None,
     return client.cluster
 
 
-def cluster_cleanup(client=None):
+def cluster_cleanup(client: Optional[Client] = None) -> None:
     """
     Stop and close dangling parallel processing workers
 
@@ -787,7 +800,7 @@ def cluster_cleanup(client=None):
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
 
     # Attempt to establish connection to dask client
     if client is None:
@@ -827,7 +840,7 @@ def cluster_cleanup(client=None):
     return
 
 
-def count_online_workers(cluster):
+def count_online_workers(cluster: SLURMCluster) -> int:
     """
     Local replacement for the late `._count_active_workers` class method
     """
