@@ -131,7 +131,7 @@ and simply un-comment the auto-generated "Changes to be committed" section.
 To further help others retrace our steps, we usually refer to GitHub issues
 by their number prepended with the "#" symbol. Here's an example:
 
-.. code-block:: bash
+.. code-block::
 
     FIX: Addresses bug in this_function
 
@@ -172,7 +172,7 @@ We keep track of changes in ACME by keeping a global changelog inspired
 by `Keep a Changelog <https://keepachangelog.com>`_. The structure of
 ACME's changelog follows the exemplary layout below:
 
-.. code-block:: bash
+.. code-block::
 
     # Changelog of ACME
     All notable changes to this project will be documented in this file.
