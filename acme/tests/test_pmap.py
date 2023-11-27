@@ -1470,6 +1470,8 @@ class TestParallelMap():
         else:
             client = esi_cluster_setup(interactive=False)
 
+        print("Allocated client")
+
         # Re-run tests with pre-allocated client (except for those in `skipTests`); ensure
         # client "survives" multiple independent test runs and is not accidentally closed
         skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun",
@@ -1477,6 +1479,7 @@ class TestParallelMap():
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:
+            print("Running test ", test)
             clnt = getattr(self, test)(testclient=client)
             assert clnt == client
         client.close()
