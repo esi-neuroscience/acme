@@ -91,58 +91,58 @@ class ACMEdaemon(object):
 
         Parameters
         ----------
-        pmap : :class:~`acme.ParallelMap` context manager
+        pmap : :class:`~acme.ParallelMap` context manager
             By default, `:class:~`acme.ACMEDaemon` assumes  that that
-            the provided :class:~`acme.ParallelMap` instance has already
+            the provided :class:`~acme.ParallelMap` instance has already
             been properly set up to process `func` (all input arguments parsed and
             properly formatted). All other input arguments of `:class:~`acme.ACMEDaemon`
-            are extracted from the provided :class:~`acme.ParallelMap` instance.
+            are extracted from the provided :class:`~acme.ParallelMap` instance.
         n_workers : int or "auto"
-            Number of SLURM workers (=jobs) to spawn. See :class:~`acme.ParallelMap`
+            Number of SLURM workers (=jobs) to spawn. See :class:`~acme.ParallelMap`
             for details.
         write_worker_results : bool
             If `True`, the return value(s) of `func` is/are saved on disk. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         output_dir : str or None
             If provided, auto-generated results are stored in the given path. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         result_shape : tuple or None
             If provided, results are slotted into a dataset/array with layout `result_shape`. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         result_dtype : str
             Determines numerical datatype of dataset laid out by `result_shape`.
-            See :class:~`acme.ParallelMap` for details.
+            See :class:`~acme.ParallelMap` for details.
         single_file : bool
             If `True`, parallel workers write to the same results container. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         write_pickle : bool
             If `True`, the return value(s) of `func` is/are pickled to disk. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         dryrun : bool
             If `True`, a dry-run of calling `func` is performed using a single
-            `args`, `kwargs` tuple. See :class:~`acme.ParallelMap` for details.
+            `args`, `kwargs` tuple. See :class:`~acme.ParallelMap` for details.
         partition : str
-            Name of SLURM partition to use. See :class:~`acme.ParallelMap` for details.
+            Name of SLURM partition to use. See :class:`~acme.ParallelMap` for details.
         mem_per_worker : str
-            Memory booking for each SLURM worker. See :class:~`acme.ParallelMap` for details.
+            Memory booking for each SLURM worker. See :class:`~acme.ParallelMap` for details.
         setup_timeout : int
             Timeout period (in seconds) for SLURM workers to come online. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         setup_interactive : bool
             If `True`, user input is queried in case not enough SLURM workers could
-            be started within `setup_timeout` seconds. See :class:~`acme.ParallelMap`
+            be started within `setup_timeout` seconds. See :class:`~acme.ParallelMap`
             for details.
         stop_client : bool or "auto"
             If `"auto"`, automatically started distributed computing clients
             are shut down at the end of computation, while user-provided clients
-            are left untouched. See :class:~`acme.ParallelMap` for details.
+            are left untouched. See :class:`~acme.ParallelMap` for details.
         verbose : None or bool
             If `None` (default), general run-time information as well as warnings
-            and errors are shown. See :class:~`acme.ParallelMap` for details.
+            and errors are shown. See :class:`~acme.ParallelMap` for details.
         logfile : None or bool or str
             If `None` (default) or `True`, and `write_worker_results` is
             `True`, all run-time information as well as errors and
-            warnings are tracked in a log-file. See :class:~`acme.ParallelMap`
+            warnings are tracked in a log-file. See :class:`~acme.ParallelMap`
             for details.
 
         Returns
@@ -151,8 +151,8 @@ class ACMEdaemon(object):
             If `write_worker_results` is `True`, `results` is a list of HDF5 file-names
             containing computed results. If `write_worker_results` is `False`,
             results is a list comprising the actual return values of `func`.
-            If `:class:~`acme.ACMEDaemon` was instantiated by :class:~`acme.ParallelMap`,
-            results are propagated back to :class:~`acme.ParallelMap`.
+            If `:class:~`acme.ACMEDaemon` was instantiated by :class:`~acme.ParallelMap`,
+            results are propagated back to :class:`~acme.ParallelMap`.
 
         See also
         --------

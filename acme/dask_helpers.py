@@ -117,7 +117,7 @@ def esi_cluster_setup(
     -----
     The employed parallel computing engine relies on the concurrent processing library
     `Dask <https://docs.dask.org/en/latest/>`_. Thus, the distributed computing
-    clients generated here are in fact instances of :class:`dask.distributed.Client`.
+    clients generated here are in fact instances of :class:`distributed.Client`.
     This function specifically acts  as a wrapper for :class:`dask_jobqueue.SLURMCluster`.
     Users familiar with Dask in general and its distributed scheduler and cluster
     objects in particular, may leverage Dask's entire API to fine-tune parallel
@@ -784,9 +784,8 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
     Parameters
     ----------
     client : dask distributed computing client or None
-        Either a concrete `dask client object <https://distributed.dask.org/en/latest/client.html>`_
-        or `None`. If `None`, a global client is queried for and shut-down
-        if found (without confirmation!).
+        Either a  :class:`distributed.Client` or `None`. If `None`, a
+        global client is queried for and shut-down if found (without confirmation!).
 
     Returns
     -------

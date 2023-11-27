@@ -41,8 +41,8 @@ First, we import the necessary packages:
     import itertools
 
 
-Building the Network & Related Runctions
-----------------------------------------
+Building the Network & Related Functions
+========================================
 
 Next, we define our ``NeuralNet`` model. We will use a simple fully connected
 network with 5 hidden layers and vary the number of units in each layer.
@@ -128,7 +128,8 @@ necessary here.
 
 
 Getting the Data Ready
------------------------
+======================
+
 We pass each PyTorch :class:`~torch.utils.data.DataLoader` along with the
 model parameters to :class:`~acme.ParallelMap`.
 
