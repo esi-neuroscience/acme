@@ -1469,7 +1469,6 @@ class TestParallelMap():
 
         else:
             client = esi_cluster_setup(interactive=False)
-
         print("Allocated client")
 
         # Re-run tests with pre-allocated client (except for those in `skipTests`); ensure

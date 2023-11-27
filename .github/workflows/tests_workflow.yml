@@ -10,7 +10,7 @@ name: tests
 on:
   # Triggers the workflow on push or pull request events
   push:
-    branches: [main, dev, release_preps]
+    branches: [main, dev]
   pull_request:
 
   # Allows you to run this workflow manually from the Actions tab
