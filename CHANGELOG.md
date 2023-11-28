@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 ### NEW
+- New keyword `cores_per_worker` in `esi_cluster_setup` to explicitly set
+  the core-count of SLURM workers.
+- Extended functionality of ACME's partition auto-selection on the ESI
+  HPC cluster to include IBM POWER machines in the "E880" partition
 - Added new "Tutorials" section in documentation
 - Added new tutorial on using ACME for parallel evaluation of classifier
   accuracy (Thanks to @timnaher, cf #53)
@@ -20,7 +24,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   "sparse" docstrings.
 
 ### CHANGED
+- To avoid dubious (and hard to debug) errors, `esi_cluster_setup` now
+  checks the micro-architecture of the submitting host against the chosen
+  partition. This avoids accidental start attempts of ppc64le SLURM jobs
+  from inside an x86_64 Python interpreter and vice versa.
+
 ### REMOVED
+- The `partition` keyword in `esi_cluster_setup` does not have a default
+  value any more (the old default of "8GBXS" was inappropriate most of
+  the time)
+- The (undocumented) "anonymous" keyword `n_cores` of `esi_cluster_setup`
+  has been removed in favor of the explicit `cores_per_worker` (now also
+  visible in the API). Just like `n_cores`, setting the new `cores_per_worker`
+  parameter is still optional: by default, `esi_cluster_setup` derives
+  core-count from `DefMemPerCPU` and the chosen value of `mem_per_worker`.
+
 ### DEPRECATED
 ### FIXED
 - fixed partition bug ``run_tests.sh`` (Thanks to @timnaher, cf #53)
@@ -29,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   notebooks.
 - clarified docstring discussing `result_dtype`: must not be `None` but
   `str` (still defaults to "float")
+- numerous corrections of errata/outdated information in docstrings
 
 ## [2023.4] - 2023-04-14
 Re-designed ACME's logs and command line output.

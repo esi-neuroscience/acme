@@ -9,6 +9,7 @@
 
 # Builtin/3rd party package imports
 import sys
+import platform
 import pytest
 
 # Import main actors here
@@ -25,6 +26,9 @@ onESI = is_esi_node()
 
 # Use a default partition if running on the ESI cluster
 if onESI:
-    defaultQ = "8GBXS"
+    if platform.machine() == "x86_64":
+        defaultQ = "8GBXS"
+    else:
+        defaultQ = "E880"
 else:
     defaultQ = "auto"

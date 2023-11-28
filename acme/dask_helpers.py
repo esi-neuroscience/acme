@@ -11,6 +11,7 @@
 import os
 import sys
 import socket
+import platform
 import subprocess
 import getpass
 import time
@@ -38,14 +39,15 @@ __all__: List["str"] = ["esi_cluster_setup", "local_cluster_setup", "cluster_cle
 
 # Setup SLURM workers on the ESI HPC cluster
 def esi_cluster_setup(
-        partition: str = "8GBXS",
+        partition: str,
         n_workers: int = 2,
-        mem_per_worker: Optional[str] = "auto",
+        mem_per_worker: str = "auto",
+        cores_per_worker: Optional[int] = None,
         n_workers_startup: int = 1,
         timeout: int = 60,
         interactive: bool = True,
         interactive_wait: int = 120,
-        start_client: bool =True,
+        start_client: bool = True,
         job_extra: List = [],
         **kwargs: Optional[Any]) -> Union[Client, SLURMCluster, LocalCluster]:
     """
@@ -60,18 +62,23 @@ def esi_cluster_setup(
         cluster.
     n_workers : int
         Number of SLURM workers (=jobs) to spawn
-    mem_per_worker : None or str
+    mem_per_worker : str
         Memory booking for each worker. Can be specified either in megabytes
         (e.g., ``mem_per_worker = 1500MB``) or gigabytes (e.g., ``mem_per_worker = "2GB"``).
-        If `mem_per_worker` is `None`, or `"auto"` it is attempted to infer a sane default value
+        If `mem_per_worker` is `"auto"` it is attempted to infer a sane default value
         from the chosen partition, e.g., for ``partition = "8GBS"`` `mem_per_worker` is
-        automatically set to the allowed maximum of `'8GB'`. However, even in
-        queues with guaranteed memory bookings, it is possible to allocate less
+        automatically set to the allowed maximum of `'8GB'`. On the IBM POWER
+        partition "E880", `mem_per_worker` is set to 16 GB if not provided.
+        Note, even in queues with guaranteed memory bookings, it is possible to allocate less
         memory than the allowed maximum per worker to spawn numerous low-memory
         workers. See Examples for details.
+    cores_per_worker : None or int
+        Number of CPU cores allocated for each worker. If `None`, core-count
+        is set based on partition settings (`DefMemPerCPU`) with respect to
+        CPU architecture (minimum 1 on x86_64, and 4 on IBM POWER).
     n_workers_startup : int
-        Number of spawned workers to wait for. If `n_workers_startup` is `100` (default),
-        the code does not proceed until either 100 SLURM jobs are running or the
+        Number of spawned workers to wait for. If `n_workers_startup` is `1` (default),
+        the code does not proceed until either 1 SLURM job is running or the
         `timeout` interval has been exceeded.
     timeout : int
         Number of seconds to wait for requested workers to start (see `n_workers_startup`).
@@ -108,6 +115,11 @@ def esi_cluster_setup(
     in the `8GBS` partition
 
     >>> client = esi_cluster_setup(n_workers=10, partition="8GBS", mem_per_worker="2GB")
+
+    Use default settings to start 2 SLURM workers in the IBM POWER E880 partition
+    (allocating 4 cores and 16 GB memory per worker)
+
+    >>> client = esi_cluster_setup(partition="E880")
 
     The underlying distributed computing cluster can be accessed using
 
@@ -191,33 +203,45 @@ def esi_cluster_setup(
     processes_per_worker = kwargs.pop("processes_per_worker", 1)
     log.debug("Found `sinfo`, set `processes_per_worker` to %d", processes_per_worker)
 
+    # Get micro-architecture of submitting host
+    mArch = platform.machine()
+
     # If partition is "auto" use `mem_per_worker` to pick pseudo-optimal partition
     # Note: the `np.where` gymnastic below is necessary since `argmin` refuses
     # to return multiple matches; if `mem_per_worker` is 12, then ``memDiff = [4, 4, ...]``,
     # however, 8GB won't fit a 12GB worker, so we have to pick the second match 16GB
-    if isinstance(partition, str) and partition == "auto":
-        if not isinstance(mem_per_worker, str) or mem_per_worker.find("estimate_memuse:") < 0:
-            msg = "Cannot auto-select partition without first invoking memory estimation in `ParallelMap`. "
-            log.error(msg)
-            raise IOError("%s %s"%(funcName, msg))
-        memEstimate = int(mem_per_worker.replace("estimate_memuse:" ,""))
-        mem_per_worker = "auto"
-        log.info("Automatically selecting SLURM partition...")
-        availPartitions = _get_slurm_partitions()
-        gbQueues = np.unique([int(queue.split("GB")[0]) for queue in availPartitions if queue[0].isdigit()])
-        memDiff = np.abs(gbQueues - memEstimate)
-        queueIdx = np.where(memDiff == memDiff.min())[0][-1]
-        partition = "{}GBXS".format(gbQueues[queueIdx])
-        msg = "Picked partition %s based on estimated memory consumption of %d GB"
-        log.info(msg, partition, memEstimate)
+    if isinstance(partition, str):
+        if partition == "auto":
+            if not isinstance(mem_per_worker, str) or mem_per_worker.find("estimate_memuse:") < 0:
+                msg = "Cannot auto-select partition without first invoking memory estimation in `ParallelMap`. "
+                log.error(msg)
+                raise IOError("%s %s"%(funcName, msg))
+            memEstimate = int(mem_per_worker.replace("estimate_memuse:", ""))
+            mem_per_worker = "auto"
+            log.info("Automatically selecting SLURM partition...")
+            availPartitions = _get_slurm_partitions()
+            if mArch == "x86_64":
+                gbQueues = np.unique([int(queue.split("GB")[0]) for queue in availPartitions if queue[0].isdigit()])
+                memDiff = np.abs(gbQueues - memEstimate)
+                queueIdx = np.where(memDiff == memDiff.min())[0][-1]
+                partition = "{}GBXS".format(gbQueues[queueIdx])
+            else:
+                partition = "E880"
+                mem_per_worker = f"{memEstimate} GB"
+            msg = "Picked partition %s based on estimated memory consumption of %d GB"
+            log.info(msg, partition, memEstimate)
+        else:
+            if (partition == "E880" and mArch == "x86_64") or \
+               (mArch == "ppc64le" and partition != "E800"):
+                otherArch = list(set(["x86_64", "ppc64le"]).difference([mArch]))[0]
+                msg = "Cannot start SLURM workers in partition %s with " +\
+                    "architecture %s from submitting host with architecture %s. " +\
+                    "Start x86_64 workers from esi-svhpc{1,2,3} and POWER workers from the hub."
+                raise ValueError(msg%(partition, otherArch, mArch))
 
-    # Extract by-worker CPU core count from anonymous keyword args or...
-    if kwargs.get("n_cores") is not None:
-        n_cores = kwargs.pop("n_cores")
-        log.debug("Set `n_cores = %d` from kwargs", n_cores)
-    else:
-        # ...get memory limit (*in MB*) of chosen partition and set core count
-        # accordingly (multiple of 8 wrt to GB RAM)
+    # If not explicitly provided, extract by-worker CPU core count from
+    # partition via `DefMeMPerCPU` and `mem_per_worker`
+    if cores_per_worker is None:
         try:
             log.debug("Using `scontrol` to get partition info")
             pc = subprocess.run("scontrol -o show partition {}".format(partition),
@@ -228,8 +252,34 @@ def esi_cluster_setup(
             msg = "Cannot fetch available memory per CPU in SLURM: %s"
             log.error(msg, str(exc))
             raise IOError("%s %s"%(funcName, msg%(str(exc))))
-        n_cores = int(defMem / 8000)
-        log.debug("Using `n_cores=%d`", n_cores)
+
+        # Use ESI-specific x86_64 partition layout (8GB(S/X/L), 16GB(S/X/L), ... )
+        # to get infer memory and core count; use "sane" (fat quotes)
+        # defaults on IBM POWER (if nothing was provided, use 4 cores/16 GB per worker)
+        if mArch == "x86_64":
+            memPerCore = 8000
+        else:
+            if mem_per_worker is not None:
+                try:
+                    memVal = float(mem_per_worker.replace("MB", "").replace("GB", ""))
+                except:
+                    raise ValueError("Invalid value of `mem_per_worker`: %s"%mem_per_worker)
+                if memVal <= 0:
+                    raise ValueError("Value of `mem_per_worker` has to be > 0!")
+                if "MB" in mem_per_worker:
+                    defMem = int(memVal)
+                else:
+                    defMem = int(round(memVal * 1000))
+                log.debug("Found `mem_per_worker` set to %d MB", defMem)
+            else:
+                defMem = 16000                  # default to 4 cores per worker if no mem req was specified
+                mem_per_worker = f"{defMem} MB"
+                log.debug("No `mem_per_worker` specified, using default of %d MB", defMem)
+            memPerCore = 4000
+
+        # Set core-count per worker (applies to both x86_64 and ppc64le)
+        cores_per_worker = int(defMem / memPerCore)
+        log.debug("Derived core-count from partition: `cores_per_worker=%d`", cores_per_worker)
 
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
     # but we may need to append to it, so ensure that's possible)
@@ -252,9 +302,11 @@ def esi_cluster_setup(
         log.debug("Setting `--output=%s`", out_files)
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
-    return slurm_cluster_setup(partition, n_cores, n_workers, processes_per_worker, mem_per_worker,     # type: ignore
-                               n_workers_startup, timeout, interactive, interactive_wait,
-                               start_client, job_extra, invalid_partitions=["DEV", "PPC"], **kwargs)
+    return slurm_cluster_setup(partition, cores_per_worker, n_workers,      # type: ignore
+                               processes_per_worker, mem_per_worker,
+                               n_workers_startup, timeout, interactive,
+                               interactive_wait, start_client, job_extra,
+                               invalid_partitions=["DEV", "ESI"], **kwargs)
 
 
 # Setup SLURM cluster
@@ -383,7 +435,7 @@ def slurm_cluster_setup(
         if not any(szstr in mem_per_worker for szstr in ["MB", "GB"]):
             log.error(msg, mem_per_worker)
             raise ValueError("%s %s"%(funcName, msg%(mem_per_worker)))
-        memNumeric = mem_per_worker.replace("MB","").replace("GB","")
+        memNumeric = mem_per_worker.replace("MB", "").replace("GB", "")
         log.debug("Found `mem_per_worker = %s` in input args", mem_per_worker)
         try:
             memVal = float(memNumeric)
@@ -421,9 +473,9 @@ def slurm_cluster_setup(
         log.debug("Using partition limit of %s MB", str(mem_lim))
     else:
         if "MB" in mem_per_worker:
-            mem_req = int(mem_per_worker[:mem_per_worker.find("MB")])
+            mem_req = int(memVal)
         else:
-            mem_req = int(round(float(mem_per_worker[:mem_per_worker.find("GB")]) * 1000))
+            mem_req = int(round(memVal * 1000))
         if mem_req > mem_lim:
             msg = "`mem_per_worker` exceeds limit of %d MB for partition %s. " +\
                 "Capping memory at partition limit. "
