@@ -32,7 +32,7 @@ from typing import Any, Optional, Union, Dict
 
 # Import main actors here
 from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
-from conftest import skip_if_not_linux, useSLURM, onESI, defaultQ
+from conftest import skip_if_not_linux, useSLURM, onESI, onx86, defaultQ
 
 # Define custom types
 realArrayLike = Union[float, NDArray[np.float64]]
@@ -442,10 +442,11 @@ class TestParallelMap():
             assert pmap.n_calls == pmap.n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             partition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
-            assert "8GB" in partition
-            memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
-            assert memory.size == 1
-            assert round(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
+            if onx86:
+                assert "8GB" in partition
+                memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+                assert memory.size == 1
+                assert round(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
 
         # Wait a sec (literally) for dask to collect its bearings (after the
         # `get_client` above) before proceeding
@@ -481,13 +482,12 @@ class TestParallelMap():
         time.sleep(1.0)
 
         # Underbook SLURM (more calls than workers)
-        partition = "8GBXS"
         n_workers = int(self.nChannels / 2)
         mem_per_worker = "2GB"
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
-                         partition=partition,
+                         partition=defaultQ,
                          n_workers=n_workers,
                          mem_per_worker=mem_per_worker,
                          stop_client=False,
@@ -502,7 +502,7 @@ class TestParallelMap():
             assert pmap.n_workers == n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
-            assert actualPartition == partition
+            assert actualPartition == defaultQ
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
             assert round(memory[0] / 1000**3) == int(mem_per_worker.replace("GB", ""))
@@ -514,13 +514,12 @@ class TestParallelMap():
                 dd.get_client()
 
         # Overbook SLURM (more workers than calls)
-        partition = "8GBXS"
         n_workers = self.nChannels + 2
         mem_per_worker = "3000MB"
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
-                         partition=partition,
+                         partition=defaultQ,
                          n_workers=n_workers,
                          mem_per_worker=mem_per_worker,
                          stop_client=False,
@@ -535,7 +534,7 @@ class TestParallelMap():
             assert pmap.n_workers == n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
-            assert actualPartition == partition
+            assert actualPartition == defaultQ
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
             assert round(memory[0] / 1000**3) * 1000 == int(mem_per_worker.replace("MB", ""))
@@ -1086,7 +1085,7 @@ class TestParallelMap():
             "   return\n" +\
             "if __name__ == '__main__':\n" +\
             "   cluster_cleanup() \n" +\
-            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, partition='8GBXS', write_worker_results=False) as pmap: \n" +\
+            f"   with ParallelMap(long_running, [None]*2, setup_interactive=False, partition='{defaultQ}', write_worker_results=False) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
         with open(scriptName, "w") as f:
@@ -1131,7 +1130,7 @@ class TestParallelMap():
             "   time.sleep(10)\n" +\
             "   return\n" +\
             "if __name__ == '__main__':\n" +\
-            "   client = esi_cluster_setup(partition='8GBDEV',n_workers=1, interactive=False)\n" +\
+            f"   client = esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n" +\
             "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False, verbose=True) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
@@ -1165,7 +1164,7 @@ class TestParallelMap():
             "from acme import esi_cluster_setup\n" +\
             "import time\n" +\
             "if __name__ == '__main__':\n" +\
-            "   esi_cluster_setup(partition='8GBDEV',n_workers=1, interactive=False)\n" +\
+            f"   esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n" +\
             "   time.sleep(60)\n"
         with open(scriptName, "w") as f:
             f.write(scriptContents)
@@ -1198,6 +1197,7 @@ class TestParallelMap():
         # directory must be cleaned up
         monkeypatch.setattr("builtins.input", lambda _ : "n")
         pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4, setup_interactive=True, dryrun=True)
+        time.sleep(1.0)
 
         # Ensure auto-generated output dir has been successfully removed
         outDir = pmap.daemon.out_dir
@@ -1218,7 +1218,7 @@ class TestParallelMap():
         # mem estimates accordingly
         arrsize = 2
         estMem = 3
-        if platform.machine() == "ppc64le":
+        if not useSLURM and platform.machine() == "ppc64le":
             arrsize = 0.5
             estMem = 1
 
@@ -1264,7 +1264,7 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked
         if onESI and useSLURM:
-            assert "Picked partition 8GBXS based on estimated memory consumption of 3 GB" in logTxt
+            assert f"Picked partition {defaultQ} based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
         # output HDF5 files were removed
@@ -1329,7 +1329,7 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked (again)
         if onESI and useSLURM:
-            assert "Picked partition 8GBXS based on estimated memory consumption of 3 GB" in logTxt
+            assert f"Picked partition {defaultQ} based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling should not have generated any output
         outDirs.append(pmap.daemon.out_dir)
@@ -1362,13 +1362,20 @@ class TestParallelMap():
 
             # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`
             # with `mem_per_worker='esstimate_memuse:XY'`
+            memUse = "estimate_memuse:12"
             client = esi_cluster_setup(partition="auto",
-                                       mem_per_worker="estimate_memuse:12",
+                                       mem_per_worker=memUse,
                                        n_workers=1,
                                        interactive=False)
 
-            # Ensure the right partition was picked (16GBXY, not 8GBXY)
-            assert "16GB" in client.cluster.job_header.split("-p ")[1].split("\n")[0]
+            # Ensure the right partition was picked (16GBXY, not 8GBXY on x86)
+            if onx86:
+                assert "16GB" in client.cluster.job_header.split("-p ")[1].split("\n")[0]
+            else:
+                memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+                assert memory.size == 1
+                assert round(memory[0] / 1000**3) == int(memUse.split(":")[1])
+
             cluster_cleanup(client)
 
             # Full run (finally) w/10 workers, 5 of em get mem-profiled
@@ -1386,7 +1393,7 @@ class TestParallelMap():
             with open(customLog3, "r", encoding="utf8") as f:
                 logTxt = f.read()
             assert "Estimated memory consumption across 5 runs" in logTxt
-            assert "Picked partition 8GBXS" in logTxt
+            assert f"Picked partition {defaultQ}" in logTxt
             outDirs.append(pmap.out_dir)
 
         # Clean up

@@ -38,6 +38,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   visible in the API). Just like `n_cores`, setting the new `cores_per_worker`
   parameter is still optional: by default, `esi_cluster_setup` derives
   core-count from `DefMemPerCPU` and the chosen value of `mem_per_worker`.
+- In `slurm_cluster_setup`, do not use `DefMemPerCPU` as fallback substitute
+  in case `MaxMemPerCPU` is not defined for chosen partition (may be overly
+  restrictive on requested memory settings)
 
 ### DEPRECATED
 ### FIXED

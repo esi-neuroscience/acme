@@ -28,8 +28,7 @@ detailed guide on how to contribute to ACME, please see our
    ./run_tests.sh pytest
    ```
 
-1. Export your environment, re-recreate it on the ESI HPC cluster and run
-   ACME's cluster test-suite
+1. Export your environment and re-recreate it on an x86 ESI HPC cluster node:
 
    ```bash
    conda env export --from-history > acmepy11.yml
@@ -37,10 +36,26 @@ detailed guide on how to contribute to ACME, please see our
    ssh esi-svhpc2
    module load conda
    conda env create --file acmepy11.yml
-   ./run_tests.sh pytest
    ```
 
-1. Coming soon..
+   Create an identical environment (append "-ppc" to its name) on a ppc64le
+   node:
+
+   ```bash
+   ssh HUB
+   module load conda
+   conda env create --file acmepy11.yml
+   ```
+
+1. Run ACME's test-suite on both architectures
+
+   ```bash
+   ssh {hub/esi-svhpc2}
+   module load conda
+   conda activate acme-py11{-ppc}
+   cd acme/acme/tests
+   ./run_tests.sh pytest
+   ```
 
 ## Deployment
 

@@ -18,39 +18,41 @@ if acme_path not in sys.path:
     sys.path.insert(0, acme_path)
 
 # Import package
-from acme import ParallelMap
+from acme import ParallelMap, esi_cluster_setup
 
-def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
-    return (x + y) * z * w.max()
 
-import time
 
-def g(x, y, z=3):
-    fSize = np.dtype("float").itemsize
-    arrSize = 4
-    time.sleep(10)
-    arr = np.ones((int(arrSize * 1024**3 / fSize), ))
-    time.sleep(300)
-    return (sum(x) + y) * z * arr.max()
+# def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+#     return (x + y) * z * w.max()
 
-def arr_test(x, y):
-    return x + y
+# import time
 
-# Prepare code to be executed using, e.g., iPython's `%run` magic command
-if __name__ == "__main__":
+# def g(x, y, z=3):
+#     fSize = np.dtype("float").itemsize
+#     arrSize = 4
+#     time.sleep(10)
+#     arr = np.ones((int(arrSize * 1024**3 / fSize), ))
+#     time.sleep(300)
+#     return (sum(x) + y) * z * arr.max()
 
-    # Test stuff within here...
-    # pass
+# def arr_test(x, y):
+#     return x + y
 
-    with ParallelMap(arr_test, [np.ones((20,)), 2 * np.ones((20,)), 3 * np.ones((20,))], 4, result_shape=(None, 20), verbose=True, single_file=True) as pmap:
-        results = pmap.compute()
+# # Prepare code to be executed using, e.g., iPython's `%run` magic command
+# if __name__ == "__main__":
 
-    1/0
+#     # Test stuff within here...
+#     # pass
 
-    # pmap = ParallelMap(g, np.arange(100), 2)
-    # pmap.daemon.estimate_memuse()
+#     with ParallelMap(arr_test, [np.ones((20,)), 2 * np.ones((20,)), 3 * np.ones((20,))], 4, result_shape=(None, 20), verbose=True, single_file=True) as pmap:
+#         results = pmap.compute()
 
-    # # with pmap as p:
-    # #     p.compute()
+#     1/0
+
+#     # pmap = ParallelMap(g, np.arange(100), 2)
+#     # pmap.daemon.estimate_memuse()
+
+#     # # with pmap as p:
+#     # #     p.compute()
 
 

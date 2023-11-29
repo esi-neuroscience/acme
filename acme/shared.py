@@ -11,6 +11,7 @@
 import os
 import sys
 import socket
+import platform
 import select
 import subprocess
 import inspect
@@ -105,6 +106,16 @@ def is_esi_node() -> bool:
     log.debug("Test if hostname matches the pattern 'esi-sv*'")
     return socket.gethostname().startswith("esi-sv") and os.path.isdir("/cs")
 
+
+def is_x86_node() -> bool:
+    """
+    Returns `True` if code is running on an x86_64 node, `False` otherwise
+    """
+
+    # Fetch ACME logger and write debug message
+    log = logging.getLogger("ACME")
+    log.debug("Test if host is x86_64 micro-architecture")
+    return platform.machine() == "x86_64"
 
 def _scalar_parser(
         var: Any,

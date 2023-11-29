@@ -14,7 +14,7 @@ import numpy as np
 
 # Import main actors here
 from acme import cluster_cleanup, esi_cluster_setup, slurm_cluster_setup, local_cluster_setup
-from conftest import useSLURM, onESI, defaultQ
+from conftest import useSLURM, onESI, onx86, defaultQ
 
 def test_cluster_setup():
 
@@ -68,25 +68,26 @@ def test_cluster_setup():
             # Over-allocation of memory should default to partition max
             # (this should work on all clusters but we don't know partition
             # names, QoS rules etc.)
-            client = esi_cluster_setup(partition="8GBDEV",
-                                       timeout=120,
-                                       n_workers=1,
-                                       mem_per_worker="9000MB",
-                                       interactive=False)
-            memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
-            assert memory.size == 1
-            assert np.round(memory / 1000**3)[0] == 8
+            if onx86:
+                client = esi_cluster_setup(partition="8GBDEV",
+                                        timeout=120,
+                                        n_workers=1,
+                                        mem_per_worker="9000MB",
+                                        interactive=False)
+                memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+                assert memory.size == 1
+                assert np.round(memory / 1000**3)[0] == 8
 
-            # Invoking `esi_cluster_setup` with existing client must not start a new one
-            clnt = esi_cluster_setup(partition="16GBXS", n_workers=2, interactive=False)
-            assert clnt == client
-            cluster_cleanup(client)
+                # Invoking `esi_cluster_setup` with existing client must not start a new one
+                clnt = esi_cluster_setup(partition="16GBXS", n_workers=2, interactive=False)
+                assert clnt == client
+                cluster_cleanup(client)
 
             # Specify CPU count manually
-            client = esi_cluster_setup(partition="16GBDEV",
+            client = esi_cluster_setup(partition=defaultQ,
                                        timeout=120,
                                        n_workers=1,
-                                       n_cores=1,
+                                       cores_per_worker=1,
                                        interactive=False)
             assert [w["nthreads"] for w in client.cluster.scheduler_info["workers"].values()][0] == 1
             cluster_cleanup(client)

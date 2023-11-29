@@ -232,12 +232,17 @@ def esi_cluster_setup(
             log.info(msg, partition, memEstimate)
         else:
             if (partition == "E880" and mArch == "x86_64") or \
-               (mArch == "ppc64le" and partition != "E800"):
+               (mArch == "ppc64le" and partition != "E880"):
                 otherArch = list(set(["x86_64", "ppc64le"]).difference([mArch]))[0]
                 msg = "Cannot start SLURM workers in partition %s with " +\
                     "architecture %s from submitting host with architecture %s. " +\
                     "Start x86_64 workers from esi-svhpc{1,2,3} and POWER workers from the hub."
                 raise ValueError(msg%(partition, otherArch, mArch))
+
+    # Convert "auto" memory selection query to `None` for easier handling below`
+    if isinstance(mem_per_worker, str) and mem_per_worker == "auto":
+        mem_per_worker = None                                       # type: ignore
+        log.debug("Using auto-memory selection")
 
     # If not explicitly provided, extract by-worker CPU core count from
     # partition via `DefMeMPerCPU` and `mem_per_worker`
@@ -278,7 +283,7 @@ def esi_cluster_setup(
             memPerCore = 4000
 
         # Set core-count per worker (applies to both x86_64 and ppc64le)
-        cores_per_worker = int(defMem / memPerCore)
+        cores_per_worker = max(1, int(defMem / memPerCore))
         log.debug("Derived core-count from partition: `cores_per_worker=%d`", cores_per_worker)
 
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
@@ -461,15 +466,15 @@ def slurm_cluster_setup(
     try:
         mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0])
     except IndexError:
-        try:
-            mem_lim = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
-        except IndexError:
-            mem_lim = np.inf                                            # type: ignore
+        mem_lim = np.inf                                            # type: ignore
     log.debug("Found a limit of  %s MB", str(mem_lim))
 
     # Consolidate requested memory with chosen partition (or assign default memory)
     if mem_per_worker is None:
-        mem_per_worker = str(mem_lim) + "MB"
+        if np.isinf(mem_lim):
+            mem_per_worker = pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0] + "MB"
+        else:
+            mem_per_worker = str(mem_lim) + "MB"
         log.debug("Using partition limit of %s MB", str(mem_lim))
     else:
         if "MB" in mem_per_worker:
