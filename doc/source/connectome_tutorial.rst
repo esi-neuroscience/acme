@@ -160,7 +160,7 @@ client to do the actual processing
 
    subjectList = list(set(range(20)).difference([7, 8, 11, 12, 19]))
    myClient = esi_cluster_setup(n_workers=8, mem_per_worker="8GB",
-                                partition="E880", n_cores=2)
+                                cores_per_worker=2, partition="E880")
 
 
 The return value of ``compute_connectome`` is always a
