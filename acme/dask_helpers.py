@@ -19,7 +19,7 @@ import inspect
 import textwrap
 import numpy as np
 from tqdm import tqdm
-if sys.platform == "win32":
+if sys.platform == "win32":                                             # pragma: no cover
     # tqdm breaks term colors on Windows - fix that (tqdm issue #446)
     import colorama
     colorama.deinit()
@@ -472,7 +472,10 @@ def slurm_cluster_setup(
     # Consolidate requested memory with chosen partition (or assign default memory)
     if mem_per_worker is None:
         if np.isinf(mem_lim):
-            mem_per_worker = pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0] + "MB"
+            try:
+                mem_per_worker = pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0] + "MB"
+            except IndexError:
+                raise ValueError("Cannot infer any default memory setting from partition %s"%partition)
         else:
             mem_per_worker = str(mem_lim) + "MB"
         log.debug("Using partition limit of %s MB", str(mem_lim))
@@ -887,6 +890,7 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
 
     # If connection was successful, first close the client, then the cluster
     client.close()
+    time.sleep(1.0)
     client.cluster.close()
 
     # Communicate what just happened and get outta here

@@ -14,7 +14,7 @@ import logging
 # Differentiate b/w being imported as Syncopy sub-package or standalone
 # ACME module: do not attempt to import syncopy but instead see if it has
 # already been imported; then ACME should use Syncopy's built-in logging
-if "syncopy" in sys.modules:
+if "syncopy" in sys.modules:                                            # pragma: no cover
     import syncopy as spy                                               # type: ignore
     log = logging.getLogger("syncopy")
     scalar_parser = lambda var, varname="", ntype=None, lims=None : \

@@ -155,7 +155,7 @@ def _scalar_parser(
     return
 
 
-def user_yesno(
+def user_yesno(                                                         # pragma: no cover
         msg: str,
         default: Optional[str] = None) -> bool:
     """
@@ -182,7 +182,7 @@ def user_yesno(
             print("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
 
 
-def user_input(
+def user_input(                                                         # pragma: no cover
         msg: str,
         valid: Optional[List] = None,
         default: Optional[str] = None,
@@ -278,7 +278,7 @@ def ctrlc_catcher(
             log.debug("CTRL + C acknowledged, client and workers successfully killed")
 
     # Relay exception handling back to appropriate system tools
-    if isipy:
+    if isipy:                                                           # pragma: no cover
         shell.ipyTBshower(shell, exc_tuple=(etype, evalue, etb), **exckwargs)
     else:
         sys.__excepthook__(etype, evalue, etb)
@@ -287,7 +287,7 @@ def ctrlc_catcher(
     # printing was handled above)
     log.error("Exception received.")
     memHandler = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)][0]
-    if memHandler.target is not None:
+    if memHandler.target is not None:                                   # pragma: no cover
         memHandler.acquire()
         with open(memHandler.target.baseFilename, "a", encoding="utf-8") as logfile:    # type: ignore
             logfile.write("".join(traceback.format_exception_only(etype, evalue)))
