@@ -40,9 +40,9 @@ from .dask_helpers import (esi_cluster_setup, local_cluster_setup,
 from .shared import user_yesno, is_esi_node, is_slurm_node
 from .logger import prepare_log
 isSpyModule = False
-if "syncopy" in sys.modules:
+if "syncopy" in sys.modules:            # pragma: no cover
     isSpyModule = True
-if TYPE_CHECKING:
+if TYPE_CHECKING:                       # pragma: no cover
     from frontend import ParallelMap
 
 __all__: List["str"] = ["ACMEdaemon"]
@@ -384,7 +384,7 @@ class ACMEdaemon(object):
             # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
             if self.has_slurm:
                 outDir = "/cs/home/{usr:s}/".format(usr=getpass.getuser())
-            else:
+            else:                                                       # pragma: no cover
                 outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
             outDir = os.path.join(outDir, "ACME_{date:s}")
             outDir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
@@ -631,7 +631,7 @@ class ACMEdaemon(object):
 
         # If things are running locally, simply fire up a dask-distributed client,
         # otherwise go through the motions of preparing a full worker cluster
-        if not self.has_slurm:
+        if not self.has_slurm:                                          # pragma: no cover
             log.debug("SLURM not found, Calling `local_cluster_setup`")
             self.client = local_cluster_setup(interactive=False)        # type: ignore
 
@@ -648,7 +648,7 @@ class ACMEdaemon(object):
                     msg = "Automatic SLURM partition selection is experimental"
                     log.warning(msg)
                     mem_per_worker = self.estimate_memuse()
-                else:
+                else:                                                   # pragma: no cover
                     err = "Automatic SLURM partition selection currently only available " +\
                         "on the ESI HPC cluster. "
                     log.error(err)
@@ -671,7 +671,7 @@ class ACMEdaemon(object):
                                                 interactive=setup_interactive, start_client=True)
 
             # Unknown cluster node, use vanilla config
-            else:
+            else:                                                       # pragma: no cover
                 wrng = "Cluster node %s not recognized. Falling back to vanilla " +\
                     "SLURM setup allocating one worker and one core per worker"
                 log.warning(wrng%(socket.getfqdn()))
@@ -691,7 +691,7 @@ class ACMEdaemon(object):
                                                   invalid_partitions=[])
 
             # If startup is aborted by user, get outta here
-            if self.client is None:
+            if self.client is None:                                     # pragma: no cover
                 msg = "%s Could not start distributed computing client. "
                 raise ConnectionAbortedError(msg%(self.objName))
 
@@ -813,7 +813,7 @@ class ACMEdaemon(object):
 
         # Dask does not correctly forward the `sys.path` from the parent process
         # to its workers. Fix this.
-        def init_acme(dask_worker, syspath):
+        def init_acme(dask_worker, syspath):                            # pragma: no cover
             sys.path = list(syspath)
         self.client.register_worker_callbacks(setup=functools.partial(init_acme, syspath=sys.path))
         log.debug("Registered worker callback to forward `sys.path`")
@@ -861,7 +861,7 @@ class ACMEdaemon(object):
         if isinstance(self.client.cluster, dj.SLURMCluster):
             logFiles = self.client.cluster.job_header.split("--output=")[1].replace("%j", "{}")
             logDir = os.path.split(logFiles)[0]
-        else:
+        else:                                                           # pragma: no cover
             logFiles = []
             logDir = os.path.dirname(self.client.cluster.dashboard_link) + "/info/main/workers.html"
         msg = "Preparing %d parallel calls of `%s` using %d workers"
@@ -928,7 +928,7 @@ class ACMEdaemon(object):
                     msg += "Please check SLURM logs in %s"%(logDir)
 
             # In case of a `LocalCluster`, syphon worker logs
-            else:
+            else:                                                       # pragma: no cover
                 msg += "Parallel worker log details: \n"
                 workerLogs = self.client.get_worker_logs().values()
                 for wLog in workerLogs:
@@ -1104,7 +1104,7 @@ class ACMEdaemon(object):
         """
 
         # If `prepare_client` has not been launched yet, just get outta here
-        if not hasattr(self, "client"):
+        if not hasattr(self, "client"):                                 # pragma: no cover
             log.debug("Helper `prepare_client` not yet launched, exiting")
             return
         if self.stop_client and self.client is not None:
@@ -1117,7 +1117,7 @@ class ACMEdaemon(object):
         return
 
     @staticmethod
-    def func_wrapper(*args: Any, **kwargs: Optional[Any]) -> None:
+    def func_wrapper(*args: Any, **kwargs: Optional[Any]) -> None:      # pragma: no cover
         """
         If the output of `func` is saved to disk, wrap `func` with this static
         method to take care of filling up HDF5/pickle files

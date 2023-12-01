@@ -31,7 +31,7 @@ from numpy.typing import NDArray
 from typing import Any, Optional, Union, Dict
 
 # Import main actors here
-from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
+from acme import ParallelMap, ACMEdaemon, cluster_cleanup, esi_cluster_setup
 from conftest import skip_if_not_linux, useSLURM, onESI, onx86, defaultQ
 
 # Define custom types
@@ -231,6 +231,73 @@ class TestParallelMap():
         with pytest.raises(ValueError) as valerr:
             ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=8, setup_interactive=False)
             assert "No object has required length of 8 matching `n_inputs`" in str(valerr.value)
+
+        # Check if other parameters  are parsed correctly
+        with pytest.raises(TypeError):
+            ParallelMap("invalid")
+        with pytest.raises(ValueError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, n_inputs="not-auto")
+        with pytest.raises(ValueError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, n_inputs=-3)
+        with pytest.raises(ValueError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, n_inputs=3.6)
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, n_inputs={})
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, write_worker_results="invalid")
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, single_file="invalid")
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, write_pickle="invalid")
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, logfile=3)
+        with pytest.raises(IOError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, logfile=os.path.dirname(os.path.realpath(__file__)))
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, output_dir=2)
+        with pytest.raises(OSError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, output_dir="/path/to/nowhere")
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, stop_client=3)
+        with pytest.raises(ValueError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, stop_client="not-auto")
+
+        # Check parameters that are only parsed if a new client has been started
+        if testclient is None:
+            cluster_cleanup()
+            with pytest.raises(TypeError):
+                ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=3)
+            with pytest.raises(ValueError):
+                ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, n_workers="invalid")
+
+            # start a client for real
+            cluster_cleanup()
+            pmap = ParallelMap(simple_func,
+                               [2, 4, 6, 8],
+                               4,
+                               partition=defaultQ,
+                               n_workers=1,
+                               setup_interactive=False)
+            outDirs.append(pmap.daemon.out_dir)
+
+            with pytest.raises(TypeError):
+                pmap.daemon.compute(debug="invalid")
+
+            # Kill our single worker and ensure ACME takes note
+            client = pmap.daemon.client
+            client.retire_workers(list(client.scheduler_info()['workers']), close_workers=True)
+            with pytest.raises(RuntimeError) as rerr:
+                pmap.daemon.compute()
+                assert "no active workers found" in str(rerr.value)
+
+            # Annihilate client slot and ensure pmap does not do anything funky
+            pmap.daemon.client = None
+            assert pmap.compute() is None
+
+        # Finally, test ACMEdaemon only accepts `ParallelMap` objects
+        with pytest.raises(TypeError) as tperr:
+            ACMEdaemon("invalid")
+            assert "`pmap` has to be a `ParallelMap` instance, not <class 'str'>" in str(tperr.value)
 
         # Clean up testing folder and any running clients
         if testclient is None:
@@ -432,7 +499,7 @@ class TestParallelMap():
             assert "/cs/home/" in logFile
         else:
             assert os.path.dirname(os.path.realpath(__file__)) in logFile
-        with open(logFile, "r") as fl:
+        with open(logFile, "r", encoding="utf8") as fl:
             assert len(fl.readlines()) > 1
 
         # Ensure client has not been killed; perform post-hoc check of default SLURM settings
@@ -465,7 +532,7 @@ class TestParallelMap():
             pmap.compute()
         outDirs.append(pmap.out_dir)
         assert os.path.isfile(customLog)
-        with open(customLog, "r") as fl:
+        with open(customLog, "r", encoding="utf8") as fl:
             assert len(fl.readlines()) > 1
 
         # Ensure only single log file `customLog` is used
@@ -480,6 +547,95 @@ class TestParallelMap():
 
         # Wait a sec (literally) to give dask enough time to close the client
         time.sleep(1.0)
+
+        # Request a log-file but don't save results
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         logfile=True,
+                         write_worker_results=False,
+                         n_workers=1,
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        assert pmap.out_dir is None
+        log = logging.getLogger("ACME")
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        assert os.path.dirname(os.path.realpath(__file__)) in logFileList[0]
+        os.unlink(logFileList[0])
+
+        # Ensure ACME warns if arguments increase its "sanity" threshold
+        # (lowered here to not overwhelm CI runners)
+        mAS = ParallelMap._maxArgSize
+        ParallelMap._maxArgSize = 1   # in MB
+        pmap = ParallelMap(simple_func,
+                           [np.ones((1000, 1000)), 4, 6, 8],
+                           4,
+                           partition=defaultQ,
+                           n_workers=1,
+                           logfile=True,
+                           setup_interactive=False)
+        log = logging.getLogger("ACME")
+        memHandlers = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)]
+        assert len(memHandlers) == 1
+        memHandler = memHandlers[0]
+        memHandler.flush()  # important: flush memory to write its contents to file
+        assert memHandler.target is not None
+        thisLogFile = memHandler.target.baseFilename
+        with open(thisLogFile, "r", encoding="utf8") as fl:
+            logTxt = fl.read()
+        assert "exceeds recommended limit of 1 MB" in logTxt
+        os.unlink(thisLogFile)
+
+        # Same with kwargs
+        pmap = ParallelMap(simple_func,
+                           [2, 4, 6, 8],
+                           4,
+                           z=np.ones((1000, 1000)),
+                           partition=defaultQ,
+                           n_workers=1,
+                           logfile=True,
+                           setup_interactive=False)
+        log = logging.getLogger("ACME")
+        log = logging.getLogger("ACME")
+        memHandlers = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)]
+        assert len(memHandlers) == 1
+        memHandler = memHandlers[0]
+        memHandler.flush()  # important: flush memory to write its contents to file
+        assert memHandler.target is not None
+        thisLogFile = memHandler.target.baseFilename
+        with open(thisLogFile, "r", encoding="utf8") as fl:
+            logTxt = fl.read()
+        assert "exceeds recommended limit of 1 MB" in logTxt
+        os.unlink(thisLogFile)
+
+        # Reset maxArgSize and continue
+        ParallelMap._maxArgSize = mAS
+
+        # Ensure warning is issued if single-file saving is requested but result writing is turned off
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         write_worker_results=False,
+                         single_file=True,
+                         partition=defaultQ,
+                         logfile=True,
+                         n_workers=1,
+                         setup_interactive=False) as pmap:
+            resInMem2 = pmap.compute()
+        assert pmap.out_dir is None
+        assert np.all(resInMem2) == np.all(resInMem)
+        log = logging.getLogger("ACME")
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        with open(logFileList[0], "r", encoding="utf8") as fl:
+            logTxt = fl.read()
+        assert "Generating a single output file only possible if `write_worker_results` is `True`" in logTxt
+        os.unlink(logFileList[0])
+
+        if testclient is None:
+            cluster_cleanup(pmap.client)
 
         # Underbook SLURM (more calls than workers)
         n_workers = int(self.nChannels / 2)
@@ -993,6 +1149,26 @@ class TestParallelMap():
             mixedResults = pmap.compute()
         outDirs.append(pmap.out_dir)
 
+        # Ensure warning is issued if pickling is requested but result writing is turned off
+        with ParallelMap(simple_func,
+                         [2, 4, 6, 8],
+                         4,
+                         partition=defaultQ,
+                         write_worker_results=False,
+                         write_pickle=True,
+                         logfile=True,
+                         n_workers=1,
+                         setup_interactive=False) as pmap:
+                results = pmap.compute()
+        assert pmap.out_dir is None
+        assert results == list(map(simple_func, [2, 4, 6, 8], [4, 4, 4, 4]))
+        log = logging.getLogger("ACME")
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        with open(logFileList[0], "r", encoding="utf8") as fl:
+            logTxt = fl.read()
+        assert "Pickling of results only possible if `write_worker_results` is `True`" in logTxt
+
         # Collection container should have been auto-removed
         resultsContainer = os.path.basename(mixedResults[0])
         resultsContainer = os.path.join(os.path.dirname(mixedResults[0]),
@@ -1088,7 +1264,7 @@ class TestParallelMap():
             f"   with ParallelMap(long_running, [None]*2, setup_interactive=False, partition='{defaultQ}', write_worker_results=False) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
-        with open(scriptName, "w") as f:
+        with open(scriptName, "w", encoding="utf8") as f:
             f.write(scriptContents)
 
         # Execute the above script both in Python and iPython to ensure global functionality
@@ -1134,7 +1310,7 @@ class TestParallelMap():
             "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False, verbose=True) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
-        with open(scriptName, "w") as f:
+        with open(scriptName, "w", encoding="utf8") as f:
             f.write(scriptContents)
 
         # Test script functionality in both Python and iPython
@@ -1166,7 +1342,7 @@ class TestParallelMap():
             "if __name__ == '__main__':\n" +\
             f"   esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n" +\
             "   time.sleep(60)\n"
-        with open(scriptName, "w") as f:
+        with open(scriptName, "w", encoding="utf8") as f:
             f.write(scriptContents)
         proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
                                 shell=True, start_new_session=True,
@@ -1202,6 +1378,16 @@ class TestParallelMap():
         # Ensure auto-generated output dir has been successfully removed
         outDir = pmap.daemon.out_dir
         assert os.path.exists(outDir) is False
+
+        # Now go through with the dry-run
+        monkeypatch.setattr("builtins.input", lambda _ : "y")
+        with ParallelMap(simple_func,
+                         [2, 4, 6, 8],
+                         4,
+                         setup_interactive=True,
+                         dryrun=True) as pmap:
+            pmap.compute()
+        shutil.rmtree(pmap.out_dir, ignore_errors=True)
 
     def test_memest(self):
 
@@ -1424,11 +1610,11 @@ class TestParallelMap():
 
         # Ensure a deprecation warning was issued
         log = logging.getLogger("ACME")
-        for handler in log.handlers:
-            if isinstance(handler, logging.FileHandler):
-                with open(handler.baseFilename, "r") as fl:
-                    logTxt = fl.read()
-                assert "DEPRECATED" in logTxt
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        with open(logFileList[0], "r", encoding="utf8") as fl:
+            logTxt = fl.read()
+        assert "DEPRECATED" in logTxt
 
         if useSLURM:
 

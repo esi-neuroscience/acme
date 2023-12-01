@@ -22,7 +22,7 @@ except DistributionNotFound:
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, shell=True)
     out, err = proc.communicate()
-    if proc.returncode != 0:
+    if proc.returncode != 0:                                            # pragma: no cover
         proc = subprocess.Popen("git rev-parse HEAD:acme/__init__.py",
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 text=True, shell=True)

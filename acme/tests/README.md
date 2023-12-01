@@ -5,9 +5,19 @@ or on HPC cluster nodes.
 
 ## Run Entire Suite
 
-ACME comes with the convenience script [run_tests.sh](./run_tests.sh) to set up and
-launch its test-suite. Launching it without arguments shows a brief usage
-summary:
+If ACME is installed in your `site-packages`, you can run all tests directly
+from your Python interpreter
+
+```python
+import pytest
+pytest_args = ["-v", "--pyargs", "acme"]
+pytest.main(pytest_args)
+```
+
+If you're working on a local clone of ACME, the convenience script
+[run_tests.sh](./run_tests.sh) can take care of setting up and
+launching ACME's test-suite. Running the script without arguments shows
+a brief usage summary:
 
 ```bash
 cd acme/acme/tests
@@ -22,8 +32,17 @@ Pick an option and start testing, e.g.,
 
 ## Run Single Tests
 
-If ACME is not installed in your `site-packages` directory, it has to be
-added to your Python path first:
+If ACME is installed in your `site-packages`, simply use the following
+code snippet to run a single test, e.g., `test_simple_filter`
+
+```python
+import pytest
+pytest_args = ["-v", "--pyargs", "acme", "-k", "test_simple_filter"]
+pytest.main(pytest_args)
+```
+
+If ACME is **not** installed in your `site-packages` directory, open a
+terminal and add ACME to your Python path first:
 
 ```bash
 cd acme/acme/tests/

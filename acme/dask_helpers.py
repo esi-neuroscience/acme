@@ -669,7 +669,7 @@ def _cluster_waiter(
     ani.close()
 
     # If we ran out of time before all workers could be started, ask what to do
-    if counter == timeout and interactive:
+    if counter == timeout and interactive:                              # pragma: no cover
         msg = "SLURM workers could not be started within given time-out " +\
               "interval of %d seconds"
         log.info(msg, timeout)
@@ -721,6 +721,7 @@ def local_cluster_setup(
         of calls to `local_cluster_setup` inside a script's main module block.
         See Notes for details. If `interactive` is `False`, the dialog is not shown.
     start_client : bool
+        DEPRECATED. Will be removed in next release.
         If `True`, a distributed computing client is launched and attached to
         the workers. If `start_client` is `False`, only a distributed
         computing cluster is started to which compute-clients can connect.
@@ -790,11 +791,9 @@ def local_cluster_setup(
     log.debug("Using `interactive = %s`", str(interactive))
 
     # Determine if a dask client was requested
-    if not isinstance(start_client, bool):
-        msg = "`start_client` has to be Boolean, not $s"
-        log.error(msg, str(type(start_client)))
-        raise TypeError("%s %s"%(funcName, msg%(str(type(start_client)))))
-    log.debug("Using `start_client = %s`", str(start_client))
+    if not isinstance(start_client, bool) or start_client is False:
+        log.warning("The keyword `start_client` in `local_cluster_setup` is DEPRECATED and will be ignored.")
+        start_client = True
 
     # ...if not, print warning/info message
     if not is_jupyter():
@@ -816,7 +815,7 @@ def local_cluster_setup(
 
     # Additional safe-guard: if a script is executed, double-check with the user
     # for proper main idiom usage
-    if interactive:
+    if interactive:                                                     # pragma: no cover
         msg = "{name:s} If launched from a script, did you wrap your code " +\
             "inside a __main__ module block?"
         if not user_yesno(msg.format(name=funcName), default="no"):
@@ -868,7 +867,7 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
         except ValueError:
             log.warning("No dangling clients or clusters found.")
             return
-        except Exception as exc:
+        except Exception as exc:                                        # pragma: no cover
             log.error("Error looking for dask client")
             raise exc
     else:

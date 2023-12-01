@@ -41,7 +41,7 @@ header = "#\n" +\
     "# Do not edit, all of your changes will be overwritten. \n"
 header = header.format(datetime.datetime.now().strftime("%Y"),
                        datetime.datetime.now().strftime("%d/%m/%Y at %H:%M:%S"))
-with open(envFile, "w") as ymlFile:
+with open(envFile, "w", encoding="utf8") as ymlFile:
     ymlFile.write(header)
     yaml.dump(ymlDict, ymlFile, default_flow_style=False)
 
@@ -58,11 +58,11 @@ else:
 
 # Update citation file
 citationFile = "CITATION.cff"
-with open(citationFile) as ymlFile:
+with open(citationFile, "r", encoding="utf8") as ymlFile:
     ymlObj = yaml.safe_load(ymlFile)
 ymlObj["version"] = version
 ymlObj["date-released"] = datetime.datetime.now().strftime("%Y-%m-%d")
-with open(citationFile, "w") as ymlFile:
+with open(citationFile, "w", encoding="utf8") as ymlFile:
     yaml.dump(ymlObj, ymlFile)
 
 # Run setup (note: identical arguments supplied in setup.cfg will take precedence)

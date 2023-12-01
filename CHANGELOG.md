@@ -43,6 +43,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   restrictive on requested memory settings)
 
 ### DEPRECATED
+- Using `start_client` in `local_cluster_setup` does not have any effect
+  any more: starting a dask `LocalCluster` always starts a client.
+
 ### FIXED
 - fixed partition bug ``run_tests.sh`` (Thanks to @timnaher, cf #53)
 - simplified and fixed interactive user queries: use the builtin `select`

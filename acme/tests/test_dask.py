@@ -17,6 +17,7 @@ import dask.distributed as dd
 from acme import cluster_cleanup, esi_cluster_setup, slurm_cluster_setup, local_cluster_setup
 from conftest import useSLURM, onESI, onx86, defaultQ
 
+
 def test_cluster_setup():
 
     # Tests which should work on any SLURM cluster
@@ -177,6 +178,10 @@ def test_cluster_setup():
             slurm_cluster_setup()
             assert "Cannot access SLURM queuing system" in str(err)
 
+    # Check if `cluster_cleanup` performs diligent error checking
+    with pytest.raises(TypeError):
+        cluster_cleanup(3)
+
 
 def test_local_setup():
 
@@ -192,6 +197,11 @@ def test_local_setup():
     # Allocate local distributed computing client w/default settings
     client = local_cluster_setup(interactive=False)
     assert len(client.cluster.scheduler_info["workers"].keys()) > 1
+    cluster_cleanup()
+
+    # Ensure error handling works
+    with pytest.raises(TypeError):
+        local_cluster_setup(interactive="invalid")
     cluster_cleanup()
 
 
