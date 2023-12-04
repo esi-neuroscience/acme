@@ -18,14 +18,21 @@ detailed guide on how to contribute to ACME, please see our
    most recent versions (not necessarily those stated) of all listed dependencies
 
    ```bash
-   conda install dask dask-jobqueue h5py ...
+   conda install dask "dask-jobqueue>=0.8" h5py numpy "tqdm>=4.31" pytest-cov ipdb ipython mypy "scipy>= 1.5,<2.0" tox
    ```
 
 1. Run the test-suite locally
 
    ```bash
-   cd acme/tests
+   cd /path/to/acme-repo/acme/tests
    ./run_tests.sh pytest
+   ```
+
+1. Run mypy static type checker locally
+
+   ```bash
+   cd /path/to/acme-repo
+   mypy acme --allow-redefinition
    ```
 
 1. Export your environment and re-recreate it on an x86 ESI HPC cluster node:
@@ -50,10 +57,10 @@ detailed guide on how to contribute to ACME, please see our
 1. Run ACME's test-suite on both architectures
 
    ```bash
-   ssh {hub/esi-svhpc2}
+   ssh {hub,esi-svhpc2}
    module load conda
    conda activate acme-py11{-ppc}
-   cd acme/acme/tests
+   cd /path/to/acme-repo/acme/tests
    ./run_tests.sh pytest
    ```
 
