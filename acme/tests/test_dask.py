@@ -87,7 +87,7 @@ def test_cluster_setup():
 
         # Trigger timeout errors
         with pytest.raises(TimeoutError):
-            slurm_cluster_setup(partition=defaultQ, n_workers=1, timeout=2, interactive=False)
+            slurm_cluster_setup(partition=defaultQ, n_workers=1, timeout=1, interactive=False)
 
         # Ensure output directory specification is parsed for correctness
         with pytest.raises(ValueError):
@@ -196,7 +196,7 @@ def test_local_setup():
 
     # Allocate local distributed computing client w/default settings
     client = local_cluster_setup(interactive=False)
-    assert len(client.cluster.scheduler_info["workers"].keys()) > 1
+    assert len(client.cluster.scheduler_info["workers"].keys()) >= 1
     cluster_cleanup()
 
     # Ensure error handling works

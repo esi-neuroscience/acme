@@ -224,7 +224,7 @@ class ACMEdaemon(object):
             logfile: Union[bool, str, None],
             write_worker_results: bool,
             output_dir: Union[str, None],
-            result_shape: Optional[tuple[Optional[int], ...]],
+            result_shape: Union[tuple[Optional[int], ...], None],
             result_dtype: str,
             single_file: bool,
             write_pickle: bool) -> None:
@@ -363,7 +363,7 @@ class ACMEdaemon(object):
     def setup_output(
             self,
             output_dir: Union[str, None],
-            result_shape: Optional[tuple[Optional[int], ...]],
+            result_shape: Union[tuple[Optional[int], ...], None],
             single_file: bool,
             write_pickle: bool) -> None:
         """
