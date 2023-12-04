@@ -11,13 +11,13 @@
 import subprocess
 import warnings
 import sys
-from pkg_resources import get_distribution, DistributionNotFound
+from importlib.metadata import version, PackageNotFoundError
 from typing import List
 
 # Get package version: either via meta-information from egg or via latest git commit
 try:
-    __version__ = get_distribution("esi-acme").version
-except DistributionNotFound:
+    __version__ = version("esi-acme")
+except PackageNotFoundError:
     proc = subprocess.Popen("git describe --always",
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, shell=True)
