@@ -307,6 +307,95 @@ class TestParallelMap():
 
         return testclient
 
+    # test if examples shown on GitHub actually work
+    def test_github_examples(self):
+
+        # Collected auto-generated output directories in list for later cleanup
+        outDirs = []
+
+        def f(x, y, z=3):
+            return (x + y) * z
+        expected = list(map(f, [2, 4, 6, 8], [4, 4, 4, 4]))
+
+        with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
+            filenames = pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        out = np.zeros((4,))
+        with h5py.File(pmap.results_container, "r") as h5f:
+            for k, key in enumerate(h5f.keys()):
+                out[k] = h5f[key]["result_0"][()]
+        assert np.array_equal(out, expected)
+
+        with ParallelMap(f, [2, 4, 6, 8], 4, result_shape=(None,)) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+        with h5py.File(pmap.results_container, "r") as h5f:
+            out == h5f["result_0"][()] # returns a NumPy array of shape (4,)
+        assert np.array_equal(out, expected)
+
+        with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
+            result = pmap.compute() # returns a 4-element list
+        assert result == expected
+        with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False, result_shape=(None,)) as pmap:
+            result = pmap.compute() # returns a NumPy array of shape (4,)
+        assert np.array_equal(out, expected)
+
+        def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+            return (sum(x) + y) * z * w.max()
+        expected = list(map(f, 2*[[2, 4, 6, 8]], [2, 2], np.array([1, 2]), 2*[np.ones((8, 1))]))
+
+        pmap = ParallelMap(f, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2)
+        with pmap as p:
+            p.compute()
+        outDirs.append(pmap.daemon.out_dir)
+        out = []
+        with h5py.File(pmap.daemon.results_container, "r") as h5f:
+            for k, key in enumerate(h5f.keys()):
+                out.append(h5f[key]["result_0"][()][0])
+        assert np.array_equal(out, expected)
+
+        def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+            return (sum(x) + y) * z * w.max()
+
+        def g(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+            return (max(x) + y) * z * w.sum()
+
+        n_workers = 2
+        x = [2, 4, 6, 8]
+        y = np.random.rand(n_workers)
+        z = range(n_workers)
+        w = np.ones((8, 1))
+
+        client = esi_cluster_setup(partition=defaultQ, n_workers=n_workers)
+
+        expected = list(map(f, n_workers*[x], y, list(z), n_workers*[w]))
+        pmap = ParallelMap(f, x, y, z=z, w=w, n_inputs=n_workers)
+        with pmap as p:
+            p.compute()
+        outDirs.append(pmap.daemon.out_dir)
+        out = []
+        with h5py.File(pmap.daemon.results_container, "r") as h5f:
+            for k, key in enumerate(h5f.keys()):
+                out.append(h5f[key]["result_0"][()][0])
+        assert np.array_equal(out, expected)
+
+        expected = list(map(g, n_workers*[x], y, list(z), n_workers*[w]))
+        pmap = ParallelMap(g, x, y, z=z, w=w, n_inputs=n_workers)
+        with pmap as p:
+            p.compute()
+        outDirs.append(pmap.daemon.out_dir)
+        out = []
+        with h5py.File(pmap.daemon.results_container, "r") as h5f:
+            for k, key in enumerate(h5f.keys()):
+                out.append(h5f[key]["result_0"][()][0])
+        assert np.array_equal(out, expected)
+
+        # Clean up testing folder and shut down allocated client
+        for folder in outDirs:
+            shutil.rmtree(folder, ignore_errors=True)
+        cluster_cleanup(client)
+
     # Functionality tests: perform channel-concurrent low-pass filtering
     def test_simple_filter(self, testclient=None):
 
@@ -1667,7 +1756,8 @@ class TestParallelMap():
         # Re-run tests with pre-allocated client (except for those in `skipTests`); ensure
         # client "survives" multiple independent test runs and is not accidentally closed
         skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun",
-                     "test_memest", "test_backcompat", "_prep_data"]
+                     "test_memest", "test_backcompat", "test_github_examples",
+                     "_prep_data"]
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:
