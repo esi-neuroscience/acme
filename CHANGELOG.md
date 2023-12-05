@@ -25,7 +25,17 @@ Nonetheless, `esi_cluster_setup` did not only get simpler to use but now also
 comes with more (still completely optional) customization settings:
 the new keyword `cores_per_worker` can be used together with `mem_per_worker`
 and `job_extra` to create specialized computing clients custom-tailored
-to specific workload requirements.
+to specific workload requirements, e.g.,
+
+```python
+client = esi_cluster_setup(n_workers=10,
+                           cores_per_worker=3,
+                           mem_per_worker="12GB",
+                           job_extra=["--job-name='myjob'"],
+                           partition="E880")
+```
+
+For more see [Advanced Usage and Customization](https://esi-acme.readthedocs.io/en/latest/advanced_usage.html)
 
 ### NEW
 - New keyword `cores_per_worker` in `esi_cluster_setup` to explicitly set
