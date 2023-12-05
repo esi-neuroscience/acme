@@ -164,7 +164,13 @@ def test_cluster_setup():
                 dd.get_client()
 
             # Manually close cluster
-            cluster.close()
+            client = dd.Client(cluster)
+            client.retire_workers(list(client.scheduler_info()['workers']), close_workers=True)
+            client.close()
+            try:
+                cluster.close()
+            except:
+                pass
 
             # Ensure job-list parsing works
             with pytest.raises(TypeError) as tperr:

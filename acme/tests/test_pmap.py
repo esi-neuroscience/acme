@@ -1674,7 +1674,6 @@ class TestParallelMap():
             print("Running test ", test)
             clnt = getattr(self, test)(testclient=client)
             assert clnt == client
-        client.close()
-        client.cluster.close()
+        cluster_cleanup()
         if useSLURM:
             shutil.rmtree(slurmOut, ignore_errors=True)
