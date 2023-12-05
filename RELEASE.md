@@ -1,3 +1,9 @@
+<!--
+Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+in Cooperation with Max Planck Society
+SPDX-License-Identifier: CC-BY-NC-SA-1.0
+-->
+
 # Releasing a New ACME Version
 
 The instructions collected here are intended to help with preparing a
@@ -64,10 +70,39 @@ detailed guide on how to contribute to ACME, please see our
    ./run_tests.sh pytest
    ```
 
+If all tests are passing, merge changes into ``[dev]`` branch.
+
 ## Deployment
+
+> Ensure you're working in ``[dev]``, not ``[main]``!
+
+1. Update dependencies/supported Python version in [setup.cfg](./setup.cfg)
+1. Update build-system requirements in [pyproject.toml](./pyproject.toml)
+1. Update testing environment in [tox.ini](./tox.ini)
+1. Bump version number in [setup.py](./setup.py)
+1. Prepare release notes in [CHANGELOG.md](./CHANGELOG.md)
+1. Force-update environment file [acme.yml](./acme.yml) as well as citation
+   resource [CITATION.cff](./CITATION.cff) and ensure the updated version
+   number is respected:
+
+   ```bash
+   python setup.py --version
+   ```
+
+1. Check proper licensing of all files (errors in [setup.py](./setup.py)
+   and [CITATION.cff](./CITATION.cff) can be ignored)
+
+   ```bash
+   reuse lint
+   ```
+
+Finally, commit all changes and open a PR into ``[main]``. Once merged,
+wait for the CI pipeline to finish and click the play button to publish
+to PyPi.
 
 ## Post-Release Cleanup
 
+1. Checkout ``[dev]`` branch
 1. Prepare next `[Unreleased]` section with pre-defined headings in
    `CHANGELOG.md` for next release:
 
