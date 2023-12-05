@@ -888,9 +888,14 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
     nWorkers = count_online_workers(client.cluster)
 
     # If connection was successful, first close the client, then the cluster
+
+    # First gracefully shut down all workers, then close client
+    client.retire_workers(list(client.scheduler_info()['workers']), close_workers=True)
     client.close()
-    time.sleep(1.0)
-    client.cluster.close()
+    try:
+        client.cluster.close()
+    except Exception as exc:
+        log.warning("Could not gracefully shut down cluster: %s", str(exc))
 
     # Communicate what just happened and get outta here
     msg = "Successfully shut down %s containing %d workers"
