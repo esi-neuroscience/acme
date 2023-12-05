@@ -82,8 +82,7 @@ If all tests are passing, merge changes into ``[dev]`` branch.
 1. Bump version number in [setup.py](./setup.py)
 1. Prepare release notes in [CHANGELOG.md](./CHANGELOG.md)
 1. Force-update environment file [acme.yml](./acme.yml) as well as citation
-   resource [CITATION.cff](./CITATION.cff) and ensure the updated version
-   number is respected:
+   resource [CITATION.cff](./CITATION.cff):
 
    ```bash
    python setup.py --version
