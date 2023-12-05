@@ -11,7 +11,7 @@ stages:
     - upload
     - deploy
 
-intellinux:
+linux_x86:
     stage: tox
     allow_failure: true
     tags:
@@ -30,7 +30,7 @@ intellinux:
     - conda activate acme
     - tox
 
-powerlinux:
+linux_ppc64le:
     stage: tox
     allow_failure: true
     tags:
@@ -48,7 +48,7 @@ powerlinux:
     - conda activate acme
     - tox -p 0
 
-intelwin:
+win_x86:
     stage: tox
     allow_failure: true
     tags:
@@ -65,7 +65,7 @@ intelwin:
     - conda.bat activate acme
     - tox
 
-m1macos:
+macos_m1:
     stage: tox
     allow_failure: true
     tags:
@@ -83,7 +83,7 @@ m1macos:
     - conda activate acme
     - tox -p 0
 
-slurmtest:
+slurm_x86:
     stage: slurm
     allow_failure: true
     tags:
@@ -102,10 +102,30 @@ slurmtest:
     - export PYTHONPATH=$CI_PROJECT_DIR
     - rm -rf $CI_PROJECT_DIR/acme/__pycache__
     - rm -rf $CI_PROJECT_DIR/acme/tests/__pycache__
-    - srun -p DEV --mem=4000m -c 4 pytest
+    - srun -p DEV --mem=8000m -c 1 pytest
     - codecov -t ${CODECOV_TOKEN}
 
-pypitest:
+slurm_ppc64le:
+    stage: slurm
+    allow_failure: true
+    tags:
+    - slurm-ppc
+    only:
+    - main
+    - dev
+    variables:
+        PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
+        GIT_FETCH_EXTRA_FLAGS: --tags
+    script:
+    - source /opt/conda/etc/profile.d/conda.sh
+    - conda env update -f acme.yml --prune
+    - conda activate acme
+    - export PYTHONPATH=$CI_PROJECT_DIR
+    - rm -rf $CI_PROJECT_DIR/acme/__pycache__
+    - rm -rf $CI_PROJECT_DIR/acme/tests/__pycache__
+    - srun -p E880 --mem=8000m -c 4 pytest
+
+pypi_test:
     stage: upload
     only:
     - main
@@ -136,7 +156,7 @@ pypitest:
     - conda deactivate
     - conda remove --yes --name piptest --all
 
-pypideploy:
+pypi_deploy:
     stage: deploy
     when: manual
     only:
