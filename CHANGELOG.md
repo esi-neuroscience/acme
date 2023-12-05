@@ -8,7 +8,25 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [Unreleased]
+## [2023.12] - 2023-12-6
+Better support for non-x86 micro-architectures. On the ESI HPC cluster,
+the convenience function `esi_cluster_setup` now transparently works with the
+local `"E880"` partition comprising our IBM POWER E880 servers. Similar to
+the x86 nodes, a simple
+
+```python
+client = esi_cluster_setup(n_workers=10, partition="E880")
+```
+
+is enough to launch ten SLURM workers each equipped with four POWER8 cores
+and 16 GB RAM by default. Similarly, ACME's automatic partition selection has been
+extended to also support workloads running inside the `"E880"` partition.
+Nonetheless, `esi_cluster_setup` did not only get simpler to use but now also
+comes with more (still completely optional) customization settings:
+the new keyword `cores_per_worker` can be used together with `mem_per_worker`
+and `job_extra` to create specialized computing clients custom-tailored
+to specific workload requirements.
+
 ### NEW
 - New keyword `cores_per_worker` in `esi_cluster_setup` to explicitly set
   the core-count of SLURM workers.
