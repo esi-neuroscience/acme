@@ -600,7 +600,7 @@ def slurm_cluster_setup(
 
     # Kill a zombie cluster in non-interactive mode
     if not interactive and count_online_workers(cluster) == 0:
-        cluster.close()
+        cluster_cleanup(Client(cluster))
         msg = "SLURM workers could not be started within given time-out " +\
               "interval of %d seconds"
         log.error(msg, timeout)
@@ -682,7 +682,7 @@ def _cluster_waiter(
             return _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
         elif choice == "a":
             log.info("Closing cluster...")
-            cluster.close()
+            cluster_cleanup(Client(cluster))
             return True
         else:
             if wrkrs == 0:
@@ -694,7 +694,7 @@ def _cluster_waiter(
                     _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
                 else:
                     log.info("Closing cluster...")
-                    cluster.close()
+                    cluster_cleanup(Client(cluster))
                     return True
 
     return False
@@ -886,8 +886,6 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
         jobID = outDir.partition("{}_".format(userName))[-1].split(os.sep)[0]
         userClust = "cluster {0}_{1}".format(userName, jobID)
     nWorkers = count_online_workers(client.cluster)
-
-    # If connection was successful, first close the client, then the cluster
 
     # First gracefully shut down all workers, then close client
     client.retire_workers(list(client.scheduler_info()['workers']), close_workers=True)
