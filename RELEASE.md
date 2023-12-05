@@ -95,9 +95,15 @@ If all tests are passing, merge changes into ``[dev]`` branch.
    reuse lint
    ```
 
-Finally, commit all changes and open a PR into ``[main]``. Once merged,
-wait for the CI pipeline to finish and click the play button to publish
-to PyPi.
+1. Create a release tag
+
+   ```bash
+   git tag -a "202x.y" -m "202x.y"
+   git push --tags
+   ```
+
+Finally, open a PR into ``[main]``. Once merged, wait for the CI pipeline
+to finish and click the play button to publish to PyPi.
 
 ## Post-Release Cleanup
 
