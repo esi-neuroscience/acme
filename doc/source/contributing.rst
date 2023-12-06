@@ -36,7 +36,8 @@ you want to set up a Windows environment )
        conda env create -f acme.yml
 
 4. Activate the environment and run ACME's test-suite to ensure your system
-   is set up correctly
+   is set up correctly (for more details see ACME's
+   `testing-README <https://github.com/esi-neuroscience/acme/blob/master/acme/tests/README.md>`_)
 
    .. tabs::
 

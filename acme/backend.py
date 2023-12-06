@@ -19,9 +19,9 @@ import os
 import sys
 import glob
 import shutil
+import functools
 import pickle
 import logging
-import functools
 import multiprocessing
 import psutil
 import tqdm
@@ -40,9 +40,9 @@ from .dask_helpers import (esi_cluster_setup, local_cluster_setup,
 from .shared import user_yesno, is_esi_node, is_slurm_node
 from .logger import prepare_log
 isSpyModule = False
-if "syncopy" in sys.modules:
+if "syncopy" in sys.modules:            # pragma: no cover
     isSpyModule = True
-if TYPE_CHECKING:
+if TYPE_CHECKING:                       # pragma: no cover
     from frontend import ParallelMap
 
 __all__: List["str"] = ["ACMEdaemon"]
@@ -91,58 +91,58 @@ class ACMEdaemon(object):
 
         Parameters
         ----------
-        pmap : :class:~`acme.ParallelMap` context manager
+        pmap : :class:`~acme.ParallelMap` context manager
             By default, `:class:~`acme.ACMEDaemon` assumes  that that
-            the provided :class:~`acme.ParallelMap` instance has already
+            the provided :class:`~acme.ParallelMap` instance has already
             been properly set up to process `func` (all input arguments parsed and
             properly formatted). All other input arguments of `:class:~`acme.ACMEDaemon`
-            are extracted from the provided :class:~`acme.ParallelMap` instance.
+            are extracted from the provided :class:`~acme.ParallelMap` instance.
         n_workers : int or "auto"
-            Number of SLURM workers (=jobs) to spawn. See :class:~`acme.ParallelMap`
+            Number of SLURM workers (=jobs) to spawn. See :class:`~acme.ParallelMap`
             for details.
         write_worker_results : bool
             If `True`, the return value(s) of `func` is/are saved on disk. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         output_dir : str or None
             If provided, auto-generated results are stored in the given path. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         result_shape : tuple or None
             If provided, results are slotted into a dataset/array with layout `result_shape`. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         result_dtype : str
             Determines numerical datatype of dataset laid out by `result_shape`.
-            See :class:~`acme.ParallelMap` for details.
+            See :class:`~acme.ParallelMap` for details.
         single_file : bool
             If `True`, parallel workers write to the same results container. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         write_pickle : bool
             If `True`, the return value(s) of `func` is/are pickled to disk. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         dryrun : bool
             If `True`, a dry-run of calling `func` is performed using a single
-            `args`, `kwargs` tuple. See :class:~`acme.ParallelMap` for details.
+            `args`, `kwargs` tuple. See :class:`~acme.ParallelMap` for details.
         partition : str
-            Name of SLURM partition to use. See :class:~`acme.ParallelMap` for details.
+            Name of SLURM partition to use. See :class:`~acme.ParallelMap` for details.
         mem_per_worker : str
-            Memory booking for each SLURM worker. See :class:~`acme.ParallelMap` for details.
+            Memory booking for each SLURM worker. See :class:`~acme.ParallelMap` for details.
         setup_timeout : int
             Timeout period (in seconds) for SLURM workers to come online. See
-            :class:~`acme.ParallelMap` for details.
+            :class:`~acme.ParallelMap` for details.
         setup_interactive : bool
             If `True`, user input is queried in case not enough SLURM workers could
-            be started within `setup_timeout` seconds. See :class:~`acme.ParallelMap`
+            be started within `setup_timeout` seconds. See :class:`~acme.ParallelMap`
             for details.
         stop_client : bool or "auto"
             If `"auto"`, automatically started distributed computing clients
             are shut down at the end of computation, while user-provided clients
-            are left untouched. See :class:~`acme.ParallelMap` for details.
+            are left untouched. See :class:`~acme.ParallelMap` for details.
         verbose : None or bool
             If `None` (default), general run-time information as well as warnings
-            and errors are shown. See :class:~`acme.ParallelMap` for details.
+            and errors are shown. See :class:`~acme.ParallelMap` for details.
         logfile : None or bool or str
             If `None` (default) or `True`, and `write_worker_results` is
             `True`, all run-time information as well as errors and
-            warnings are tracked in a log-file. See :class:~`acme.ParallelMap`
+            warnings are tracked in a log-file. See :class:`~acme.ParallelMap`
             for details.
 
         Returns
@@ -151,8 +151,8 @@ class ACMEdaemon(object):
             If `write_worker_results` is `True`, `results` is a list of HDF5 file-names
             containing computed results. If `write_worker_results` is `False`,
             results is a list comprising the actual return values of `func`.
-            If `:class:~`acme.ACMEDaemon` was instantiated by :class:~`acme.ParallelMap`,
-            results are propagated back to :class:~`acme.ParallelMap`.
+            If `:class:~`acme.ACMEDaemon` was instantiated by :class:`~acme.ParallelMap`,
+            results are propagated back to :class:`~acme.ParallelMap`.
 
         See also
         --------
@@ -224,7 +224,7 @@ class ACMEdaemon(object):
             logfile: Union[bool, str, None],
             write_worker_results: bool,
             output_dir: Union[str, None],
-            result_shape: Optional[tuple[Optional[int], ...]],
+            result_shape: Union[tuple[Optional[int], ...], None],
             result_dtype: str,
             single_file: bool,
             write_pickle: bool) -> None:
@@ -363,7 +363,7 @@ class ACMEdaemon(object):
     def setup_output(
             self,
             output_dir: Union[str, None],
-            result_shape: Optional[tuple[Optional[int], ...]],
+            result_shape: Union[tuple[Optional[int], ...], None],
             single_file: bool,
             write_pickle: bool) -> None:
         """
@@ -384,7 +384,7 @@ class ACMEdaemon(object):
             # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
             if self.has_slurm:
                 outDir = "/cs/home/{usr:s}/".format(usr=getpass.getuser())
-            else:
+            else:                                                       # pragma: no cover
                 outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
             outDir = os.path.join(outDir, "ACME_{date:s}")
             outDir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
@@ -629,11 +629,24 @@ class ACMEdaemon(object):
                     "to clean up client started by `ParallelMap`"
                 log.debug(msg)
 
+            # If `n_workers` is `"auto`, set `n_workers = n_calls` (default)
+            msg = "%s `n_workers` has to be 'auto' or an integer >= 1, not %s"
+            if isinstance(n_workers, str):
+                if n_workers != "auto":
+                    raise ValueError(msg%(self.objName, n_workers))
+                if self.has_slurm:
+                    n_workers = self.n_calls
+                else:
+                    n_workers = None
+                log.debug("Changing `n_workers` from `'auto'` to %s", str(n_workers))
+            log.debug("Using provided `n_workers = %d` to start client", n_workers)
+
         # If things are running locally, simply fire up a dask-distributed client,
         # otherwise go through the motions of preparing a full worker cluster
-        if not self.has_slurm:
+        if not self.has_slurm:                                          # pragma: no cover
+
             log.debug("SLURM not found, Calling `local_cluster_setup`")
-            self.client = local_cluster_setup(interactive=False)        # type: ignore
+            self.client = local_cluster_setup(n_workers=n_workers, interactive=False)        # type: ignore
 
         else:
 
@@ -648,19 +661,10 @@ class ACMEdaemon(object):
                     msg = "Automatic SLURM partition selection is experimental"
                     log.warning(msg)
                     mem_per_worker = self.estimate_memuse()
-                else:
+                else:                                                   # pragma: no cover
                     err = "Automatic SLURM partition selection currently only available " +\
                         "on the ESI HPC cluster. "
                     log.error(err)
-
-            # If `n_workers` is `"auto`, set `n_workers = n_calls` (default)
-            msg = "%s `n_workers` has to be 'auto' or an integer >= 2, not %s"
-            if isinstance(n_workers, str):
-                if n_workers != "auto":
-                    raise ValueError(msg%(self.objName, n_workers))
-                n_workers = self.n_calls
-                log.debug("Changing `n_workers` from `'auto'` to %d", n_workers)
-            log.debug("Using provided `n_workers = %d` to start client", n_workers)
 
             # All set, remaining input processing is done by respective `*_cluster_setup` routines
             if is_esi_node():
@@ -671,7 +675,7 @@ class ACMEdaemon(object):
                                                 interactive=setup_interactive, start_client=True)
 
             # Unknown cluster node, use vanilla config
-            else:
+            else:                                                       # pragma: no cover
                 wrng = "Cluster node %s not recognized. Falling back to vanilla " +\
                     "SLURM setup allocating one worker and one core per worker"
                 log.warning(wrng%(socket.getfqdn()))
@@ -691,7 +695,7 @@ class ACMEdaemon(object):
                                                   invalid_partitions=[])
 
             # If startup is aborted by user, get outta here
-            if self.client is None:
+            if self.client is None:                                     # pragma: no cover
                 msg = "%s Could not start distributed computing client. "
                 raise ConnectionAbortedError(msg%(self.objName))
 
@@ -861,7 +865,7 @@ class ACMEdaemon(object):
         if isinstance(self.client.cluster, dj.SLURMCluster):
             logFiles = self.client.cluster.job_header.split("--output=")[1].replace("%j", "{}")
             logDir = os.path.split(logFiles)[0]
-        else:
+        else:                                                           # pragma: no cover
             logFiles = []
             logDir = os.path.dirname(self.client.cluster.dashboard_link) + "/info/main/workers.html"
         msg = "Preparing %d parallel calls of `%s` using %d workers"
@@ -928,7 +932,7 @@ class ACMEdaemon(object):
                     msg += "Please check SLURM logs in %s"%(logDir)
 
             # In case of a `LocalCluster`, syphon worker logs
-            else:
+            else:                                                       # pragma: no cover
                 msg += "Parallel worker log details: \n"
                 workerLogs = self.client.get_worker_logs().values()
                 for wLog in workerLogs:
@@ -1104,7 +1108,7 @@ class ACMEdaemon(object):
         """
 
         # If `prepare_client` has not been launched yet, just get outta here
-        if not hasattr(self, "client"):
+        if not hasattr(self, "client"):                                 # pragma: no cover
             log.debug("Helper `prepare_client` not yet launched, exiting")
             return
         if self.stop_client and self.client is not None:
@@ -1117,7 +1121,7 @@ class ACMEdaemon(object):
         return
 
     @staticmethod
-    def func_wrapper(*args: Any, **kwargs: Optional[Any]) -> None:
+    def func_wrapper(*args: Any, **kwargs: Optional[Any]) -> None:      # pragma: no cover
         """
         If the output of `func` is saved to disk, wrap `func` with this static
         method to take care of filling up HDF5/pickle files

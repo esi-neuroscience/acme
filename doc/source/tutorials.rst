@@ -11,6 +11,7 @@ to tackle real-world problems.
 
 - :doc:`Parallel Bootstrapping with ACME <classifier_tutorial>`
 - :doc:`Deep Learning with ACME <deeplearning_tutorial>`
+- :doc:`Functional Connectivity with ACME <connectome_tutorial>`
 
 You have used ACME in your productive work too? We would love to hear from you!
 If you want to share your experience with ACME in form of a tutorial here,
