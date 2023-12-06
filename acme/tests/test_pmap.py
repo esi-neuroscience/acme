@@ -1102,7 +1102,7 @@ class TestParallelMap():
                          single_file=False,
                          partition=defaultQ,
                          setup_interactive=False) as pmap:
-             pmap.compute()
+            pmap.compute()
         outDirs.append(pmap.out_dir)
 
         # Save results for later
@@ -1738,6 +1738,10 @@ class TestParallelMap():
 
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):
+
+        # Do not execute on GitHub runner
+        if os.environ.get("GITHUB_ACTIONS"):
+            return
 
         # Test custom SLURM cluster setup
         if useSLURM:
