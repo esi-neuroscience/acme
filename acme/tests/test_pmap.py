@@ -265,8 +265,9 @@ class TestParallelMap():
         # Check parameters that are only parsed if a new client has been started
         if testclient is None:
             cluster_cleanup()
-            with pytest.raises(TypeError):
-                ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=3)
+            if useSLURM:
+                with pytest.raises(TypeError):
+                    ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=3)
             with pytest.raises(ValueError):
                 ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, n_workers="invalid")
 
@@ -367,7 +368,7 @@ class TestParallelMap():
         z = range(n_workers)
         w = np.ones((8, 1))
 
-        client = esi_cluster_setup(partition=defaultQ, n_workers=n_workers)
+        client = esi_cluster_setup(partition=defaultQ, n_workers=n_workers, interactive=False)
 
         expected = list(map(f, n_workers*[x], y, list(z), n_workers*[w]))
         pmap = ParallelMap(f, x, y, z=z, w=w, n_inputs=n_workers)
@@ -1750,7 +1751,7 @@ class TestParallelMap():
             assert "--output={}".format(slurmOut) in client.cluster.job_header
 
         else:
-            client = esi_cluster_setup(interactive=False)
+            client = esi_cluster_setup(partition="auto", interactive=False)
         print("Allocated client")
 
         # Re-run tests with pre-allocated client (except for those in `skipTests`); ensure

@@ -629,11 +629,24 @@ class ACMEdaemon(object):
                     "to clean up client started by `ParallelMap`"
                 log.debug(msg)
 
+            # If `n_workers` is `"auto`, set `n_workers = n_calls` (default)
+            msg = "%s `n_workers` has to be 'auto' or an integer >= 1, not %s"
+            if isinstance(n_workers, str):
+                if n_workers != "auto":
+                    raise ValueError(msg%(self.objName, n_workers))
+                if self.has_slurm:
+                    n_workers = self.n_calls
+                else:
+                    n_workers = None
+                log.debug("Changing `n_workers` from `'auto'` to %s", str(n_workers))
+            log.debug("Using provided `n_workers = %d` to start client", n_workers)
+
         # If things are running locally, simply fire up a dask-distributed client,
         # otherwise go through the motions of preparing a full worker cluster
         if not self.has_slurm:                                          # pragma: no cover
+
             log.debug("SLURM not found, Calling `local_cluster_setup`")
-            self.client = local_cluster_setup(interactive=False)        # type: ignore
+            self.client = local_cluster_setup(n_workers=n_workers, interactive=False)        # type: ignore
 
         else:
 
@@ -652,15 +665,6 @@ class ACMEdaemon(object):
                     err = "Automatic SLURM partition selection currently only available " +\
                         "on the ESI HPC cluster. "
                     log.error(err)
-
-            # If `n_workers` is `"auto`, set `n_workers = n_calls` (default)
-            msg = "%s `n_workers` has to be 'auto' or an integer >= 2, not %s"
-            if isinstance(n_workers, str):
-                if n_workers != "auto":
-                    raise ValueError(msg%(self.objName, n_workers))
-                n_workers = self.n_calls
-                log.debug("Changing `n_workers` from `'auto'` to %d", n_workers)
-            log.debug("Using provided `n_workers = %d` to start client", n_workers)
 
             # All set, remaining input processing is done by respective `*_cluster_setup` routines
             if is_esi_node():
