@@ -34,6 +34,14 @@ detailed guide on how to contribute to ACME, please see our
    ./run_tests.sh pytest
    ```
 
+1. Update testing environment in [tox.ini](./tox.ini) and run tox locally
+   (**IMPORTANT** this also tests if ACME can be installed via pip!)
+
+   ```bash
+   cd /path/to/acme-repo
+   tox
+   ```
+
 1. Run mypy static type checker locally
 
    ```bash
@@ -55,7 +63,7 @@ detailed guide on how to contribute to ACME, please see our
    node:
 
    ```bash
-   ssh HUB
+   ssh hub
    module load conda
    conda env create --file acmepy11.yml
    ```
@@ -78,7 +86,6 @@ If all tests are passing, merge changes into ``[dev]`` branch.
 
 1. Update dependencies/supported Python version in [setup.cfg](./setup.cfg)
 1. Update build-system requirements in [pyproject.toml](./pyproject.toml)
-1. Update testing environment in [tox.ini](./tox.ini)
 1. Bump version number in [setup.py](./setup.py)
 1. Prepare release notes in [CHANGELOG.md](./CHANGELOG.md)
 1. Force-update environment file [acme.yml](./acme.yml) as well as citation

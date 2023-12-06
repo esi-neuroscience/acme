@@ -6,7 +6,7 @@
 #
 
 [build-system]
-requires = ["pyyaml", "setuptools", "setuptools_scm", "toml", "wheel"]
+requires = ["pyyaml", "setuptools", "toml", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [[tool.mypy.overrides]]

@@ -401,7 +401,7 @@ class TestParallelMap():
     def test_simple_filter(self, testclient=None):
 
         # Prepare data containers
-        tempDir, sigName = self._prep_data("acme_tmp")
+        tempDir, sigName = self._prep_data(f"acme_tmp_{platform.machine()}")
 
         # Collect auto-generated output directories in list for later cleanup
         outDirs = []
@@ -535,7 +535,7 @@ class TestParallelMap():
         # Simulate user-defined results-directory not auto-populated by ACME
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
         if useSLURM:
-            tempDir2 = "/cs/home/{}/acme_tmp_lowpass_hard".format(getpass.getuser())
+            tempDir2 = f"/cs/home/{getpass.getuser()}/acme_tmp_lowpass_hard_{platform.machine()}"
         os.makedirs(tempDir2, exist_ok=True)
 
         # Same task, different function: simulate user-defined saving scheme and "weird" inputs
@@ -1337,7 +1337,7 @@ class TestParallelMap():
     def test_cancel(self):
 
         # Setup temp-directory layout for subprocess-scripts and prepare interpreters
-        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{platform.machine()}")
         os.makedirs(tempDir, exist_ok=True)
         pshells = [os.path.join(os.path.split(sys.executable)[0], pyExec) for pyExec in ["python", "ipython"]]
 
@@ -1485,7 +1485,7 @@ class TestParallelMap():
         cluster_cleanup()
 
         # Create tmp directory for logfile
-        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{platform.machine()}")
         os.makedirs(tempDir, exist_ok=True)
         customLog = os.path.join(tempDir, "mem_log.txt")
         outDirs = []
@@ -1740,7 +1740,7 @@ class TestParallelMap():
     def test_existing_cluster(self):
 
         # Do not execute on GitHub runner
-        if os.environ.get("GITHUB_ACTIONS"):
+        if os.environ.get("GITHUB_ACTIONS") or os.environ.get("INTOX"):
             return
 
         # Test custom SLURM cluster setup

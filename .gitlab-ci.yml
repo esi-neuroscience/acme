@@ -44,7 +44,6 @@ linux_ppc64le:
     script:
     - source /opt/conda/etc/profile.d/conda.sh
     - conda clean --all -y
-    - conda env update -f acme.yml --prune
     - conda activate acme
     - tox -p 0
 
