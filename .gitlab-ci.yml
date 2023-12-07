@@ -29,23 +29,6 @@ linux_x86:
     - conda activate acme
     - tox
 
-linux_ppc64le:
-    stage: tox
-    allow_failure: true
-    tags:
-    - power
-    only:
-    - main
-    - dev
-    variables:
-        PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
-        GIT_FETCH_EXTRA_FLAGS: --tags
-    script:
-    - source /opt/conda/etc/profile.d/conda.sh
-    - conda clean --all -y
-    - conda activate acme
-    - tox -p 0
-
 win_x86:
     stage: tox
     allow_failure: true
@@ -58,9 +41,8 @@ win_x86:
         PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
-    - conda init cmd.exe
     - conda clean --all -y
-    - conda activate acme
+    - conda.bat activate acme
     - tox
 
 macos_m1:
@@ -126,7 +108,6 @@ pypi_test:
     stage: upload
     only:
     - main
-    - tags
     tags:
     - deploy
     variables:
@@ -157,7 +138,7 @@ pypi_deploy:
     stage: deploy
     when: manual
     only:
-    - tags
+    - main
     tags:
     - deploy
     variables:
