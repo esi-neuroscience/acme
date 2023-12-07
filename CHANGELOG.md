@@ -8,19 +8,80 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [Unreleased]
+## [2023.12] - 2023-12-6
+Better support for non-x86 micro-architectures. On the ESI HPC cluster,
+the convenience function `esi_cluster_setup` now transparently works with the
+local `"E880"` partition comprising our IBM POWER E880 servers. Similar to
+the x86 nodes, a simple
+
+```python
+client = esi_cluster_setup(n_workers=10, partition="E880")
+```
+
+is enough to launch ten SLURM workers each equipped with four POWER8 cores
+and 16 GB RAM by default. Similarly, ACME's automatic partition selection has been
+extended to also support workloads running inside the `"E880"` partition.
+Nonetheless, `esi_cluster_setup` did not only get simpler to use but now also
+comes with more (still completely optional) customization settings:
+the new keyword `cores_per_worker` can be used together with `mem_per_worker`
+and `job_extra` to create specialized computing clients custom-tailored
+to specific workload requirements, e.g.,
+
+```python
+client = esi_cluster_setup(n_workers=10,
+                           cores_per_worker=3,
+                           mem_per_worker="12GB",
+                           job_extra=["--job-name='myjob'"],
+                           partition="E880")
+```
+
+For more see [Advanced Usage and Customization](https://esi-acme.readthedocs.io/en/latest/advanced_usage.html)
+
 ### NEW
+- New keyword `cores_per_worker` in `esi_cluster_setup` to explicitly set
+  the core-count of SLURM workers.
+- Extended functionality of ACME's partition auto-selection on the ESI
+  HPC cluster to include IBM POWER machines in the "E880" partition
 - Added new "Tutorials" section in documentation
 - Added new tutorial on using ACME for parallel evaluation of classifier
   accuracy (Thanks to @timnaher, cf #53)
 - Added new tutorial on using ACME for parallel neural net model evaluation
   (Thanks to @timnaher, cf #53)
+- Added type-hints following PEP 484 to support static code analyzers
+  (e.g., `mypy`) and clarify type conventions in internal functions with
+  "sparse" docstrings.
 
 ### CHANGED
+- To avoid dubious (and hard to debug) errors, `esi_cluster_setup` now
+  checks the micro-architecture of the submitting host against the chosen
+  partition. This avoids accidental start attempts of ppc64le SLURM jobs
+  from inside an x86_64 Python interpreter and vice versa.
+
 ### REMOVED
+- The `partition` keyword in `esi_cluster_setup` does not have a default
+  value any more (the old default of "8GBXS" was inappropriate most of
+  the time)
+- The (undocumented) "anonymous" keyword `n_cores` of `esi_cluster_setup`
+  has been removed in favor of the explicit `cores_per_worker` (now also
+  visible in the API). Just like `n_cores`, setting the new `cores_per_worker`
+  parameter is still optional: by default, `esi_cluster_setup` derives
+  core-count from `DefMemPerCPU` and the chosen value of `mem_per_worker`.
+- In `slurm_cluster_setup`, do not use `DefMemPerCPU` as fallback substitute
+  in case `MaxMemPerCPU` is not defined for chosen partition (may be overly
+  restrictive on requested memory settings)
+
 ### DEPRECATED
+- Using `start_client` in `local_cluster_setup` does not have any effect
+  any more: starting a dask `LocalCluster` always starts a client.
+
 ### FIXED
 - fixed partition bug ``run_tests.sh`` (Thanks to @timnaher, cf #53)
+- simplified and fixed interactive user queries: use the builtin `select`
+  module in everything but Jupyter and rely on the `input` module inside
+  notebooks.
+- clarified docstring discussing `result_dtype`: must not be `None` but
+  `str` (still defaults to "float")
+- numerous corrections of errata/outdated information in docstrings
 
 ## [2023.4] - 2023-04-14
 Re-designed ACME's logs and command line output.

@@ -11,16 +11,16 @@
 import os
 import sys
 import socket
+import platform
+import select
 import subprocess
 import inspect
 import logging
 import traceback
-import multiprocessing
-import time
 import numpy as np
 import dask.distributed as dd
-from tqdm import tqdm
 from logging import handlers
+from typing import Any, Optional, List
 
 # Local imports
 from acme import __version__
@@ -29,10 +29,12 @@ from . import dask_helpers as dh
 callCount = 0
 callMax = 1000000
 
-__all__ = []
+__all__: List["str"] = []
 
 
-def sizeOf(obj, varname):
+def sizeOf(
+        obj: Any,
+        varname: str) -> float:
     """
     Estimate memory consumption of Python objects
 
@@ -40,6 +42,8 @@ def sizeOf(obj, varname):
     ----------
     obj : Python object
         Any valid Python object whose memory footprint is of interest.
+    varname : str
+        Assigned name of `obj`
 
     Returns
     -------
@@ -58,7 +62,7 @@ def sizeOf(obj, varname):
     global callCount
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
 
     # Protect against circular object references
     callCount += 1
@@ -75,7 +79,7 @@ def sizeOf(obj, varname):
     return objsize
 
 
-def is_slurm_node():
+def is_slurm_node() -> bool:
     """
     Returns `True` if code is running on a SLURM-managed cluster node, `False`
     otherwise
@@ -92,7 +96,7 @@ def is_slurm_node():
     return len(out) > 0
 
 
-def is_esi_node():
+def is_esi_node() -> bool:
     """
     Returns `True` if code is running on an ESI cluster node, `False` otherwise
     """
@@ -103,13 +107,27 @@ def is_esi_node():
     return socket.gethostname().startswith("esi-sv") and os.path.isdir("/cs")
 
 
-def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.inf]):
+def is_x86_node() -> bool:
+    """
+    Returns `True` if code is running on an x86_64 node, `False` otherwise
+    """
+
+    # Fetch ACME logger and write debug message
+    log = logging.getLogger("ACME")
+    log.debug("Test if host is x86_64 micro-architecture")
+    return platform.machine() == "x86_64"
+
+def _scalar_parser(
+        var: Any,
+        varname: str = "varname",
+        ntype: str = "int_like",
+        lims: List = [-np.inf, np.inf]) -> None:
     """
     ACME-specific version of Syncopy's `scalar_parser` (used for cross-compatibility)
     """
 
     # Get name of calling method/function
-    funcName = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)
+    funcName = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)      # type: ignore
 
     # Make sure `var` is a scalar-like number
     msg = "%s `%s` has to be %s between %s and %s, not %s"
@@ -137,7 +155,9 @@ def _scalar_parser(var, varname="varname", ntype="int_like", lims=[-np.inf, np.i
     return
 
 
-def user_yesno(msg, default=None):
+def user_yesno(                                                         # pragma: no cover
+        msg: str,
+        default: Optional[str] = None) -> bool:
     """
     ACME specific version of user-input query
     """
@@ -162,78 +182,64 @@ def user_yesno(msg, default=None):
             print("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
 
 
-def user_input(msg, valid, default=None, timeout=None):
+def user_input(                                                         # pragma: no cover
+        msg: str,
+        valid: Optional[List] = None,
+        default: Optional[str] = None,
+        timeout: Optional[float] = None) -> str:
     """
     ACME specific version of user-input query
     """
+
+    # Prepare to log any uncaught exceptions
+    log = logging.getLogger("ACME")
 
     # Add trailing whitespace to `msg` if not already present and append
     # default reply (if provided)
     suffix = "" + " " * (not msg.endswith(" "))
     if default is not None:
         default = default.replace("[", "").replace("]","")
-        assert default in valid
-        suffix = "[Default: '{}'] ".format(default)
+        if valid is not None:
+            assert default in valid
+        suffix = f"[Default: '{default}'] "
     query = msg + suffix
 
-    if timeout is None:
-        return _get_user_input(query, valid, default)
-    else:
-        procQueue = multiprocessing.Queue()
-        proc = multiprocessing.Process(target=_queuing_input,
-                                       args=(procQueue,
-                                             sys.stdin.fileno(),
-                                             query,
-                                             valid,
-                                             default)
-                                       )
-        proc.start()
-        countdown = tqdm(desc="Time remaining", leave=True, bar_format="{desc}: {n}  ",
-                         initial=timeout, position=1)
-        ticker = 0
-        while procQueue.empty() and ticker < timeout:
-            time.sleep(1)
-            ticker += 1
-            countdown.n = timeout - ticker
-            countdown.refresh()   # force refresh to display elapsed time every second
-        countdown.close()
-        proc.terminate()
+    # Jupyter only supports hard-blocking `input` fields
+    if is_jupyter():
+        log.debug("Running inside Jupyter notebook, deactivating timeout")
+        timeout = None
 
-        if not procQueue.empty():
-            choice = procQueue.get()
-        else:
-            choice = default
-        return choice
-
-
-def _get_user_input(query, valid, default):
-    """
-    Performs the actual input query
-    """
-
-    # Wait for valid user input and return choice upon receipt
+    # Wait for user I/O
+    print(query)
     while True:
-        choice = input(query)
+        if timeout is None:
+            choice = input()
+        else:
+            stdin, _, _ = select.select([sys.stdin], [], [], timeout)
+            if stdin:
+                choice = sys.stdin.readline().strip()
+            else:
+                if default is None:
+                    err = f"No response received within the given timeout of {timeout} seconds. "
+                    raise TimeoutError(err)
         if default is not None and choice == "":
             return default
-        elif choice in valid:
-            return choice
+        elif valid is not None and choice not in valid:
+            print("Please respond with " + " or ".join(valid))
         else:
-            print("Please respond with '" + \
-                "or '".join(opt + "' " for opt in valid) + "\n")
+            return choice
 
 
-def _queuing_input(procQueue, stdin_fd, query, valid, default):
-    """
-    Target routine to tie subprocess to (in case input-query is time-restricted)
-    """
-    sys.stdin = os.fdopen(stdin_fd)
-    procQueue.put(_get_user_input(query, valid, default))
+def is_jupyter() -> bool:
+    try:
+        return get_ipython().__class__.__name__ == "ZMQInteractiveShell"    # type: ignore
+    except NameError:
+        return False
 
 
-
-
-def ctrlc_catcher(*excargs, **exckwargs):
+def ctrlc_catcher(
+        *excargs: Any,
+        **exckwargs: Optional[Any]) -> None:
     """
     Custom Traceback for properly handling CTRL + C interrupts while parallel
     computations are running
@@ -248,7 +254,7 @@ def ctrlc_catcher(*excargs, **exckwargs):
         shell, = excargs
         etype, evalue, etb = sys.exc_info()
         try:                            # careful: if iPython is used to launch a script, ``get_ipython`` is not defined
-            get_ipython()
+            get_ipython()               # type: ignore
             isipy = True
             sys.last_traceback = etb    # smartify ``sys``
         except NameError:
@@ -272,7 +278,7 @@ def ctrlc_catcher(*excargs, **exckwargs):
             log.debug("CTRL + C acknowledged, client and workers successfully killed")
 
     # Relay exception handling back to appropriate system tools
-    if isipy:
+    if isipy:                                                           # pragma: no cover
         shell.ipyTBshower(shell, exc_tuple=(etype, evalue, etb), **exckwargs)
     else:
         sys.__excepthook__(etype, evalue, etb)
@@ -281,9 +287,9 @@ def ctrlc_catcher(*excargs, **exckwargs):
     # printing was handled above)
     log.error("Exception received.")
     memHandler = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)][0]
-    if memHandler.target is not None:
+    if memHandler.target is not None:                                   # pragma: no cover
         memHandler.acquire()
-        with open(memHandler.target.baseFilename, "a", encoding="utf-8") as logfile:
+        with open(memHandler.target.baseFilename, "a", encoding="utf-8") as logfile:    # type: ignore
             logfile.write("".join(traceback.format_exception_only(etype, evalue)))
             logfile.write("".join(traceback.format_tb(etb)))
         memHandler.release()

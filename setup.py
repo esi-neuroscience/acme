@@ -9,15 +9,13 @@
 import datetime
 from setuptools import setup
 from setuptools.config.setupcfg import read_configuration
-import subprocess
 import toml
 
 # External packages
 import yaml
-from setuptools_scm import get_version
 
-# Set release version by hand
-releaseVersion = "2023.4"
+# Manually set release version
+releaseVersion = "2023.12"
 
 # Read dependencies from setup.cfg + pyproject.toml and create conda environment file
 envFile = "acme.yml"
@@ -28,6 +26,11 @@ pipPkgs = ["sphinx_automodapi"]
 for k in range(len(pipPkgs)):
     pkg = pipPkgs[k]
     pipPkgs[k] = allPkgs.pop([allPkgs.index(dep) for dep in allPkgs if pkg in dep][0])
+condaMap = {"msgpack" : "msgpack-python"}
+for pipName, condaName in condaMap.items():
+    depIdx = [allPkgs.index(dep) for dep in allPkgs if pipName in dep][0]
+    depName = allPkgs[depIdx]
+    allPkgs[depIdx] = depName.replace(pipName, condaName)
 pyVer = setupOpts
 allPkgs += ["python " + str(setupOpts["python_requires"]), "pip", {"pip" : pipPkgs}]
 ymlDict = {"name" : "acme",
@@ -41,32 +44,18 @@ header = "#\n" +\
     "# Do not edit, all of your changes will be overwritten. \n"
 header = header.format(datetime.datetime.now().strftime("%Y"),
                        datetime.datetime.now().strftime("%d/%m/%Y at %H:%M:%S"))
-with open(envFile, "w") as ymlFile:
+with open(envFile, "w", encoding="utf8") as ymlFile:
     ymlFile.write(header)
     yaml.dump(ymlDict, ymlFile, default_flow_style=False)
 
-# If code has not been obtained via `git` or we're inside the main branch,
-# use the hard-coded `releaseVersion` as version. Otherwise keep the local `tag.devx`
-# scheme for TestPyPI uploads
-proc = subprocess.run("git branch --show-current", shell=True, capture_output=True, text=True)
-if proc.returncode !=0 or proc.stdout.strip() == "main":
-    version = releaseVersion
-    versionKws = {"use_scm_version" : False, "version" : version}
-else:
-    version = get_version(root='.', relative_to=__file__, local_scheme="no-local-version")
-    versionKws = {"use_scm_version" : {"local_scheme": "no-local-version"}}
-
 # Update citation file
 citationFile = "CITATION.cff"
-with open(citationFile) as ymlFile:
+with open(citationFile, "r", encoding="utf8") as ymlFile:
     ymlObj = yaml.safe_load(ymlFile)
-ymlObj["version"] = version
+ymlObj["version"] = releaseVersion
 ymlObj["date-released"] = datetime.datetime.now().strftime("%Y-%m-%d")
-with open(citationFile, "w") as ymlFile:
+with open(citationFile, "w", encoding="utf8") as ymlFile:
     yaml.dump(ymlObj, ymlFile)
 
 # Run setup (note: identical arguments supplied in setup.cfg will take precedence)
-setup(
-    setup_requires=['setuptools_scm'],
-    **versionKws
-)
+setup(version=releaseVersion)

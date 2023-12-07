@@ -10,5 +10,8 @@ exclude .gitignore
 exclude .gitlab-ci.yml
 exclude MANIFEST.in
 exclude .readthedocs.yml
+exclude acme/tests/local_acme.py
+exclude acme/tests/no_slurm.sh
+exclude acme/tests/run_tests.*
 recursive-exclude .github *
 recursive-exclude doc *

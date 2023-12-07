@@ -20,6 +20,22 @@ main: [![tests](https://github.com/esi-neuroscience/acme/actions/workflows/tests
 dev: [![tests](https://github.com/esi-neuroscience/acme/actions/workflows/tests_workflow.yml/badge.svg?branch=dev)](https://github.com/esi-neuroscience/acme/actions/workflows/tests_workflow.yml)
 [![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/dev/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)
 
+## Table of Contents
+
+1. [Summary](#summary)
+1. [Installation](#installation)
+1. [Usage](#usage)
+   - [Basic Examples](#basic-examples)
+   - [Intermediate Examples](#intermediate-examples)
+   - [Advanced Use](#advanced-use)
+1. [Handling Results](#handling-results)
+   - [Load Results From Files](#load-results-from-files)
+   - [Collect Results in Single HDF5 Dataset](#collect-results-in-single-hdf5-dataset)
+   - [Collect Results in Local Memory](#collect-results-in-local-memory)
+1. [Debugging](#debugging)
+1. [Documentation and Contact](#documentation-and-contact)
+   - [Resources](#resources)
+
 ## Summary
 
 The objective of ACME (pronounced *"ak-mee"*) is to provide easy-to-use
@@ -130,9 +146,9 @@ with pmap as p:
 
 For more information see [Reuse Worker Clients](https://esi-acme.readthedocs.io/en/latest/userguide.html#reuse-worker-clients)
 
-## Handling results
+## Handling Results
 
-### Load results from files
+### Load Results From Files
 
 By default, results are saved to disk in HDF5 format and can be accessed using
 the `results_container` attribute of `ParallelMap`:
@@ -159,7 +175,7 @@ with h5py.File(pmap.results_container, "r") as h5f:
 
 See also [Where Are My Results?](https://esi-acme.readthedocs.io/en/latest/userguide.html#where-are-my-results)
 
-### Collect results in single HDF5 dataset
+### Collect Results in Single HDF5 Dataset
 
 If possible, results can be slotted into a single HDF5 dataset:
 
@@ -183,7 +199,7 @@ with h5py.File(pmap.results_container, "r") as h5f:
 More examples can be found in
 [Collect Results in Single Dataset](https://esi-acme.readthedocs.io/en/latest/userguide.html#collect-results-in-single-dataset)
 
-### Collect results in local memory
+### Collect Results in Local Memory
 
 This is possible but not recommended.
 
@@ -224,3 +240,11 @@ To report bugs or ask questions please use our
 [GitHub issue tracker](https://github.com/esi-neuroscience/acme/issues).
 More usage details and background information is available in our
 [online documentation](https://esi-acme.readthedocs.io).
+
+### Resources
+
+- [ACME Presentation](https://pantaray.github.io/RSE23-talk/)
+  at [deRSE23 - Conference for Research Software Engineering in Germany](https://de-rse23.sciencesconf.org/)
+- [ACME Demo](https://esi-neuroscience.github.io/acme-demo/) presented at the 4th annual Data Scientist Community Meeting
+- [ACME Tutorials](https://esi-acme.readthedocs.io/en/latest/tutorials.html)
+- [ACME FAQ](https://esi-acme.readthedocs.io/en/latest/troubleshooting_faq.html)

@@ -27,22 +27,42 @@ import dask.distributed as dd
 from logging import handlers
 from glob import glob
 from scipy import signal
+from numpy.typing import NDArray
+from typing import Any, Optional, Union, Dict
 
 # Import main actors here
-from acme import ParallelMap, cluster_cleanup, esi_cluster_setup
-from conftest import skip_if_not_linux, useSLURM, onESI, defaultQ
+from acme import ParallelMap, ACMEdaemon, cluster_cleanup, esi_cluster_setup
+from conftest import skip_if_not_linux, useSLURM, onESI, onx86, defaultQ
+
+# Define custom types
+realArrayLike = Union[float, NDArray[np.float64]]
+realArray = NDArray[np.float64]
 
 # Functions that act as stand-ins for user-funcs
-def simple_func(x, y, z=3):
+def simple_func(
+        x: float,
+        y: float,
+        z: float = 3) -> float:
     return (x + y) * z
 
-def medium_func(x, y, z=3, w=np.ones((3, 3))):
+def medium_func(
+        x: realArray,
+        y: realArrayLike,
+        z: realArrayLike = 3,
+        w: NDArray = np.ones((3, 3))) -> realArrayLike:
     return (sum(x) + y) * z * w.max()
 
-def hard_func(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+def hard_func(
+        x: realArray,
+        y: realArrayLike,
+        z: realArrayLike = 3,
+        w: realArray = np.zeros((3, 1)),
+        **kwargs: Optional[Any]) -> tuple[realArrayLike, realArray]:
     return sum(x) + y,  z * w
 
-def lowpass_simple(h5name, channel_no):
+def lowpass_simple(
+        h5name: str,
+        channel_no: int) -> realArray:
     with h5py.File(h5name, "r") as h5f:
         channel = h5f["data"][:, channel_no]
         b = h5f["data"].attrs["b"]
@@ -50,7 +70,9 @@ def lowpass_simple(h5name, channel_no):
     res = signal.filtfilt(b, a, channel, padlen=200)
     return res
 
-def lowpass_medium(h5name, channel_no):
+def lowpass_medium(
+        h5name: str,
+        channel_no: int) -> tuple[realArray, int, float, float]:
     with h5py.File(h5name, "r") as h5f:
         channel = h5f["data"][:, channel_no]
         b = h5f["data"].attrs["b"]
@@ -58,7 +80,15 @@ def lowpass_medium(h5name, channel_no):
     res = signal.filtfilt(b, a, channel, padlen=200)
     return res, channel_no, b, a
 
-def lowpass_hard(arr_like, b, a, res_dir, res_base="lowpass_hard_", dset_name="custom_dset_name", padlen=200, taskID=None):
+def lowpass_hard(
+        arr_like: realArray,
+        b: float,
+        a: float,
+        res_dir: str,
+        res_base: str = "lowpass_hard_",
+        dset_name: str = "custom_dset_name",
+        padlen: int = 200,
+        taskID: Optional[int] = None) -> None:
     channel = arr_like[:, taskID]
     res = signal.filtfilt(b, a, channel, padlen=padlen)
     h5name = os.path.join(res_dir, res_base +"{}.h5".format(taskID))
@@ -66,14 +96,24 @@ def lowpass_hard(arr_like, b, a, res_dir, res_base="lowpass_hard_", dset_name="c
         h5f.create_dataset(dset_name, data=res)
     return
 
-def pickle_func(arr, b, a, channel_no, sabotage_hdf5=False):
+def pickle_func(
+        arr: realArray,
+        b: float,
+        a: float,
+        channel_no: int,
+        sabotage_hdf5: bool = False) -> Union[Dict[str, float], realArray]:
     res = signal.filtfilt(b, a, arr[:, channel_no], padlen=200)
     if sabotage_hdf5:
         if channel_no % 2 == 0:
             return {"b" : b}
     return res
 
-def memtest_func(x, y, z=3, arrsize=2, sleeper=300):
+def memtest_func(
+        x: float,
+        y: float,
+        z: float = 3,
+        arrsize: float = 2,
+        sleeper: int = 300) -> float:
     fSize = np.dtype("float").itemsize
     time.sleep(2)
     arr = np.ones((int(arrsize * 1024**3 / fSize), ))   # `arrsize` denotes array size in GB
@@ -116,6 +156,7 @@ class TestParallelMap():
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), tmpName)
         if useSLURM:
             tempDir = "/cs/home/{}/{}".format(getpass.getuser(), tmpName)
+        shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         sigName = os.path.join(tempDir, "sigdata.h5")
         origName = os.path.join(tempDir, "origdata.h5")
@@ -192,6 +233,74 @@ class TestParallelMap():
             ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=8, setup_interactive=False)
             assert "No object has required length of 8 matching `n_inputs`" in str(valerr.value)
 
+        # Check if other parameters  are parsed correctly
+        with pytest.raises(TypeError):
+            ParallelMap("invalid")
+        with pytest.raises(ValueError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, n_inputs="not-auto")
+        with pytest.raises(ValueError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, n_inputs=-3)
+        with pytest.raises(ValueError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, n_inputs=3.6)
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, n_inputs={})
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, write_worker_results="invalid")
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, single_file="invalid")
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, write_pickle="invalid")
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, logfile=3)
+        with pytest.raises(IOError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, logfile=os.path.dirname(os.path.realpath(__file__)))
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, output_dir=2)
+        with pytest.raises(OSError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, output_dir="/path/to/nowhere")
+        with pytest.raises(TypeError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, stop_client=3)
+        with pytest.raises(ValueError):
+            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, stop_client="not-auto")
+
+        # Check parameters that are only parsed if a new client has been started
+        if testclient is None:
+            cluster_cleanup()
+            if useSLURM:
+                with pytest.raises(TypeError):
+                    ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=3)
+            with pytest.raises(ValueError):
+                ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, n_workers="invalid")
+
+            # start a client for real
+            cluster_cleanup()
+            pmap = ParallelMap(simple_func,
+                               [2, 4, 6, 8],
+                               4,
+                               partition=defaultQ,
+                               n_workers=1,
+                               setup_interactive=False)
+            outDirs.append(pmap.daemon.out_dir)
+
+            with pytest.raises(TypeError):
+                pmap.daemon.compute(debug="invalid")
+
+            # Kill our single worker and ensure ACME takes note
+            client = pmap.daemon.client
+            client.retire_workers(list(client.scheduler_info()['workers']), close_workers=True)
+            with pytest.raises(RuntimeError) as rerr:
+                pmap.daemon.compute()
+                assert "no active workers found" in str(rerr.value)
+
+            # Annihilate client slot and ensure pmap does not do anything funky
+            pmap.daemon.client = None
+            assert pmap.compute() is None
+
+        # Finally, test ACMEdaemon only accepts `ParallelMap` objects
+        with pytest.raises(TypeError) as tperr:
+            ACMEdaemon("invalid")
+            assert "`pmap` has to be a `ParallelMap` instance, not <class 'str'>" in str(tperr.value)
+
         # Clean up testing folder and any running clients
         if testclient is None:
             cluster_cleanup()
@@ -200,11 +309,100 @@ class TestParallelMap():
 
         return testclient
 
+    # test if examples shown on GitHub actually work
+    def test_github_examples(self):
+
+        # Collected auto-generated output directories in list for later cleanup
+        outDirs = []
+
+        def f(x, y, z=3):
+            return (x + y) * z
+        expected = list(map(f, [2, 4, 6, 8], [4, 4, 4, 4]))
+
+        with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
+            filenames = pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        out = np.zeros((4,))
+        with h5py.File(pmap.results_container, "r") as h5f:
+            for k, key in enumerate(h5f.keys()):
+                out[k] = h5f[key]["result_0"][()]
+        assert np.array_equal(out, expected)
+
+        with ParallelMap(f, [2, 4, 6, 8], 4, result_shape=(None,)) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+        with h5py.File(pmap.results_container, "r") as h5f:
+            out == h5f["result_0"][()] # returns a NumPy array of shape (4,)
+        assert np.array_equal(out, expected)
+
+        with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
+            result = pmap.compute() # returns a 4-element list
+        assert result == expected
+        with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False, result_shape=(None,)) as pmap:
+            result = pmap.compute() # returns a NumPy array of shape (4,)
+        assert np.array_equal(out, expected)
+
+        def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+            return (sum(x) + y) * z * w.max()
+        expected = list(map(f, 2*[[2, 4, 6, 8]], [2, 2], np.array([1, 2]), 2*[np.ones((8, 1))]))
+
+        pmap = ParallelMap(f, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2)
+        with pmap as p:
+            p.compute()
+        outDirs.append(pmap.daemon.out_dir)
+        out = []
+        with h5py.File(pmap.daemon.results_container, "r") as h5f:
+            for k, key in enumerate(h5f.keys()):
+                out.append(h5f[key]["result_0"][()][0])
+        assert np.array_equal(out, expected)
+
+        def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+            return (sum(x) + y) * z * w.max()
+
+        def g(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+            return (max(x) + y) * z * w.sum()
+
+        n_workers = 2
+        x = [2, 4, 6, 8]
+        y = np.random.rand(n_workers)
+        z = range(n_workers)
+        w = np.ones((8, 1))
+
+        client = esi_cluster_setup(partition=defaultQ, n_workers=n_workers, interactive=False)
+
+        expected = list(map(f, n_workers*[x], y, list(z), n_workers*[w]))
+        pmap = ParallelMap(f, x, y, z=z, w=w, n_inputs=n_workers)
+        with pmap as p:
+            p.compute()
+        outDirs.append(pmap.daemon.out_dir)
+        out = []
+        with h5py.File(pmap.daemon.results_container, "r") as h5f:
+            for k, key in enumerate(h5f.keys()):
+                out.append(h5f[key]["result_0"][()][0])
+        assert np.array_equal(out, expected)
+
+        expected = list(map(g, n_workers*[x], y, list(z), n_workers*[w]))
+        pmap = ParallelMap(g, x, y, z=z, w=w, n_inputs=n_workers)
+        with pmap as p:
+            p.compute()
+        outDirs.append(pmap.daemon.out_dir)
+        out = []
+        with h5py.File(pmap.daemon.results_container, "r") as h5f:
+            for k, key in enumerate(h5f.keys()):
+                out.append(h5f[key]["result_0"][()][0])
+        assert np.array_equal(out, expected)
+
+        # Clean up testing folder and shut down allocated client
+        for folder in outDirs:
+            shutil.rmtree(folder, ignore_errors=True)
+        cluster_cleanup(client)
+
     # Functionality tests: perform channel-concurrent low-pass filtering
     def test_simple_filter(self, testclient=None):
 
         # Prepare data containers
-        tempDir, sigName = self._prep_data("acme_tmp")
+        tempDir, sigName = self._prep_data(f"acme_tmp_{platform.machine()}")
 
         # Collect auto-generated output directories in list for later cleanup
         outDirs = []
@@ -338,7 +536,8 @@ class TestParallelMap():
         # Simulate user-defined results-directory not auto-populated by ACME
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
         if useSLURM:
-            tempDir2 = "/cs/home/{}/acme_tmp_lowpass_hard".format(getpass.getuser())
+            tempDir2 = f"/cs/home/{getpass.getuser()}/acme_tmp_lowpass_hard_{platform.machine()}"
+        shutil.rmtree(tempDir2, ignore_errors=True)
         os.makedirs(tempDir2, exist_ok=True)
 
         # Same task, different function: simulate user-defined saving scheme and "weird" inputs
@@ -392,7 +591,7 @@ class TestParallelMap():
             assert "/cs/home/" in logFile
         else:
             assert os.path.dirname(os.path.realpath(__file__)) in logFile
-        with open(logFile, "r") as fl:
+        with open(logFile, "r", encoding="utf8") as fl:
             assert len(fl.readlines()) > 1
 
         # Ensure client has not been killed; perform post-hoc check of default SLURM settings
@@ -402,10 +601,11 @@ class TestParallelMap():
             assert pmap.n_calls == pmap.n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             partition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
-            assert "8GB" in partition
-            memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
-            assert memory.size == 1
-            assert round(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
+            if onx86:
+                assert "8GB" in partition
+                memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+                assert memory.size == 1
+                assert round(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
 
         # Wait a sec (literally) for dask to collect its bearings (after the
         # `get_client` above) before proceeding
@@ -424,7 +624,7 @@ class TestParallelMap():
             pmap.compute()
         outDirs.append(pmap.out_dir)
         assert os.path.isfile(customLog)
-        with open(customLog, "r") as fl:
+        with open(customLog, "r", encoding="utf8") as fl:
             assert len(fl.readlines()) > 1
 
         # Ensure only single log file `customLog` is used
@@ -440,14 +640,102 @@ class TestParallelMap():
         # Wait a sec (literally) to give dask enough time to close the client
         time.sleep(1.0)
 
+        # Request a log-file but don't save results
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         logfile=True,
+                         write_worker_results=False,
+                         n_workers=1,
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        assert pmap.out_dir is None
+        log = logging.getLogger("ACME")
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        assert os.path.dirname(os.path.realpath(__file__)) in logFileList[0]
+        os.unlink(logFileList[0])
+
+        # Ensure ACME warns if arguments increase its "sanity" threshold
+        # (lowered here to not overwhelm CI runners)
+        mAS = ParallelMap._maxArgSize
+        ParallelMap._maxArgSize = 1   # in MB
+        pmap = ParallelMap(simple_func,
+                           [np.ones((1000, 1000)), 4, 6, 8],
+                           4,
+                           partition=defaultQ,
+                           n_workers=1,
+                           logfile=True,
+                           setup_interactive=False)
+        log = logging.getLogger("ACME")
+        memHandlers = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)]
+        assert len(memHandlers) == 1
+        memHandler = memHandlers[0]
+        memHandler.flush()  # important: flush memory to write its contents to file
+        assert memHandler.target is not None
+        thisLogFile = memHandler.target.baseFilename
+        with open(thisLogFile, "r", encoding="utf8") as fl:
+            logTxt = fl.read()
+        assert "exceeds recommended limit of 1 MB" in logTxt
+        os.unlink(thisLogFile)
+
+        # Same with kwargs
+        pmap = ParallelMap(simple_func,
+                           [2, 4, 6, 8],
+                           4,
+                           z=np.ones((1000, 1000)),
+                           partition=defaultQ,
+                           n_workers=1,
+                           logfile=True,
+                           setup_interactive=False)
+        log = logging.getLogger("ACME")
+        log = logging.getLogger("ACME")
+        memHandlers = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)]
+        assert len(memHandlers) == 1
+        memHandler = memHandlers[0]
+        memHandler.flush()  # important: flush memory to write its contents to file
+        assert memHandler.target is not None
+        thisLogFile = memHandler.target.baseFilename
+        with open(thisLogFile, "r", encoding="utf8") as fl:
+            logTxt = fl.read()
+        assert "exceeds recommended limit of 1 MB" in logTxt
+        os.unlink(thisLogFile)
+
+        # Reset maxArgSize and continue
+        ParallelMap._maxArgSize = mAS
+
+        # Ensure warning is issued if single-file saving is requested but result writing is turned off
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         write_worker_results=False,
+                         single_file=True,
+                         partition=defaultQ,
+                         logfile=True,
+                         n_workers=1,
+                         setup_interactive=False) as pmap:
+            resInMem2 = pmap.compute()
+        assert pmap.out_dir is None
+        assert np.all(resInMem2) == np.all(resInMem)
+        log = logging.getLogger("ACME")
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        with open(logFileList[0], "r", encoding="utf8") as fl:
+            logTxt = fl.read()
+        assert "Generating a single output file only possible if `write_worker_results` is `True`" in logTxt
+        os.unlink(logFileList[0])
+
+        if testclient is None:
+            cluster_cleanup(pmap.client)
+
         # Underbook SLURM (more calls than workers)
-        partition = "8GBXS"
         n_workers = int(self.nChannels / 2)
         mem_per_worker = "2GB"
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
-                         partition=partition,
+                         partition=defaultQ,
                          n_workers=n_workers,
                          mem_per_worker=mem_per_worker,
                          stop_client=False,
@@ -462,7 +750,7 @@ class TestParallelMap():
             assert pmap.n_workers == n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
-            assert actualPartition == partition
+            assert actualPartition == defaultQ
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
             assert round(memory[0] / 1000**3) == int(mem_per_worker.replace("GB", ""))
@@ -474,13 +762,12 @@ class TestParallelMap():
                 dd.get_client()
 
         # Overbook SLURM (more workers than calls)
-        partition = "8GBXS"
         n_workers = self.nChannels + 2
         mem_per_worker = "3000MB"
         with ParallelMap(lowpass_simple,
                          sigName,
                          range(self.nChannels),
-                         partition=partition,
+                         partition=defaultQ,
                          n_workers=n_workers,
                          mem_per_worker=mem_per_worker,
                          stop_client=False,
@@ -495,7 +782,7 @@ class TestParallelMap():
             assert pmap.n_workers == n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
-            assert actualPartition == partition
+            assert actualPartition == defaultQ
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
             assert round(memory[0] / 1000**3) * 1000 == int(mem_per_worker.replace("MB", ""))
@@ -817,7 +1104,7 @@ class TestParallelMap():
                          single_file=False,
                          partition=defaultQ,
                          setup_interactive=False) as pmap:
-             pmap.compute()
+            pmap.compute()
         outDirs.append(pmap.out_dir)
 
         # Save results for later
@@ -954,6 +1241,26 @@ class TestParallelMap():
             mixedResults = pmap.compute()
         outDirs.append(pmap.out_dir)
 
+        # Ensure warning is issued if pickling is requested but result writing is turned off
+        with ParallelMap(simple_func,
+                         [2, 4, 6, 8],
+                         4,
+                         partition=defaultQ,
+                         write_worker_results=False,
+                         write_pickle=True,
+                         logfile=True,
+                         n_workers=1,
+                         setup_interactive=False) as pmap:
+                results = pmap.compute()
+        assert pmap.out_dir is None
+        assert results == list(map(simple_func, [2, 4, 6, 8], [4, 4, 4, 4]))
+        log = logging.getLogger("ACME")
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        with open(logFileList[0], "r", encoding="utf8") as fl:
+            logTxt = fl.read()
+        assert "Pickling of results only possible if `write_worker_results` is `True`" in logTxt
+
         # Collection container should have been auto-removed
         resultsContainer = os.path.basename(mixedResults[0])
         resultsContainer = os.path.join(os.path.dirname(mixedResults[0]),
@@ -1032,7 +1339,8 @@ class TestParallelMap():
     def test_cancel(self):
 
         # Setup temp-directory layout for subprocess-scripts and prepare interpreters
-        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{platform.machine()}")
+        shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         pshells = [os.path.join(os.path.split(sys.executable)[0], pyExec) for pyExec in ["python", "ipython"]]
 
@@ -1046,10 +1354,10 @@ class TestParallelMap():
             "   return\n" +\
             "if __name__ == '__main__':\n" +\
             "   cluster_cleanup() \n" +\
-            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, partition='8GBXS', write_worker_results=False) as pmap: \n" +\
+            f"   with ParallelMap(long_running, [None]*2, setup_interactive=False, partition='{defaultQ}', write_worker_results=False) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
-        with open(scriptName, "w") as f:
+        with open(scriptName, "w", encoding="utf8") as f:
             f.write(scriptContents)
 
         # Execute the above script both in Python and iPython to ensure global functionality
@@ -1091,11 +1399,11 @@ class TestParallelMap():
             "   time.sleep(10)\n" +\
             "   return\n" +\
             "if __name__ == '__main__':\n" +\
-            "   client = esi_cluster_setup(partition='8GBDEV',n_workers=1, interactive=False)\n" +\
+            f"   client = esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n" +\
             "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False, verbose=True) as pmap: \n" +\
             "       pmap.compute()\n" +\
             "   print('ALL DONE')\n"
-        with open(scriptName, "w") as f:
+        with open(scriptName, "w", encoding="utf8") as f:
             f.write(scriptContents)
 
         # Test script functionality in both Python and iPython
@@ -1125,9 +1433,9 @@ class TestParallelMap():
             "from acme import esi_cluster_setup\n" +\
             "import time\n" +\
             "if __name__ == '__main__':\n" +\
-            "   esi_cluster_setup(partition='8GBDEV',n_workers=1, interactive=False)\n" +\
+            f"   esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n" +\
             "   time.sleep(60)\n"
-        with open(scriptName, "w") as f:
+        with open(scriptName, "w", encoding="utf8") as f:
             f.write(scriptContents)
         proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
                                 shell=True, start_new_session=True,
@@ -1158,10 +1466,21 @@ class TestParallelMap():
         # directory must be cleaned up
         monkeypatch.setattr("builtins.input", lambda _ : "n")
         pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4, setup_interactive=True, dryrun=True)
+        time.sleep(1.0)
 
         # Ensure auto-generated output dir has been successfully removed
         outDir = pmap.daemon.out_dir
         assert os.path.exists(outDir) is False
+
+        # Now go through with the dry-run
+        monkeypatch.setattr("builtins.input", lambda _ : "y")
+        with ParallelMap(simple_func,
+                         [2, 4, 6, 8],
+                         4,
+                         setup_interactive=True,
+                         dryrun=True) as pmap:
+            pmap.compute()
+        shutil.rmtree(pmap.out_dir, ignore_errors=True)
 
     def test_memest(self):
 
@@ -1169,7 +1488,8 @@ class TestParallelMap():
         cluster_cleanup()
 
         # Create tmp directory for logfile
-        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp")
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{platform.machine()}")
+        shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         customLog = os.path.join(tempDir, "mem_log.txt")
         outDirs = []
@@ -1178,7 +1498,7 @@ class TestParallelMap():
         # mem estimates accordingly
         arrsize = 2
         estMem = 3
-        if platform.machine() == "ppc64le":
+        if not useSLURM and platform.machine() == "ppc64le":
             arrsize = 0.5
             estMem = 1
 
@@ -1224,7 +1544,7 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked
         if onESI and useSLURM:
-            assert "Picked partition 8GBXS based on estimated memory consumption of 3 GB" in logTxt
+            assert f"Picked partition {defaultQ} based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
         # output HDF5 files were removed
@@ -1260,7 +1580,7 @@ class TestParallelMap():
                            sleeper=300,
                            arrsize=arrsize,
                            logfile=customLog2,
-                           setup_timeout=10,
+                           setup_timeout=30,
                            setup_interactive=False)
 
         # Again, fire off `estimate_memuse` manually if tests are run locally
@@ -1289,7 +1609,7 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked (again)
         if onESI and useSLURM:
-            assert "Picked partition 8GBXS based on estimated memory consumption of 3 GB" in logTxt
+            assert f"Picked partition {defaultQ} based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling should not have generated any output
         outDirs.append(pmap.daemon.out_dir)
@@ -1322,13 +1642,20 @@ class TestParallelMap():
 
             # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`
             # with `mem_per_worker='esstimate_memuse:XY'`
+            memUse = "estimate_memuse:12"
             client = esi_cluster_setup(partition="auto",
-                                       mem_per_worker="estimate_memuse:12",
+                                       mem_per_worker=memUse,
                                        n_workers=1,
                                        interactive=False)
 
-            # Ensure the right partition was picked (16GBXY, not 8GBXY)
-            assert "16GB" in client.cluster.job_header.split("-p ")[1].split("\n")[0]
+            # Ensure the right partition was picked (16GBXY, not 8GBXY on x86)
+            if onx86:
+                assert "16GB" in client.cluster.job_header.split("-p ")[1].split("\n")[0]
+            else:
+                memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+                assert memory.size == 1
+                assert round(memory[0] / 1000**3) == int(memUse.split(":")[1])
+
             cluster_cleanup(client)
 
             # Full run (finally) w/10 workers, 5 of em get mem-profiled
@@ -1346,7 +1673,7 @@ class TestParallelMap():
             with open(customLog3, "r", encoding="utf8") as f:
                 logTxt = f.read()
             assert "Estimated memory consumption across 5 runs" in logTxt
-            assert "Picked partition 8GBXS" in logTxt
+            assert f"Picked partition {defaultQ}" in logTxt
             outDirs.append(pmap.out_dir)
 
         # Clean up
@@ -1377,11 +1704,11 @@ class TestParallelMap():
 
         # Ensure a deprecation warning was issued
         log = logging.getLogger("ACME")
-        for handler in log.handlers:
-            if isinstance(handler, logging.FileHandler):
-                with open(handler.baseFilename, "r") as fl:
-                    logTxt = fl.read()
-                assert "DEPRECATED" in logTxt
+        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        assert len(logFileList) == 1
+        with open(logFileList[0], "r", encoding="utf8") as fl:
+            logTxt = fl.read()
+        assert "DEPRECATED" in logTxt
 
         if useSLURM:
 
@@ -1416,6 +1743,10 @@ class TestParallelMap():
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):
 
+        # Do not execute on GitHub runner
+        if os.environ.get("GITHUB_ACTIONS") or os.environ.get("INTOX"):
+            return
+
         # Test custom SLURM cluster setup
         if useSLURM:
 
@@ -1428,18 +1759,20 @@ class TestParallelMap():
             assert "--output={}".format(slurmOut) in client.cluster.job_header
 
         else:
-            client = esi_cluster_setup(interactive=False)
+            client = esi_cluster_setup(partition="auto", interactive=False)
+        print("Allocated client")
 
         # Re-run tests with pre-allocated client (except for those in `skipTests`); ensure
         # client "survives" multiple independent test runs and is not accidentally closed
         skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun",
-                     "test_memest", "test_backcompat", "_prep_data"]
+                     "test_memest", "test_backcompat", "test_github_examples",
+                     "_prep_data"]
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:
+            print("Running test ", test)
             clnt = getattr(self, test)(testclient=client)
             assert clnt == client
-        client.close()
-        client.cluster.close()
+        cluster_cleanup()
         if useSLURM:
             shutil.rmtree(slurmOut, ignore_errors=True)

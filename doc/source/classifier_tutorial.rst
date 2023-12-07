@@ -33,7 +33,7 @@ from scikit-learn and splitting it into training and testing sets using the
 
 
 Training and Evaluating The Classifiers
----------------------------------------
+=======================================
 
 Next, we define three scikit-learn classifiers: K nearest neighbors
 (:class:`~sklearn.neighbors.KNeighborsClassifier`), a neural network model
@@ -66,7 +66,7 @@ distribution of accuracies to later compare the confidence intervals. To
 achieve this, we can use `bootstrapping <https://en.wikipedia.org/wiki/Bootstrapping_(statistics)/>`_.
 
 Bootstrapping and Confidence Intervals
---------------------------------------
+======================================
 
 We define a function ``bootstrap_model_accuracy`` that resamples the test
 set *with* replacement and calculates the accuracy of each classifier on
@@ -124,7 +124,7 @@ We can now go ahead and also plot our bootstrapped results as histograms.
     plt.title("Distributions of model accuracy for different models")
     plt.legend()
 
-.. image:: images/classifier_tutorial.png
+.. image:: _static/classifier_tutorial.png
     :width: 600
     :align: center
     :alt: Classifier Tutorial

@@ -177,5 +177,8 @@ intersphinx_mapping = {
     ),
     "torch": ("https://pytorch.org/docs/stable/",
               "https://pytorch.org/docs/stable/objects.inv"
+    ),
+    "nilearn": ("https://nilearn.github.io/stable/",
+                "https://nilearn.github.io/stable/objects.inv"
     )
 }

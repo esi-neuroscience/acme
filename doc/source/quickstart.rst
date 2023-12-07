@@ -86,7 +86,7 @@ by running :func:`~acme.slurm_cluster_setup` (on an HPC cluster managed by the
     from acme import slurm_cluster_setup
 
     slurmClient = slurm_cluster_setup(partition="some_partition",
-                                      n_cores=2,
+                                      cores_per_worker=2,
                                       mem_per_worker="2GB",
                                       n_workers=10)
 

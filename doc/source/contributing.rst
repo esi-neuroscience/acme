@@ -36,7 +36,8 @@ you want to set up a Windows environment )
        conda env create -f acme.yml
 
 4. Activate the environment and run ACME's test-suite to ensure your system
-   is set up correctly
+   is set up correctly (for more details see ACME's
+   `testing-README <https://github.com/esi-neuroscience/acme/blob/master/acme/tests/README.md>`_)
 
    .. tabs::
 
@@ -74,7 +75,35 @@ We use feature branches for development with a dedicated development branch
 release.
 To get your feature included in ACME's upstream code, please create a new
 branch from ``[dev]`` in your fork and push your work to this branch. Once
-you're done with your changes, please open a
+you're done with your changes, please launch a full test-run to ensure
+ACME's proper functionality:
+
+.. tabs::
+
+    .. tab:: Linux/macOS
+
+        .. code-block:: shell
+
+            cd tests/
+            ./run_tests.sh pytest
+
+    .. tab:: Windows
+
+        .. code-block:: shell
+
+            cd tests/
+            run_tests.cmd pytest
+
+Similarly, please use a static code checker to verify ACME's source code integrity.
+By default, our development environment comes with `mypy`. To perform
+the static code analysis with `mypy`, open a terminal, go to the root directory of
+your local ACME repository and run:
+
+.. code-block:: shell
+
+    mypy acme --allow-redefinition
+
+Once all checks pass and you are happy with your modifications please open a
 `pull request <https://github.com/esi-neuroscience/acme/pulls>`_
 for merging in the ``[dev]`` branch of ACME's
 `main repository <https://github.com/esi-neuroscience/acme>`_.
@@ -103,7 +132,7 @@ and simply un-comment the auto-generated "Changes to be committed" section.
 To further help others retrace our steps, we usually refer to GitHub issues
 by their number prepended with the "#" symbol. Here's an example:
 
-.. code-block:: bash
+.. code-block::
 
     FIX: Addresses bug in this_function
 
@@ -144,7 +173,7 @@ We keep track of changes in ACME by keeping a global changelog inspired
 by `Keep a Changelog <https://keepachangelog.com>`_. The structure of
 ACME's changelog follows the exemplary layout below:
 
-.. code-block:: bash
+.. code-block::
 
     # Changelog of ACME
     All notable changes to this project will be documented in this file.

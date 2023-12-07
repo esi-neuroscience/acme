@@ -41,6 +41,20 @@ if [ "$1" == "" ]; then
     usage
 fi
 
+# Define default SLURM partition based on architecture we're running on
+mArch=`uname -m`
+if [ "${mArch}" == "x86_64" ]; then
+    pytestQ="8GBL"
+    pytestCPU=1
+    toxQ="16GBL"
+    toxCPU=2
+else
+    pytestQ="E880"
+    pytestCPU=4
+    toxQ="E880"
+    toxCPU=8
+fi
+
 # Set up "global" pytest options for running test-suite (coverage is only done in local pytest runs)
 export PYTEST_ADDOPTS="--color=yes --tb=short --verbose"
 
@@ -51,26 +65,26 @@ while [ "$1" != "" ]; do
             shift
             export PYTHONPATH=$(cd ../../ && pwd)
             if [ $_useSLURM ]; then
-                CMD="srun -p 8GBDEV --mem=4000m -c 4 pytest"
+                CMD="srun -u -p ${pytestQ} --mem=8000m -c ${pytestCPU} pytest"
             else
-                PYTEST_ADDOPTS="$PYTEST_ADDOPTS --cov=../../acme --cov-config=../../.coveragerc"
+                PYTEST_ADDOPTS="${PYTEST_ADDOPTS} --cov=../../acme --cov-config=../../.coveragerc"
                 export PYTEST_ADDOPTS
                 CMD="pytest"
             fi
             echo ">>>"
-            echo ">>> Running $CMD $PYTEST_ADDOPTS"
+            echo ">>> Running ${CMD} ${PYTEST_ADDOPTS}"
             echo ">>>"
             ${CMD}
             ;;
         tox)
             shift
             if [ $_useSLURM ]; then
-                CMD="srun -p DEV --mem=8000m -c 4 tox"
+                CMD="srun -u -p ${toxQ} --mem=8000m -c ${toxCPU} tox"
             else
                 CMD="tox"
             fi
             echo ">>>"
-            echo ">>> Running $CMD "
+            echo ">>> Running ${CMD} "
             echo ">>>"
             ${CMD}
             ;;
