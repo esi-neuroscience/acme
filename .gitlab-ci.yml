@@ -58,8 +58,9 @@ win_x86:
         PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
+    - conda init cmd.exe
     - conda clean --all -y
-    - conda.bat activate acme
+    - conda activate acme
     - tox
 
 macos_m1:

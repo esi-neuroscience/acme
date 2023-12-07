@@ -156,6 +156,7 @@ class TestParallelMap():
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), tmpName)
         if useSLURM:
             tempDir = "/cs/home/{}/{}".format(getpass.getuser(), tmpName)
+        shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         sigName = os.path.join(tempDir, "sigdata.h5")
         origName = os.path.join(tempDir, "origdata.h5")
@@ -536,6 +537,7 @@ class TestParallelMap():
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
         if useSLURM:
             tempDir2 = f"/cs/home/{getpass.getuser()}/acme_tmp_lowpass_hard_{platform.machine()}"
+        shutil.rmtree(tempDir2, ignore_errors=True)
         os.makedirs(tempDir2, exist_ok=True)
 
         # Same task, different function: simulate user-defined saving scheme and "weird" inputs
@@ -1338,6 +1340,7 @@ class TestParallelMap():
 
         # Setup temp-directory layout for subprocess-scripts and prepare interpreters
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{platform.machine()}")
+        shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         pshells = [os.path.join(os.path.split(sys.executable)[0], pyExec) for pyExec in ["python", "ipython"]]
 
@@ -1486,6 +1489,7 @@ class TestParallelMap():
 
         # Create tmp directory for logfile
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{platform.machine()}")
+        shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         customLog = os.path.join(tempDir, "mem_log.txt")
         outDirs = []
