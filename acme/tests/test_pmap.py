@@ -1576,7 +1576,7 @@ class TestParallelMap():
                            sleeper=300,
                            arrsize=arrsize,
                            logfile=customLog2,
-                           setup_timeout=10,
+                           setup_timeout=30,
                            setup_interactive=False)
 
         # Again, fire off `estimate_memuse` manually if tests are run locally

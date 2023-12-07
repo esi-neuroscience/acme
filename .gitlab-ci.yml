@@ -26,7 +26,6 @@ linux_x86:
     script:
     - source $HOME/miniconda/etc/profile.d/conda.sh
     - conda clean --all -y
-    - conda env update -f acme.yml --prune
     - conda activate acme
     - tox
 
@@ -60,7 +59,6 @@ win_x86:
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
     - conda clean --all -y
-    - conda env update -f acme.yml --prune
     - conda.bat activate acme
     - tox
 
@@ -78,9 +76,8 @@ macos_m1:
     script:
     - source /opt/conda/etc/profile.d/conda.sh
     - conda clean --all -y
-    - conda env update -f acme.yml --prune
     - conda activate acme
-    - tox -p 0
+    - tox -p
 
 slurm_x86:
     stage: slurm
@@ -168,7 +165,6 @@ pypi_deploy:
     - source $HOME/miniconda/etc/profile.d/conda.sh
     - conda update --yes conda
     - conda clean --all -y
-    - conda env update -f acme.yml --prune
     - conda activate acme
     - conda install --yes twine keyring rfc3986
     - conda update --yes twine keyring rfc3986
