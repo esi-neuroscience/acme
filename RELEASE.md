@@ -110,7 +110,34 @@ If all tests are passing, merge changes into ``[dev]`` branch.
    ```
 
 Finally, open a PR into ``[main]``. Once merged, wait for the CI pipeline
-to finish and click the play button to publish to PyPi.
+to finish and click the play button to publish to PyPi. Then wait for the
+`regro-cf-autotick-bot` to open an PR in ACME's conda-forge feedstock.
+Checkout the bot's branch and run the Docker-based conda-forge test suite.
+
+```bash
+cd esi-acme-feedstock/
+git pull
+git checkout -t origin/2023.12_h898bc9
+sudo -i
+./build-locally.py
+```
+
+**WARNING**: As of Dec. 2023, in Linux, the local build script has to
+be run as `root` (even if Docker is installed with root-less support).
+This will trigger the error
+``fatal: detected dubious ownership in repository at '/home/conda/feedstock_root'
+``. To do this, change the `docker run` command in
+`esi-acme-feedstock/.scripts/run_docker_build.sh`:
+
+```bash
+           bash -c \
+           "git config --global --add safe.directory '/home/conda/feedstock_root' && /home/conda/feedstock_root/${PROVIDER_DIR}/build_steps.sh"
+```
+
+Change dependencies as needed in `meta.yaml`. Take care (not) to bump
+the `build/number` as explained in
+[Updating esi-acme-feedstock](https://github.com/conda-forge/esi-acme-feedstock#updating-esi-acme-feedstock).
+Commit changes and push to the bots branch. Once done, merge the PR.
 
 ## Post-Release Cleanup
 
