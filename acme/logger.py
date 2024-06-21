@@ -107,11 +107,13 @@ def prepare_log(
     # temporary buffering of all log messages
     if len(log.handlers) == 0:
         stdoutHandler = logging.StreamHandler()
+        stdoutHandler.setFormatter(streamFrmt)
         log.addHandler(stdoutHandler)
         memHandler = handlers.MemoryHandler(1000,
                                             flushLevel=logging.ERROR,
                                             target=None,
                                             flushOnClose=True)
+        memHandler.setFormatter(streamFrmt)
         log.addHandler(memHandler)
 
     # If log-file creation was requested, add a target to the initially
@@ -127,7 +129,6 @@ def prepare_log(
     # and formatter
     for h in log.handlers:
         h.setLevel(loglevel)
-        h.setFormatter(streamFrmt)
 
     return
 
