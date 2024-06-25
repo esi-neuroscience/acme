@@ -13,7 +13,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### CHANGED
 ### REMOVED
 ### DEPRECATED
+- Dropped support for Python 3.7
+
 ### FIXED
+- Custom resource allocations were not correctly propagated to dask
+  workers (especially in the "E880" partition on the ESI cluster). This
+  has been fixed (cf #60)
+- A bug in `python-msgpack` under Python 3.12 triggered de-serialization
+  errors; pinned `python-msgpack` to version 1.0.5 (cf #59)
 
 ## [2023.12] - 2023-12-6
 Better support for non-x86 micro-architectures. On the ESI HPC cluster,
