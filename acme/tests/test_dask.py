@@ -113,11 +113,11 @@ def test_cluster_setup():
             # (this should work on all clusters but we don't know partition
             # names, QoS rules etc.)
             if onx86:
-                client = esi_cluster_setup(partition="8GBDEV",
-                                        timeout=120,
-                                        n_workers=1,
-                                        mem_per_worker="9000MB",
-                                        interactive=False)
+                client = esi_cluster_setup(partition=defaultQ,
+                                           timeout=120,
+                                           n_workers=1,
+                                           mem_per_worker="9000MB",
+                                           interactive=False)
                 memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
                 assert memory.size == 1
                 assert np.round(memory / 1000**3)[0] == 8
@@ -132,6 +132,9 @@ def test_cluster_setup():
                     esi_cluster_setup(partition="E880")
                     assert "ppc64le from submitting host with architecture x86_64" in str(valerr.value)
 
+                # Define queue for testing CPU allocations below
+                tmpQ = "24GBXS"
+
             else:
 
                 # Attempt to start a client on x86
@@ -139,13 +142,17 @@ def test_cluster_setup():
                     esi_cluster_setup(partition="8GBXS")
                     assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
 
+                # Define queue for testing CPU allocations below
+                tmpq = defaultQ
+
             # Specify CPU count manually
-            client = esi_cluster_setup(partition=defaultQ,
+            n_cores = 3
+            client = esi_cluster_setup(partition=tmpQ,
                                        timeout=120,
                                        n_workers=1,
-                                       cores_per_worker=1,
+                                       cores_per_worker=n_cores,
                                        interactive=False)
-            assert [w["nthreads"] for w in client.cluster.scheduler_info["workers"].values()][0] == 1
+            assert f"--cpus-per-task={n_cores}" in client.cluster.job_script()
 
             # Kill worker in client to trigger cleanup and startup of new
             # cluster when re-invoking setup routine

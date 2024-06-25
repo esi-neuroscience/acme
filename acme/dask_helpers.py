@@ -259,8 +259,8 @@ def esi_cluster_setup(
             raise IOError("%s %s"%(funcName, msg%(str(exc))))
 
         # Use ESI-specific x86_64 partition layout (8GB(S/X/L), 16GB(S/X/L), ... )
-        # to get infer memory and core count; use "sane" (fat quotes)
-        # defaults on IBM POWER (if nothing was provided, use 4 cores/16 GB per worker)
+        # to infer memory and core count; use "sane" (fat quotes) defaults on IBM POWER
+        # (if nothing was provided, use 4 cores/16 GB per worker)
         if mArch == "x86_64":
             memPerCore = 8000
         else:
@@ -307,7 +307,7 @@ def esi_cluster_setup(
         log.debug("Setting `--output=%s`", out_files)
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
-    return slurm_cluster_setup(partition, cores_per_worker, n_workers,      # type: ignore
+    return slurm_cluster_setup(partition, cores_per_worker, n_workers,
                                processes_per_worker, mem_per_worker,
                                n_workers_startup, timeout, interactive,
                                interactive_wait, start_client, job_extra,
@@ -320,7 +320,7 @@ def slurm_cluster_setup(
         n_cores: int = 1,
         n_workers: int = 1,
         processes_per_worker: int = 1,
-        mem_per_worker: str = "1GB",
+        mem_per_worker: Optional[str] = "1GB",
         n_workers_startup: int = 1,
         timeout: int = 60,
         interactive: bool = True,
@@ -347,8 +347,8 @@ def slurm_cluster_setup(
         Number of processes to use per SLURM job (=worker). Should be greater
         than one only if the chosen partition contains nodes that expose multiple
         cores per job.
-    mem_per_worker : str
-        Memory allocation for each worker
+    mem_per_worker : str or None
+        Memory allocation for each worker. If `None`, partition's `DefMemPerCPU` is queried.
     n_workers_startup : int
         Number of spawned SLURM workers to wait for. The code does not return until either
         `n_workers_startup` SLURM jobs are running or the `timeout` interval (see
@@ -469,6 +469,10 @@ def slurm_cluster_setup(
         mem_lim = np.inf                                            # type: ignore
     log.debug("Found a limit of  %s MB", str(mem_lim))
 
+    # Prepare list of directives to skip in generated sbatch script, e.g.,
+    # do not set '--mem' explicitly if using partition maxima
+    skip_directives = ["-t 00:30:00"]
+
     # Consolidate requested memory with chosen partition (or assign default memory)
     if mem_per_worker is None:
         if np.isinf(mem_lim):
@@ -479,6 +483,7 @@ def slurm_cluster_setup(
         else:
             mem_per_worker = str(mem_lim) + "MB"
         log.debug("Using partition limit of %s MB", str(mem_lim))
+        skip_directives.append("--mem")
     else:
         if "MB" in mem_per_worker:
             mem_req = int(memVal)
@@ -489,6 +494,7 @@ def slurm_cluster_setup(
                 "Capping memory at partition limit. "
             log.warning(msg, mem_lim, partition)
             mem_per_worker = str(int(mem_lim)) + "MB"
+            skip_directives.append("--mem")
 
     # Parse requested timeout period
     try:
@@ -542,7 +548,7 @@ def slurm_cluster_setup(
     # Ensure validity of requested worker processes
     try:
         scalar_parser(processes_per_worker, varname="processes_per_worker",
-                      ntype="int_like", lims=[1, 16])
+                      ntype="int_like", lims=[1, np.inf])
     except Exception as exc:
         log.error("Error parsing `processes_per_worker`")
         raise exc
@@ -578,14 +584,14 @@ def slurm_cluster_setup(
     # Create `SLURMCluster` object using provided parameters
     log.debug("Instantiating `SLURMCluster` object")
     cluster = SLURMCluster(cores=n_cores,
+                           job_cpu=n_cores,
                            memory=mem_per_worker,
                            processes=processes_per_worker,
                            local_directory=slurm_wdir,
                            queue=partition,
                            python=sys.executable,
-                           job_directives_skip=["-t", "--mem"],
+                           job_directives_skip=skip_directives,
                            job_extra_directives=job_extra)
-                           # interface="asdf", # interface is set via `psutil.net_if_addrs()`
 
     # Compute total no. of workers and up-scale cluster accordingly
     if n_workers_startup < n_workers:
