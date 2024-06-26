@@ -698,8 +698,7 @@ def _cluster_waiter(
 def local_cluster_setup(
         n_workers: Optional[int] = None,
         mem_per_worker: Optional[str] = None,
-        interactive: bool = True,
-        start_client: bool = True) -> Union[Client, LocalCluster, None]:
+        interactive: bool = True) -> Union[Client, None]:
     """
     Start a local distributed Dask multi-processing cluster
 
@@ -715,18 +714,12 @@ def local_cluster_setup(
         If `True`, a confirmation dialog is displayed to ensure proper encapsulation
         of calls to `local_cluster_setup` inside a script's main module block.
         See Notes for details. If `interactive` is `False`, the dialog is not shown.
-    start_client : bool
-        DEPRECATED. Will be removed in next release.
-        If `True`, a distributed computing client is launched and attached to
-        the workers. If `start_client` is `False`, only a distributed
-        computing cluster is started to which compute-clients can connect.
 
     Returns
     -------
-    proc : object
-        A distributed computing client (if ``start_client = True``) or
-        a distributed computing cluster (otherwise). If a client cannot
-        be started, `proc` is set to `None`.
+    client : distributed.Client or None
+        A distributed computing client. If a client cannot be started,
+        `proc` is set to `None`.
 
     Notes
     -----
@@ -785,12 +778,6 @@ def local_cluster_setup(
         raise TypeError("%s %s"%(funcName, msg%(str(type(interactive)))))
     log.debug("Using `interactive = %s`", str(interactive))
 
-    # Determine if a dask client was requested
-    if not isinstance(start_client, bool) or start_client is False:
-        log.warning("The keyword `start_client` in `local_cluster_setup` is DEPRECATED and will be ignored.")
-        start_client = True
-
-    # ...if not, print warning/info message
     if not is_jupyter():
         msg = """\
         If you use a script to start a local parallel computing client, please ensure
@@ -826,9 +813,7 @@ def local_cluster_setup(
         client = Client()
     msg = "Local parallel computing client ready, dashboard accessible at %s"
     log.info(msg, client.cluster.dashboard_link)
-    if start_client:
-        return client
-    return client.cluster
+    return client
 
 
 def cluster_cleanup(client: Optional[Client] = None) -> None:

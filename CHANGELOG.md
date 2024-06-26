@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### NEW
 ### CHANGED
 ### REMOVED
+- As announced in the previous release the `start_client` has been removed
+  from `local_cluster_setup` (starting a dask `LocalCluster` always starts
+  a client anyway)
+
 ### DEPRECATED
 - Dropped support for Python 3.7
 
