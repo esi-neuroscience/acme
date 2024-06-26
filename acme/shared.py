@@ -62,7 +62,7 @@ def sizeOf(
     global callCount
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Protect against circular object references
     callCount += 1
@@ -127,7 +127,7 @@ def _scalar_parser(
     """
 
     # Get name of calling method/function
-    funcName = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)      # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Make sure `var` is a scalar-like number
     msg = "%s `%s` has to be %s between %s and %s, not %s"

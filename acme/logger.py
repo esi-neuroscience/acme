@@ -45,7 +45,7 @@ def prepare_log(
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Ensure `logname` can be processed
     if not isinstance(logname, str):

@@ -92,7 +92,7 @@ def lowpass_hard(
         taskID: Optional[int] = None) -> None:
     channel = arr_like[:, taskID]
     res = signal.filtfilt(b, a, channel, padlen=padlen)
-    h5name = os.path.join(res_dir, res_base +"{}.h5".format(taskID))
+    h5name = os.path.join(res_dir, f"{res_base}{taskID}.h5")
     with h5py.File(h5name, "w") as h5f:
         h5f.create_dataset(dset_name, data=res)
     return
@@ -156,7 +156,7 @@ class TestParallelMap():
         # Create tmp directory and create data-containers
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), tmpName)
         if useSLURM:
-            tempDir = "/cs/home/{}/{}".format(getpass.getuser(), tmpName)
+            tempDir = f"/cs/home/{getpass.getuser()}/{tmpName}"
         shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         sigName = os.path.join(tempDir, "sigdata.h5")
@@ -520,7 +520,7 @@ class TestParallelMap():
         with pytest.raises(KeyError) as keyerr:
             with h5py.File(colRes, "r") as h5col:
                 chNo = np.random.choice(self.nChannels, size=1)[0]
-                h5col["comp_{}".format(chNo)]["result_0"]
+                h5col[f"comp_{chNo}"]["result_0"]
         assert "unable to open external file" in str(keyerr.value)
 
         # Ensure `output_dir` is properly ignored if `write_worker_results` is `False`
@@ -563,7 +563,7 @@ class TestParallelMap():
 
         # Compare computed single-channel results to expected low-freq signal
         for chNo in range(self.nChannels):
-            h5name = res_base + "{}.h5".format(chNo)
+            h5name = f"{res_base}{chNo}.h5"
             with h5py.File(os.path.join(tempDir2, h5name), "r") as h5f:
                 assert np.mean(np.abs(h5f[dset_name][()] - self.orig[:, chNo])) < self.tol
 
@@ -834,7 +834,7 @@ class TestParallelMap():
         with h5py.File(pmap.results_container, "r") as h5col:
             dset = "comp_{}/result_{}"
             for chNo in range(self.nChannels):
-                assert len(h5col["comp_{}".format(chNo)].keys()) == 4
+                assert len(h5col[f"comp_{chNo}"].keys()) == 4
                 assert np.mean(np.abs(h5col[dset.format(chNo, 0)][()] - self.orig[:, chNo])) < self.tol
                 assert h5col[dset.format(chNo, 1)][()] == chNo
                 assert np.array_equal(h5col[dset.format(chNo, 2)][()], self.b)
@@ -861,7 +861,7 @@ class TestParallelMap():
             with h5py.File(pmap.results_container, "r") as h5single:
                 dset = "comp_{}/result_{}"
                 for chNo in range(self.nChannels):
-                    assert len(h5single["comp_{}".format(chNo)].keys()) == 4
+                    assert len(h5single[f"comp_{chNo}"].keys()) == 4
                     assert np.array_equal(h5single[dset.format(chNo, 0)][()], h5col[dset.format(chNo, 0)][()])
                     assert h5col[dset.format(chNo, 1)][()] == h5single[dset.format(chNo, 1)][()]
                     assert np.array_equal(h5col[dset.format(chNo, 2)][()], h5single[dset.format(chNo, 2)][()])
@@ -1118,10 +1118,10 @@ class TestParallelMap():
                 assert h5f["result_0"].is_virtual is True
                 assert np.array_equal(h5f["result_0"][()], h5col["result_0"][()])
                 for k in range(pmap.n_calls):
-                    assert len(h5f["comp_{}".format(k)].keys()) == 3
-                    assert h5f["comp_{}/{}".format(k, "result_1")][()] == k
-                    assert np.array_equal(h5f["comp_{}/{}".format(k, "result_2")][()], self.b)
-                    assert np.array_equal(h5f["comp_{}/{}".format(k, "result_3")][()], self.a)
+                    assert len(h5f[f"comp_{k}"].keys()) == 3
+                    assert h5f[f"comp_{k}/result_1"][()] == k
+                    assert np.array_equal(h5f[f"comp_{k}/result_2"][()], self.b)
+                    assert np.array_equal(h5f[f"comp_{k}/result_3"][()], self.a)
 
         # Same w/single output container
         with ParallelMap(lowpass_medium,
@@ -1140,7 +1140,7 @@ class TestParallelMap():
                 assert len(h5f.keys()) == pmap.n_calls + 1
                 for k in range(pmap.n_calls):
                     for rk in range(1,4):
-                        dset = "comp_{}/result_{}".format(k, rk)
+                        dset = f"comp_{k}/result_{rk}"
                         assert np.array_equal(h5f[dset], h5ref[dset])
 
         # Finally, ensure in-memory results-collection works w/multiple returns
@@ -1156,12 +1156,12 @@ class TestParallelMap():
             assert np.array_equal(h5ref["result_0"][()], resInMem[0])
             rCount = 1
             for k in range(pmap.n_calls):
-                assert h5ref["comp_{}/{}".format(k, "result_1")][()] == resInMem[rCount]
-                rCount +=1
-                assert np.array_equal(h5ref["comp_{}/{}".format(k, "result_2")][()], resInMem[rCount])
-                rCount +=1
-                assert np.array_equal(h5ref["comp_{}/{}".format(k, "result_3")][()], resInMem[rCount])
-                rCount +=1
+                assert h5ref[f"comp_{k}/result_1"][()] == resInMem[rCount]
+                rCount += 1
+                assert np.array_equal(h5ref[f"comp_{k}/result_2"][()], resInMem[rCount])
+                rCount += 1
+                assert np.array_equal(h5ref[f"comp_{k}/result_3"][()], resInMem[rCount])
+                rCount += 1
 
         # Clean up created results directories
         for folder in outDirs:
@@ -1752,12 +1752,12 @@ class TestParallelMap():
         if useSLURM:
 
             # Supply extra args to start client for actual tests
-            slurmOut = "/cs/home/{}/acme_out".format(getpass.getuser())
+            slurmOut = f"/cs/home/{getpass.getuser()}/acme_out"
             client = esi_cluster_setup(partition=defaultQ,
                                        n_workers=10,
-                                       job_extra=["--output={}".format(slurmOut)],
+                                       job_extra=[f"--output={slurmOut}"],
                                        interactive=False)
-            assert "--output={}".format(slurmOut) in client.cluster.job_header
+            assert f"--output={slurmOut}" in client.cluster.job_header
 
         else:
             client = esi_cluster_setup(partition="auto", interactive=False)

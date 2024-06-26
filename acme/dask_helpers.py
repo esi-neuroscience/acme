@@ -144,7 +144,7 @@ def esi_cluster_setup(
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Backwards compatibility: legacy keywords are converted to new nomenclature
     if any(kw in kwargs for kw in __deprecated__):
@@ -184,11 +184,10 @@ def esi_cluster_setup(
         # SLURM is not installed: either allocate `LocalCluster` or just leave
         if proc.returncode > 0:
             if interactive:
-                msg = "{name:s} SLURM does not seem to be installed on this machine " +\
-                    "({host:s}). Do you want to start a local multi-processing " +\
+                msg = f"{funcName} SLURM does not seem to be installed on this machine " +\
+                    f"({socket.gethostname()}). Do you want to start a local multi-processing " +\
                     "computing client instead? "
-                startLocal = user_yesno(msg.format(name=funcName, host=socket.gethostname()),
-                                        default="no")
+                startLocal = user_yesno(msg, default="no")
             else:
                 startLocal = True
             if startLocal:
@@ -224,7 +223,7 @@ def esi_cluster_setup(
                 gbQueues = np.unique([int(queue.split("GB")[0]) for queue in availPartitions if queue[0].isdigit()])
                 memDiff = np.abs(gbQueues - memEstimate)
                 queueIdx = np.where(memDiff == memDiff.min())[0][-1]
-                partition = "{}GBXS".format(gbQueues[queueIdx])
+                partition = f"{gbQueues[queueIdx]}GBXS"
             else:
                 partition = "E880"
                 mem_per_worker = f"{memEstimate} GB"
@@ -249,7 +248,7 @@ def esi_cluster_setup(
     if cores_per_worker is None:
         try:
             log.debug("Using `scontrol` to get partition info")
-            pc = subprocess.run("scontrol -o show partition {}".format(partition),
+            pc = subprocess.run(f"scontrol -o show partition {partition}",
                                 capture_output=True, check=True, shell=True, text=True)
             defMem = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
             log.debug("Found DefMemPerCPU=%d", defMem)
@@ -297,13 +296,11 @@ def esi_cluster_setup(
     if not any(option.startswith("--output") or option.startswith("-o") for option in job_extra):
         log.debug("Auto-populating `--output` setting for sbatch")
         usr = getpass.getuser()
-        slurm_wdir = "/cs/slurm/{usr:s}/{usr:s}_{date:s}"
-        slurm_wdir = slurm_wdir.format(usr=usr,
-                                       date=datetime.now().strftime('%Y%m%d-%H%M%S'))
+        slurm_wdir = f"/cs/slurm/{usr}/{usr}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         os.makedirs(slurm_wdir, exist_ok=True)
         log.debug("Using %s for slurm logs", slurm_wdir)
         out_files = os.path.join(slurm_wdir, "slurm-%j.out")
-        job_extra.append("--output={}".format(out_files))
+        job_extra.append(f"--output={out_files}")
         log.debug("Setting `--output=%s`", out_files)
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
@@ -394,7 +391,7 @@ def slurm_cluster_setup(
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Backwards compatibility: legacy keywords are converted to new nomenclature
     if any(kw in kwargs for kw in __deprecated__):
@@ -461,7 +458,7 @@ def slurm_cluster_setup(
 
     # Get memory limit (*in MB*) of chosen partition (guaranteed to exist, cf. above)
     log.debug("Use `scontrol` to fetch partition's memory limit")
-    pc = subprocess.run("scontrol -o show partition {}".format(partition),
+    pc = subprocess.run(f"scontrol -o show partition {partition}",
                         capture_output=True, check=True, shell=True, text=True)
     try:
         mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0]) - 500
@@ -622,7 +619,7 @@ def _get_slurm_partitions() -> List:
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Retrieve all partitions currently available in SLURM
     log.debug("Use `sinfo` to fetch available partitions")
@@ -657,7 +654,7 @@ def _cluster_waiter(
     wrkrs = count_online_workers(cluster)
     to = str(timedelta(seconds=timeout))[2:]
     fmt = "{desc}: {n}/{total} \t[elapsed time {elapsed} | timeout at " + to + "]"
-    ani = tqdm(desc="{} SLURM workers ready".format(funcName), total=total_workers,
+    ani = tqdm(desc=f"{funcName} SLURM workers ready", total=total_workers,
                leave=True, bar_format=fmt, initial=wrkrs, position=0)
     counter = 0
     while count_online_workers(cluster) < total_workers and counter < timeout:
@@ -673,11 +670,9 @@ def _cluster_waiter(
         msg = "SLURM workers could not be started within given time-out " +\
               "interval of %d seconds"
         log.info(msg, timeout)
-        query = "{name:s} Do you want to [k]eep waiting for 60s, [a]bort or " +\
-                "[c]ontinue with {wrk:d} workers?"
-        choice = user_input(query.format(name=funcName, wrk=wrkrs),
-                            valid=["k", "a", "c"], default="c", timeout=interactive_wait)
-
+        query = f"{funcName} Do you want to [k]eep waiting for 60s, [a]bort or " +\
+                f"[c]ontinue with {wrkrs} workers?"
+        choice = user_input(query, valid=["k", "a", "c"], default="c", timeout=interactive_wait)
         if choice == "k":
             return _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
         elif choice == "a":
@@ -686,9 +681,9 @@ def _cluster_waiter(
             return True
         else:
             if wrkrs == 0:
-                query = "{} Cannot continue with 0 workers. Do you want to " +\
+                query = f"{funcName} Cannot continue with 0 workers. Do you want to " +\
                         "[k]eep waiting for 60s or [a]bort?"
-                choice = user_input(query.format(funcName), valid=["k", "a"],
+                choice = user_input(query, valid=["k", "a"],
                                     default="a", timeout=60)
                 if choice == "k":
                     _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
@@ -781,7 +776,7 @@ def local_cluster_setup(
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Determine if cluster allocation is happening interactively
     if not isinstance(interactive, bool):
@@ -816,9 +811,9 @@ def local_cluster_setup(
     # Additional safe-guard: if a script is executed, double-check with the user
     # for proper main idiom usage
     if interactive:                                                     # pragma: no cover
-        msg = "{name:s} If launched from a script, did you wrap your code " +\
+        msg = f"{funcName} If launched from a script, did you wrap your code " +\
             "inside a __main__ module block?"
-        if not user_yesno(msg.format(name=funcName), default="no"):
+        if not user_yesno(msg, default="no"):
             return None
 
     # Start the actual distributed client
@@ -858,7 +853,7 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Attempt to establish connection to dask client
     if client is None:
@@ -879,12 +874,12 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
 
     # Prepare message for prompt
     if client.cluster.__class__.__name__ == "LocalCluster":
-        userClust = "LocalCluster hosted on {}".format(client.scheduler_info()["address"])
+        userClust = f"LocalCluster hosted on {client.scheduler_info()["address"]}"
     else:
         userName = getpass.getuser()
         outDir = client.cluster.job_header.partition("--output=")[-1]
-        jobID = outDir.partition("{}_".format(userName))[-1].split(os.sep)[0]
-        userClust = "cluster {0}_{1}".format(userName, jobID)
+        jobID = outDir.partition(f"{userName}_")[-1].split(os.sep)[0]
+        userClust = f"cluster {userName}_{jobID}"
     nWorkers = count_online_workers(client.cluster)
 
     # First gracefully shut down all workers, then close client

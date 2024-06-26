@@ -342,9 +342,9 @@ class ACMEdaemon(object):
                     logfile = self.out_dir
                 else:
                     logfile = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
-                logfile = os.path.join(logfile, "ACME_{func:s}_{date:s}.log")   # type: ignore
-                logfile = logfile.format(func=self.func.__name__,
-                                         date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
+                logfile = os.path.join(
+                    logfile,
+                    f"ACME_{self.func.__name__}_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log")   # type: ignore
             else:
                 logfile = None
         elif isinstance(logfile, str):
@@ -383,11 +383,10 @@ class ACMEdaemon(object):
         else:
             # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
             if self.has_slurm:
-                outDir = "/cs/home/{usr:s}/".format(usr=getpass.getuser())
+                outDir = f"/cs/home/{getpass.getuser()}/"
             else:                                                       # pragma: no cover
                 outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
-            outDir = os.path.join(outDir, "ACME_{date:s}")
-            outDir = outDir.format(date=datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f'))
+            outDir = os.path.join(outDir, f"ACME_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}")
         log.debug("Using output directory %s", outDir)
 
         # Unless specifically denied by the user, each worker stores results
@@ -396,7 +395,7 @@ class ACMEdaemon(object):
         self.out_dir = str(outDir)                                      # type: ignore
         if not single_file and not write_pickle:
             log.debug("Preparing payload directory for HDF5 containers")
-            payloadName = "{}_payload".format(self.func.__name__)
+            payloadName = f"{self.func.__name__}_payload"
             outputDir = os.path.join(self.out_dir, payloadName)         # type: ignore
         else:
             msg = "Either single-file output or pickling was requested. " +\
@@ -421,7 +420,7 @@ class ACMEdaemon(object):
             log.debug("Pickling was requested")
         else:
             fExt = "h5"
-            self.results_container = os.path.join(self.out_dir, "{}.h5".format(self.func.__name__))     # type: ignore
+            self.results_container = os.path.join(self.out_dir, f"{self.func.__name__}.h5")     # type: ignore
             log.debug("Using HDF5 storage %s", self.results_container)
 
         # By default, `results_container` is a collection of links that point to
@@ -438,7 +437,7 @@ class ACMEdaemon(object):
                 msg = "Created group comp_%d in single shared results container"
                 with h5py.File(self.results_container, "w") as h5f:
                     for i in self.task_ids:
-                        h5f.create_group("comp_{}".format(i))
+                        h5f.create_group(f"comp_{i}")
                         log.debug(msg, i)
             else:
                 msg = "Created unique dataset 'result_0' with shape %s " +\
@@ -451,10 +450,8 @@ class ACMEdaemon(object):
 
         else:
             self.kwargv["outFile"] = [os.path.join(outputDir,
-                                                    "{}_{}.{}".format(self.func.__name__,
-                                                                        taskID,
-                                                                        fExt))
-                                                    for taskID in self.task_ids]
+                                                   f"{self.func.__name__}_{taskID}.{fExt}")
+                                                   for taskID in self.task_ids]
             if not write_pickle:
 
                 # If no output shape provided, generate links to external datasets;
@@ -466,7 +463,7 @@ class ACMEdaemon(object):
                     with h5py.File(self.results_container, "w") as h5f:
                         for i, fname in enumerate(self.kwargv["outFile"]):
                             relPath = os.path.join(payloadName, os.path.basename(fname))
-                            h5f["comp_{}".format(i)] = h5py.ExternalLink(relPath, "/")
+                            h5f[f"comp_{i}"] = h5py.ExternalLink(relPath, "/")
                             log.debug(msg, i, relPath)
                 else:
 
@@ -548,8 +545,8 @@ class ACMEdaemon(object):
         # here as well; if execution is terminated, remove auto-generated output directory
         goOn = True
         if setup_interactive:
-            msg = "Do you want to continue executing {fname:s} with the provided arguments?"
-            if not user_yesno(msg.format(fname=self.func.__name__), default="yes"):
+            msg = f"Do you want to continue executing {self.func.__name__} with the provided arguments?"
+            if not user_yesno(msg, default="yes"):
                 if self.out_dir is not None:
                     shutil.rmtree(self.out_dir, ignore_errors=True)
                 goOn = False
@@ -741,7 +738,6 @@ class ACMEdaemon(object):
 
         msg = "Running %d random workers evaluating %s for max. %d seconds"
         log.debug(msg%(len(dryRunIdx), self.func.__name__, runTime))    # type: ignore
-        wmsg = "Launching worker #{wrknum:d}"
         for i, idx in enumerate(dryRunIdx):                             # type: ignore
 
             # Set up dedicated process to execute user-provided function w/allocated args/kwargs
@@ -752,7 +748,7 @@ class ACMEdaemon(object):
             # Run user-func for max. `runTime` seconds (or worker finishes),
             # get memory footprint every second
             proc.start()
-            with tqdm.tqdm(desc=wmsg.format(wrknum=idx),
+            with tqdm.tqdm(desc=f"Launching worker #{idx}",
                            total=runTime,
                            bar_format=self.tqdmFormat,
                            position=0) as pbar:
@@ -1083,7 +1079,7 @@ class ACMEdaemon(object):
                                     for retVal in missingReturns:
                                         for i, fname in enumerate(values):
                                             relPath = os.path.join(os.path.basename(payloadDir), os.path.basename(fname))
-                                            h5r["comp_{}/{}".format(i, retVal)] = h5py.ExternalLink(relPath, retVal)
+                                            h5r[f"comp_{i}/{retVal}"] = h5py.ExternalLink(relPath, retVal)
                                             log.debug("Added return value via external link comp_%d/%s", i, retVal)
 
                         finalMsg = finalMsg%(self.results_container)
@@ -1160,7 +1156,7 @@ class ACMEdaemon(object):
             if singleFile:
                 lock = dd.lock.Lock(name=os.path.basename(fname))       # type: ignore
                 lock.acquire()
-                grpName = "comp_{}/".format(taskID)
+                grpName = f"comp_{taskID}/"
 
             if not isinstance(result, (list, tuple)):
                 result = [result]
@@ -1171,7 +1167,7 @@ class ACMEdaemon(object):
                     if stackingDim is None:
                         if not all(isinstance(value, (numbers.Number, str)) for value in result):
                             for rk, res in enumerate(result):
-                                h5f.create_dataset(grpName + "result_{}".format(rk), data=res)
+                                h5f.create_dataset(f"{grpName}result_{rk}", data=res)
                                 log.debug("Created new dataset `result_%d` in %s", rk, fname)
                         else:
                             h5f.create_dataset(grpName + "result_0", data=result)
@@ -1183,11 +1179,11 @@ class ACMEdaemon(object):
                             h5f["result_0"][tuple(idx)] = result[0]
                             log.debug("Wrote to pre-allocated dataset `result_0` in %s", fname)
                             for rk, res in enumerate(result[1:]):
-                                h5f.create_dataset(grpName + "result_{}".format(rk + 1), data=res)
+                                h5f.create_dataset(f"{grpName}result_{rk + 1}", data=res)
                                 log.debug("Created new dataset `result_%d` in %s", rk+1, fname)
                         else:
                             for rk, res in enumerate(result):
-                                h5f.create_dataset(grpName + "result_{}".format(rk), data=res)
+                                h5f.create_dataset(f"{grpName}result_{rk}", data=res)
                                 log.debug("Created new dataset `result_%d` in %s", rk, fname)
 
                 if singleFile:

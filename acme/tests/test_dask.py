@@ -96,13 +96,13 @@ def test_cluster_setup():
         with pytest.raises(ValueError):
             slurm_cluster_setup(partition=defaultQ, job_extra=["--output=invalid=path"])
         cluster_cleanup()
-        slurmOut = "/tmp/{}".format(getpass.getuser())
+        slurmOut = f"/tmp/{getpass.getuser()}"
         client = slurm_cluster_setup(partition=defaultQ,
                                      n_workers=1,
                                      timeout=120,
-                                     job_extra=["--output={}".format(slurmOut), "--job-name='averycustomjobname'"],
+                                     job_extra=[f"--output={slurmOut}", "--job-name='averycustomjobname'"],
                                      interactive=False)
-        assert "--output={}".format(slurmOut) in client.cluster.job_header
+        assert f"--output={slurmOut}" in client.cluster.job_header
         assert 'averycustomjobname' in client.cluster.job_header
         cluster_cleanup(client)
 
