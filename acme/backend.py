@@ -28,8 +28,8 @@ import tqdm
 import h5py
 import dask
 import dask.distributed as dd
-import dask_jobqueue as dj
 import numpy as np
+from dask_jobqueue import SLURMCluster
 from typing import TYPE_CHECKING, Optional, Any, Union, List
 from numpy.typing import ArrayLike
 
@@ -862,7 +862,7 @@ class ACMEdaemon(object):
                 return values
 
         # Depending on the used dask cluster object, point to respective log info
-        if isinstance(self.client.cluster, dj.SLURMCluster):
+        if isinstance(self.client.cluster, SLURMCluster):
             logFiles = self.client.cluster.job_header.split("--output=")[1].replace("%j", "{}")
             logDir = os.path.split(logFiles)[0]
         else:                                                           # pragma: no cover
