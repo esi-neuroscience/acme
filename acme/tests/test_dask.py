@@ -120,7 +120,7 @@ def test_cluster_setup():
                                            interactive=False)
                 memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
                 assert memory.size == 1
-                assert np.round(memory / 1000**3)[0] == 8
+                assert np.ceil(memory / 1000**3)[0] == 8
 
                 # Invoking `esi_cluster_setup` with existing client must not start a new one
                 clnt = esi_cluster_setup(partition="16GBXS", n_workers=2, interactive=False)
