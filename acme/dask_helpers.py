@@ -464,26 +464,21 @@ def slurm_cluster_setup(
     pc = subprocess.run("scontrol -o show partition {}".format(partition),
                         capture_output=True, check=True, shell=True, text=True)
     try:
-        mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0])
+        mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0]) - 500
     except IndexError:
         mem_lim = np.inf                                            # type: ignore
     log.debug("Found a limit of  %s MB", str(mem_lim))
-
-    # Prepare list of directives to skip in generated sbatch script, e.g.,
-    # do not set '--mem' explicitly if using partition maxima
-    skip_directives = ["-t 00:30:00"]
 
     # Consolidate requested memory with chosen partition (or assign default memory)
     if mem_per_worker is None:
         if np.isinf(mem_lim):
             try:
-                mem_per_worker = pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0] + "MB"
+                mem_per_worker = f"{int(pc.stdout.strip().partition('DefMemPerCPU=')[-1].split()[0]) - 500}MB"
             except IndexError:
                 raise ValueError("Cannot infer any default memory setting from partition %s"%partition)
         else:
             mem_per_worker = str(mem_lim) + "MB"
         log.debug("Using partition limit of %s MB", str(mem_lim))
-        skip_directives.append("--mem")
     else:
         if "MB" in mem_per_worker:
             mem_req = int(memVal)
@@ -494,7 +489,6 @@ def slurm_cluster_setup(
                 "Capping memory at partition limit. "
             log.warning(msg, mem_lim, partition)
             mem_per_worker = str(int(mem_lim)) + "MB"
-            skip_directives.append("--mem")
 
     # Parse requested timeout period
     try:
@@ -590,7 +584,7 @@ def slurm_cluster_setup(
                            local_directory=slurm_wdir,
                            queue=partition,
                            python=sys.executable,
-                           job_directives_skip=skip_directives,
+                           job_directives_skip=["-t 00:30:00"],
                            job_extra_directives=job_extra)
 
     # Compute total no. of workers and up-scale cluster accordingly

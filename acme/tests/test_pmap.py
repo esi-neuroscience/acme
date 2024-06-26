@@ -17,6 +17,7 @@ import inspect
 import subprocess
 import getpass
 import time
+import math
 import itertools
 import logging
 import h5py
@@ -211,27 +212,27 @@ class TestParallelMap():
         # not enough positional args
         with pytest.raises(ValueError) as valerr:
             ParallelMap(simple_func, 4, setup_interactive=False)
-            assert "simple_func expects 2 positional arguments ('x', 'y'), found 1" in str(valerr.value)
+        assert "simple_func expects 2 positional arguments ('x', 'y'), found 1" in str(valerr.value)
         # invalid kwargs
         with pytest.raises(ValueError) as valerr:
             ParallelMap(simple_func, 4, 4, z=3, w=4, setup_interactive=False)
-            assert "simple_func accepts at maximum 1 keyword arguments ('z'), found 2" in str(valerr.value)
+        assert "simple_func accepts at maximum 1 keyword arguments ('z'), found 2" in str(valerr.value)
         # ill-posed parallelization: two candidate lists for input distribution
         with pytest.raises(ValueError) as valerr:
             ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], setup_interactive=False)
-            assert "automatic input distribution failed: found 2 objects containing 2 to 4 elements" in str(valerr.value)
+        assert "automatic input distribution failed: found 2 objects containing 2 to 4 elements" in str(valerr.value)
         # ill-posed parallelization: two candidate lists for input distribution (`x` and `w`)
         with pytest.raises(ValueError) as valerr:
             ParallelMap(medium_func, [1, 2, 3], None, w=[np.ones((3,3)), 2 * np.ones((3,3))], setup_interactive=False)
-            assert "automatic input distribution failed: found 2 objects containing 2 to 3 elements." in str(valerr.value)
+        assert "automatic input distribution failed: found 2 objects containing 2 to 3 elements." in str(valerr.value)
         # invalid input spec
         with pytest.raises(ValueError) as valerr:
             ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=3, setup_interactive=False)
-            assert "No object has required length of 3 matching `n_inputs`" in str(valerr.value)
+        assert "No object has required length of 3 matching `n_inputs`" in str(valerr.value)
         # invalid input spec: `w` expects a NumPy array, thus it is not considered for input distribution
         with pytest.raises(ValueError) as valerr:
             ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=8, setup_interactive=False)
-            assert "No object has required length of 8 matching `n_inputs`" in str(valerr.value)
+        assert "No object has required length of 8 matching `n_inputs`" in str(valerr.value)
 
         # Check if other parameters  are parsed correctly
         with pytest.raises(TypeError):
@@ -290,7 +291,7 @@ class TestParallelMap():
             client.retire_workers(list(client.scheduler_info()['workers']), close_workers=True)
             with pytest.raises(RuntimeError) as rerr:
                 pmap.daemon.compute()
-                assert "no active workers found" in str(rerr.value)
+            assert "no active workers found" in str(rerr.value)
 
             # Annihilate client slot and ensure pmap does not do anything funky
             pmap.daemon.client = None
@@ -299,7 +300,7 @@ class TestParallelMap():
         # Finally, test ACMEdaemon only accepts `ParallelMap` objects
         with pytest.raises(TypeError) as tperr:
             ACMEdaemon("invalid")
-            assert "`pmap` has to be a `ParallelMap` instance, not <class 'str'>" in str(tperr.value)
+        assert "`pmap` has to be a `ParallelMap` instance, not <class 'str'>" in str(tperr.value)
 
         # Clean up testing folder and any running clients
         if testclient is None:
@@ -520,7 +521,7 @@ class TestParallelMap():
             with h5py.File(colRes, "r") as h5col:
                 chNo = np.random.choice(self.nChannels, size=1)[0]
                 h5col["comp_{}".format(chNo)]["result_0"]
-            assert "unable to open external file" in str(keyerr.value)
+        assert "unable to open external file" in str(keyerr.value)
 
         # Ensure `output_dir` is properly ignored if `write_worker_results` is `False`
         pmap = ParallelMap(lowpass_simple,
@@ -605,7 +606,7 @@ class TestParallelMap():
                 assert "8GB" in partition
                 memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
                 assert memory.size == 1
-                assert round(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
+                assert math.ceil(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
 
         # Wait a sec (literally) for dask to collect its bearings (after the
         # `get_client` above) before proceeding
@@ -986,7 +987,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_dtype` has to be a string" in str(tperr)
+        assert "`result_dtype` has to be a string" in str(tperr)
         with pytest.raises(TypeError) as tperr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -996,7 +997,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_dtype` has to be a valid NumPy datatype" in str(tperr)
+        assert "`result_dtype` has to be a valid NumPy datatype" in str(tperr)
 
         # Ensure borked shapes are caught
         with pytest.raises(TypeError) as tperr:
@@ -1007,7 +1008,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` has to be either `None` or tuple" in str(tperr)
+        assert "`result_shape` has to be either `None` or tuple" in str(tperr)
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -1016,7 +1017,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` must contain exactly one `None`" in str(valerr)
+        assert "`result_shape` must contain exactly one `None`" in str(valerr)
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -1025,7 +1026,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` must contain exactly one `None`" in str(valerr)
+        assert "`result_shape` must contain exactly one `None`" in str(valerr)
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -1034,7 +1035,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` must only contain numerical values" in str(valerr)
+        assert "`result_shape` must only contain numerical values" in str(valerr)
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -1043,7 +1044,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` must only contain non-negative integers" in str(valerr)
+        assert "`result_shape` must only contain non-negative integers" in str(valerr)
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -1052,7 +1053,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` must only contain non-negative integers" in str(valerr)
+        assert "`result_shape` must only contain non-negative integers" in str(valerr)
 
         # Emergency pickling
         with ParallelMap(pickle_func,
@@ -1226,7 +1227,7 @@ class TestParallelMap():
                             partition=defaultQ,
                             setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "Pickling of results does not support single output file creation" in str(valerr.value)
+        assert "Pickling of results does not support single output file creation" in str(valerr.value)
 
         # Test emergency pickling
         with ParallelMap(pickle_func,
@@ -1311,7 +1312,7 @@ class TestParallelMap():
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
         with pytest.raises(RuntimeError) as runerr:
             pmap.compute()
-            assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
+        assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
         pmap = ParallelMap(pickle_func,
                            self.sig,
                            self.b,
@@ -1326,7 +1327,7 @@ class TestParallelMap():
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
         with pytest.raises(RuntimeError) as runerr:
             pmap.compute()
-            assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
+        assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
 
         # Clean up testing folder
         for folder in outDirs:

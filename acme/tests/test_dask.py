@@ -130,7 +130,7 @@ def test_cluster_setup():
                 # Attempt to start a client on ppc64le
                 with pytest.raises(ValueError) as valerr:
                     esi_cluster_setup(partition="E880")
-                    assert "ppc64le from submitting host with architecture x86_64" in str(valerr.value)
+                assert "ppc64le from submitting host with architecture x86_64" in str(valerr.value)
 
                 # Define queue for testing CPU allocations below
                 tmpQ = "24GBXS"
@@ -140,7 +140,7 @@ def test_cluster_setup():
                 # Attempt to start a client on x86
                 with pytest.raises(ValueError) as valerr:
                     esi_cluster_setup(partition="8GBXS")
-                    assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
+                assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
 
                 # Define queue for testing CPU allocations below
                 tmpq = defaultQ
@@ -182,14 +182,14 @@ def test_cluster_setup():
             # Ensure job-list parsing works
             with pytest.raises(TypeError) as tperr:
                 esi_cluster_setup(partition=defaultQ, job_extra="invalid")
-                assert "`job_extra` has to be a list, not <class 'str'>" in str(tperr.value)
+            assert "`job_extra` has to be a list, not <class 'str'>" in str(tperr.value)
 
     else:
 
         # Trigger an exception by invoking `slurm_cluster_setup`` on non-SLURM node
         with pytest.raises(IOError) as err:
             slurm_cluster_setup()
-            assert "Cannot access SLURM queuing system" in str(err)
+        assert "Cannot access SLURM queuing system" in str(err)
 
     # Check if `cluster_cleanup` performs diligent error checking
     with pytest.raises(TypeError):

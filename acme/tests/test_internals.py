@@ -28,7 +28,7 @@ def test_sizeof():
     acme.shared.callMax = 100
     with pytest.raises(RecursionError) as recerr:
         sizeOf(infDict, "infdict")
-        assert f"maximum recursion depth {acme.shared.callMax} exceeded" in str(recerr.value)
+    assert f"maximum recursion depth {acme.shared.callMax} exceeded" in str(recerr.value)
     acme.shared.callMax = callMax
 
     # Ensure well-behaved dicts are processed correctly (`arrsize` denotes array size in MB)
@@ -44,14 +44,14 @@ def test_scalarparser():
     _scalar_parser(3.0, ntype="int_like")
     with pytest.raises(ValueError) as valerr:
         _scalar_parser(3.14, ntype="int_like")
-        assert "`varname` has to be an integer between -inf and inf, not 3.14" in str(valerr.value)
+    assert "`varname` has to be an integer between -inf and inf, not 3.14" in str(valerr.value)
 
     # Ensure limits are inclusive and respected
     _scalar_parser(3, lims=[-4, 4])
     _scalar_parser(3, lims=[3, 3])
     with pytest.raises(ValueError) as valerr:
         _scalar_parser(3, lims=[0, 2])
-        assert "`varname` has to be an integer between 0 and 2, not 3" in str(valerr.value)
+    assert "`varname` has to be an integer between 0 and 2, not 3" in str(valerr.value)
 
     # Anything not-int-like should parse fine too
     _scalar_parser(3, ntype="something", lims=[3, 3])
@@ -59,7 +59,7 @@ def test_scalarparser():
     # Anything not number-like should not
     with pytest.raises(TypeError) as tperr:
         _scalar_parser("notAnumber")
-        assert "`varname` has to be a scalar, not <class 'str'>" in str(tperr.value)
+    assert "`varname` has to be a scalar, not <class 'str'>" in str(tperr.value)
 
 def test_logger():
 
