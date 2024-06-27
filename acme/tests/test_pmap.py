@@ -931,6 +931,23 @@ class TestParallelMap():
                     assert np.mean(np.abs(h5f["result_0"][()] - self.orig[:, chNo])) < self.tol
                     assert np.array_equal(h5col["result_0"][chNo, :], h5f["result_0"][()])
 
+        # As above but don't specify `nSamples`
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         result_shape=(None, np.inf),
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        infRes = str(pmap.results_container)
+
+        # Ensure not specifying `nSamples` did not change anything
+        with h5py.File(colRes, "r") as h5col:
+            with h5py.File(infRes, "r") as h5inf:
+                assert np.array_equal(h5col["result_0"][()], h5inf["result_0"][()])
+
         # Same but don't use a virtual dataset and transpose the final array
         with ParallelMap(lowpass_simple,
                          sigName,
@@ -942,15 +959,94 @@ class TestParallelMap():
             pmap.compute()
         outDirs.append(pmap.out_dir)
 
+        singleRes = str(pmap.results_container)
+
         # Ensure only one (data) file was generated
         assert glob(os.path.join(pmap.out_dir, "*.h5")) == [pmap.results_container]
 
         # Compare single file to virtual dataset
         with h5py.File(colRes, "r") as h5col:
-            with h5py.File(pmap.results_container, "r") as h5single:
+            with h5py.File(singleRes, "r") as h5single:
                 assert len(h5single.keys()) == 1
                 assert h5single["result_0"].is_virtual is False
                 assert np.array_equal(h5single["result_0"][()].T, h5col["result_0"][()])
+
+        # Use a resizable single hdf container (not specifying `nSamples`)
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         result_shape=(np.inf, None),
+                         single_file=True,
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        singleInfRes = str(pmap.results_container)
+
+        # Ensure not specifying `nSamples` did not change anything
+        with h5py.File(singleRes, "r") as h5single:
+            with h5py.File(singleInfRes, "r") as h5singleinf:
+                assert np.array_equal(h5single["result_0"][()], h5singleinf["result_0"][()])
+
+        # More elaborate stacking/expendable dimension
+        with ParallelMap(simple_func,
+                         [elem * np.ones((3, 3)) for elem in [2, 4]],
+                         4,
+                         result_shape=(3, None, 3),
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        tripleDim = str(pmap.results_container)
+
+        with ParallelMap(simple_func,
+                         [elem * np.ones((3, 3)) for elem in [2, 4]],
+                         4,
+                         result_shape=(np.inf, None, 3),
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        tripleDimInf = str(pmap.results_container)
+
+        with h5py.File(tripleDim, "r") as h5triple:
+            with h5py.File(tripleDimInf, "r") as h5tripleinf:
+                assert np.array_equal(h5triple["result_0"][()], h5tripleinf["result_0"][()])
+
+        with ParallelMap(simple_func,
+                         [elem * np.ones((3, 3)) for elem in [2, 4]],
+                         4,
+                         result_shape=(3, None, 3),
+                         partition=defaultQ,
+                         single_file=True,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        tripleDimSingle = str(pmap.results_container)
+
+        with ParallelMap(simple_func,
+                         [elem * np.ones((3, 3)) for elem in [2, 4]],
+                         4,
+                         result_shape=(np.inf, None, 3),
+                         partition=defaultQ,
+                         single_file=True,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        tripleDimSingleInf = str(pmap.results_container)
+
+        with h5py.File(tripleDimSingle, "r") as h5triple:
+            with h5py.File(tripleDimSingleInf, "r") as h5tripleinf:
+                assert np.array_equal(h5triple["result_0"][()], h5tripleinf["result_0"][()])
+
+        with h5py.File(tripleDim, "r") as h5triple:
+            with h5py.File(tripleDimSingleInf, "r") as h5tripleinf:
+                assert np.array_equal(h5triple["result_0"][()], h5tripleinf["result_0"][()])
 
         # Finally, ensure in-memory results-collection works as expected
         with ParallelMap(lowpass_simple,
@@ -1054,6 +1150,25 @@ class TestParallelMap():
                              setup_interactive=False) as pmap:
                 pmap.compute()
         assert "`result_shape` must only contain non-negative integers" in str(valerr)
+        with pytest.raises(ValueError) as valerr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=(None, np.inf),
+                             partition=defaultQ,
+                             write_worker_results=False,
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+        assert "`np.inf` in `result_shape` is only valid if `write_worker_results` is `True`" in str(valerr)
+        with pytest.raises(ValueError) as valerr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=(None, np.inf, np.inf),
+                             partition=defaultQ,
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+        assert "cannot use more than one `np.inf` in `result_shape`" in str(valerr)
 
         # Emergency pickling
         with ParallelMap(pickle_func,

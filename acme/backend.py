@@ -277,17 +277,21 @@ class ACMEdaemon(object):
             rShape = list(result_shape)
             self.stacking_dim = result_shape.index(None)                # type: ignore
             rShape[self.stacking_dim] = self.n_calls                    # type: ignore
-            if write_worker_results:
-                self.kwargv["stackingDim"] = [self.stacking_dim]
 
+            if not write_worker_results and any(np.isinf(spec) for spec in rShape):
+                msg = "%s using `np.inf` in `result_shape` is only valid if `write_worker_results` is `True`"
+                raise ValueError(msg%self.objName)
+            if rShape.count(np.inf) > 1:
+                msg = "%s cannot use more than one `np.inf` in `result_shape`"
+                raise ValueError(msg%self.objName)
             if not all(isinstance(spec, numbers.Number) for spec in rShape):
                 msg = "%s `result_shape` must only contain numerical values"
                 raise ValueError(msg%self.objName)
-            if any(spec < 0 or int(spec) != spec for spec in rShape):   # type: ignore
+            if any(spec < 0 or int(spec) != spec or np.isnan(spec) for spec in rShape if not np.isinf(spec)):   # type: ignore
                 msg = "%s `result_shape` must only contain non-negative integers"
                 raise ValueError(msg%self.objName)
 
-            self.result_shape = tuple(rShape)                           # type: ignore
+            self.result_shape = tuple(rShape)
             msg = "Found `result_shape = %s`. Set stacking dimension to %d"
             log.debug(msg, str(result_shape), self.stacking_dim)
 
@@ -298,6 +302,10 @@ class ACMEdaemon(object):
                 msg += "Original error message below:\n%s"
                 raise TypeError(msg%(self.objName, str(exc)))
             log.debug("Set `result_dtype = %s`", self.result_dtype)
+
+            if write_worker_results:
+                self.kwargv["stackingDim"] = [self.stacking_dim]
+
         else:
             log.debug("Found `result_shape = %s`", str(result_shape))
             log.debug("Found `result_dtype = %s`", str(result_dtype))
@@ -440,11 +448,18 @@ class ACMEdaemon(object):
                         h5f.create_group(f"comp_{i}")
                         log.debug(msg, i)
             else:
+                if np.inf in self.result_shape:
+                    actShape = tuple(spec if spec is not np.inf else 1 for spec in self.result_shape)
+                    maxShape = tuple(spec if spec is not np.inf else None for spec in self.result_shape)
+                else:
+                    actShape = self.result_shape
+                    maxShape = None
                 msg = "Created unique dataset 'result_0' with shape %s " +\
                     "in single shared results container"
                 with h5py.File(self.results_container, "w") as h5f:
                     h5f.create_dataset("result_0",
-                                       shape=self.result_shape,
+                                       shape=actShape,
+                                       maxshape=maxShape,
                                        dtype=self.result_dtype)
                     log.debug(msg, str(self.result_shape))
 
@@ -467,19 +482,35 @@ class ACMEdaemon(object):
                             log.debug(msg, i, relPath)
                 else:
 
-                    # Assemble virtual dataset
-                    ShapeSource = list(self.result_shape)               # type: ignore
-                    ShapeSource.pop(self.stacking_dim)
-                    ShapeSource = tuple(ShapeSource)
-                    layout = h5py.VirtualLayout(shape=self.result_shape, dtype=self.result_dtype)   # type: ignore
-                    idx = [slice(None)] * len(self.result_shape)        # type: ignore
+                    VSourceShape = [spec if spec is not np.inf else None for spec in self.result_shape]
+                    VSourceShape.pop(self.stacking_dim)
+                    VSourceShape = tuple(VSourceShape)
+
+                    # Account for resizable datasets
+                    if None in VSourceShape:
+                        resActShape = tuple(spec if spec is not np.inf else 1 for spec in self.result_shape)
+                        resMaxShape = tuple(spec if spec is not np.inf else None for spec in self.result_shape)
+                        vsActShape = tuple(spec if spec is not None else 1 for spec in VSourceShape)
+                        vsMaxShape = VSourceShape
+                    else:
+                        resActShape = self.result_shape
+                        resMaxShape = None
+                        vsActShape = VSourceShape
+                        vsMaxShape = None
+                    layout = h5py.VirtualLayout(shape=resActShape,
+                                                dtype=self.result_dtype,
+                                                maxshape=resMaxShape)   # type: ignore
+                    idx = [slice(None) if spec is not np.inf else slice(h5py.h5s.UNLIMITED) for spec in self.result_shape]
+                    jdx = list(idx)
+                    jdx.pop(self.stacking_dim)
+
                     msg = "Created virtual dataset result_0' with shape " +\
                         "%s in results container"
                     for i, fname in enumerate(self.kwargv["outFile"]):
                         idx[self.stacking_dim] = i                      # type: ignore
                         relPath = os.path.join(payloadName, os.path.basename(fname))
-                        vsource = h5py.VirtualSource(fname, "result_0", shape=ShapeSource)
-                        layout[tuple(idx)] = vsource
+                        vsource = h5py.VirtualSource(fname, "result_0", shape=vsActShape, maxshape=vsMaxShape)
+                        layout[tuple(idx)] = vsource[tuple(jdx)]
                     with h5py.File(self.results_container, "w", libver="latest") as h5f:
                         h5f.create_virtual_dataset("result_0", layout)
                         log.debug(msg, self.result_shape)
@@ -609,7 +640,7 @@ class ACMEdaemon(object):
             log.debug("Detected running client %s", str(self.client))
             if stop_client == "auto":
                 self.stop_client = False                                # type: ignore
-                msg = "%s Changing `stop_client` from `'auto'` to `False` " +\
+                msg = "Changing `stop_client` from `'auto'` to `False` " +\
                     "to not terminate external client"
                 log.debug(msg)
             self.n_workers = count_online_workers(self.client.cluster)  # type: ignore
@@ -1174,13 +1205,27 @@ class ACMEdaemon(object):
                             log.debug("Created new dataset `result_0` in %s", fname)
                     else:
                         if singleFile:
-                            idx = [slice(None)] * len(h5f["result_0"].shape)    # type: ignore
+                            dset = h5f["result_0"]
+                            idx = [slice(None)] * len(dset.shape)    # type: ignore
                             idx[stackingDim] = taskID                           # type: ignore
-                            h5f["result_0"][tuple(idx)] = result[0]
+                            if None in dset.maxshape:
+                                if len(result[0].shape) < len(idx):
+                                    lenDim = list(set(result[0].shape).difference(dset.maxshape))
+                                    if len(lenDim) == 0:
+                                        lenDim = result[0].shape[0]
+                                    else:
+                                        lenDim = lenDim[0]
+                                    actShape = tuple(spec if spec is not None else lenDim for spec in dset.maxshape)
+                                else:
+                                    actShape = list(result[0].shape)
+                                    actShape[stackingDim] = dset.maxshape[stackingDim]
+                                    actShape = tuple(actShape)
+                                dset.resize(actShape)
+                            dset[tuple(idx)] = result[0]
                             log.debug("Wrote to pre-allocated dataset `result_0` in %s", fname)
                             for rk, res in enumerate(result[1:]):
                                 h5f.create_dataset(f"{grpName}result_{rk + 1}", data=res)
-                                log.debug("Created new dataset `result_%d` in %s", rk+1, fname)
+                                log.debug("Created new dataset `result_%d` in %s", rk + 1, fname)
                         else:
                             for rk, res in enumerate(result):
                                 h5f.create_dataset(f"{grpName}result_{rk}", data=res)
