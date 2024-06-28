@@ -257,7 +257,27 @@ dimension is set a-priori via ``result_shape = (None, 3)``: this
 tells ACME that incoming results are 3-component vectors, that are to be stacked
 along the first dimension (position of ``None``) of a 2d-dataset.
 
-Similarly, results may be collected in memory by setting ``write_worker_results``
+In case the exact size of a single dimension cannot be determined a-priori,
+ACME supports HDF5 datasets with "unlimited" dimensions by using ``np.inf``
+in ``result_shape``. For instance, the above example can be equivalently rewritten as
+
+.. code-block:: python
+
+    with ParallelMap(f, [2, 4, 6, 8], y, n_inputs=4, result_shape=(None, np.inf)) as pmap_inf:
+        pmap_inf.compute()
+
+Then ACME fills an HDF5 dataset at runtime with computed entries yielding
+the same (4, 3)-array
+
+.. code-block:: python
+
+    >>> h5py.File(pmap.results_container, "r")["result_0"][()]
+    array([[18., 18., 18.],
+           [24., 24., 24.],
+           [30., 30., 30.],
+           [36., 36., 36.]])
+
+Results may also be collected in memory by setting ``write_worker_results``
 to ``False`` (not recommended):
 
 .. code-block:: python
@@ -278,8 +298,11 @@ This yields:
 
 Note that in contrast to the example given in the previous section
 `Override Automatic Input Argument Distribution`_, ``results`` does **not**
-contain four (3,)-arrays, but one (4, 3)-array. More information and additional
-control options are discussed in :doc:`Advanced Usage and Customization <advanced_usage>`.
+contain four (3,)-arrays, but one (4, 3)-array. Also, "unlimited" dimension
+specifications via ``np.inf`` in ``result_shape`` are **not supported**
+with in-memory arrays created by ``write_worker_results = False``.
+More information and additional control options are discussed in
+:doc:`Advanced Usage and Customization <advanced_usage>`.
 
 Reuse Worker Clients
 --------------------

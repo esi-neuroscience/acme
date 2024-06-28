@@ -249,7 +249,7 @@ create the desired array, the keyword ``result_shape`` can be used to tell
     import numpy as np
 
     M = 10
-    N = M -1
+    N = M - 1
     K = 200
     a = np.random.default_rng().random((M, 2*M))
     with ParallelMap(matconstruct, a, range(K), n_workers=50, result_shape=(None, M, N)) as pmap:
@@ -384,6 +384,19 @@ which yields
              [ 0.3445 , -0.1846 , -0.0252 , -0.2454 , -0.2363 , -0.07697,  0.1531 ,  0.337  ,  1.     ]],
             ...
             ...
+
+Unlimited Dataset Dimensions (``np.inf`` in ``result_shape``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Sometimes the final shape of an array is not straight-forward to predict
+upfront. Assume sensor data acquired by 200 probes needs to be smoothed
+and stored in a single array for further downstream processing. Each sensor
+emits a single data-point per time step, i.e., a 1D time-series, start and
+stop of sensor recordings have been synchronized by hardware triggers.
+Thus, a set of 200 1D-timeseries of the same length needs to be smoothed
+and stored in a ``200 x nSamples`` array, where ``nSamples`` is not known
+a-priori. Instead of manually inspecting the sensor data to garner the exact
+value of ``nSamples``, ACME can allocate HDF5 datasets of variable dimensions
+by using ``np.inf`` in ``result_shape``.
 
 
 .. _pickling:
