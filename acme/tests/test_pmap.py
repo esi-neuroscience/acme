@@ -337,6 +337,34 @@ class TestParallelMap():
             out == h5f["result_0"][()] # returns a NumPy array of shape (4,)
         assert np.array_equal(out, expected)
 
+        mockName = f"mock_data_{platform.machine()}"
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), mockName)
+        if useSLURM:
+            tempDir = f"/cs/home/{getpass.getuser()}/{mockName}"
+        shutil.rmtree(tempDir, ignore_errors=True)
+        os.makedirs(tempDir, exist_ok=True)
+        outDirs.append(tempDir)
+
+        # Assume only the channel count but not the number of samples is known
+        nChannels = 10
+        nSamples = 1234
+        mock_data = np.random.rand(nChannels, nSamples)
+        mock_file = os.path.join(tempDir, "mock_data.npy")
+        np.save(mock_file, mock_data)
+
+        def mock_processing(val):
+            data = np.load(mock_file)
+            return val * data
+
+        with ParallelMap(mock_processing, [2, 4, 6, 8], result_shape=(None, nChannels, np.inf)) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        with h5py.File(pmap.results_container, "r") as h5f:
+            mock_processed = h5f["result_0"][()] # returns a NumPy array of shape (4, nChannels, nSamples)
+        for k, val in enumerate([2, 4, 6, 8]):
+            assert np.array_equal(mock_processed[k], val * mock_data)
+
         with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
             result = pmap.compute() # returns a 4-element list
         assert result == expected
