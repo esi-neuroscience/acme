@@ -191,7 +191,7 @@ def esi_cluster_setup(
             else:
                 startLocal = True
             if startLocal:
-                return local_cluster_setup(interactive=interactive, start_client=start_client)
+                return local_cluster_setup(interactive=interactive)
 
         # SLURM is installed, but something's wrong
         msg = "Cannot access SLURM queuing system from node %s: %s "

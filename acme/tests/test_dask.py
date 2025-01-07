@@ -189,7 +189,7 @@ def test_cluster_setup():
         # Trigger an exception by invoking `slurm_cluster_setup`` on non-SLURM node
         with pytest.raises(IOError) as err:
             slurm_cluster_setup()
-        assert "Cannot access SLURM queuing system" in str(err)
+        assert "sinfo: not found" in str(err)
 
     # Check if `cluster_cleanup` performs diligent error checking
     with pytest.raises(TypeError):
