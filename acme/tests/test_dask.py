@@ -143,7 +143,7 @@ def test_cluster_setup():
                 assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
 
                 # Define queue for testing CPU allocations below
-                tmpq = defaultQ
+                tmpQ = defaultQ
 
             # Specify CPU count manually
             n_cores = 3
