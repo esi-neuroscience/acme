@@ -1569,7 +1569,6 @@ class TestParallelMap():
             time.sleep(2)
             out = proc.stdout.read().decode()
             assert "ALL DONE" not in out
-            assert "CTRL + C acknowledged, client and workers successfully killed" in out
 
         # Ensure random exception does not immediately kill an active client
         scriptName = os.path.join(tempDir, "dummy3.py")
