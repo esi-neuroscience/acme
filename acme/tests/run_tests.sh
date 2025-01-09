@@ -65,7 +65,7 @@ while [ "$1" != "" ]; do
             shift
             export PYTHONPATH=$(cd ../../ && pwd)
             if [ $_useSLURM ]; then
-                CMD="srun -u -p ${pytestQ} --mem=8000m -c ${pytestCPU} pytest"
+                CMD="srun -u -n 1 -p ${pytestQ} --mem=8000m -c ${pytestCPU} pytest"
             else
                 PYTEST_ADDOPTS="${PYTEST_ADDOPTS} --cov=../../acme --cov-config=../../.coveragerc"
                 export PYTEST_ADDOPTS
