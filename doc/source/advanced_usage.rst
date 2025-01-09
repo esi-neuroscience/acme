@@ -268,7 +268,7 @@ aggregate results container only contains the single Virtual Dataset `"result_0"
 .. note::
 
     By default, ACME uses
-    `Virtual HDF5 Datasets <https://support.hdfgroup.org/HDF5/docNewFeatures/NewFeaturesVirtualDatasetDocs.html>`_
+    `Virtual HDF5 Datasets <https://support.hdfgroup.org/documentation/hdf5-docs/advanced_topics/intro_VDS.html>`_
     for slotting results of
     concurrent computational runs. The real datasets in the generated payload
     files are mapped together into a single virtual dataset via the a-priori
@@ -396,7 +396,49 @@ Thus, a set of 200 1D-timeseries of the same length needs to be smoothed
 and stored in a ``200 x nSamples`` array, where ``nSamples`` is not known
 a-priori. Instead of manually inspecting the sensor data to garner the exact
 value of ``nSamples``, ACME can allocate HDF5 datasets of variable dimensions
-by using ``np.inf`` in ``result_shape``.
+by using ``np.inf`` in ``result_shape``:
+
+.. code-block:: python
+
+    import numpy as np
+    from scipy.ndimage import uniform_filter1d
+    from acme import ParallelMap
+
+    # Construct 200 artificial time-series
+    # (sine wave + 10% additive Gaussian noise)
+    # mocking sensor data
+    nChannels = 200
+    sine_wave = np.sin(np.linspace(0, 2*np.pi, 15000))
+    sensor_data = [sine_wave + 0.1 * np.random.randn(sine_wave.size) for _ in range(nChannels)]
+
+    # Apply a moving average filter to all channels in parallel
+    with ParallelMap(uniform_filter1d,
+                     sensor_data,
+                     size=10,
+                     mode="nearest",
+                     n_workers=10,
+                     result_shape=(None, np.inf)) as pmap:
+        pmap.compute()
+
+Inspecting the generated HDF5 container shows that ACME created a dataset with 200
+rows and an "unlimited" number of columns (up to the HDF5 per-axis limit of 2^64).
+
+.. code-block:: python
+
+    >>> import h5py
+    >>> h5f = h5py.File(pmap.results_container, "r")
+    >>> h5f["result_0"].maxshape # no limit on no. of columns
+    (200, None)
+    >>> h5f["result_0"].shape # actual shape correctly inferred from data
+    (200, 15000)
+    >>> h5f["result_0"].is_virtual # still a virtual dataset
+    True
+
+.. note::
+    Unlimited dimensions are supported for on-disk results in HDF5 containers,
+    for both virtual and regular datasets (``single_file = True`` or ``single_file = False``)
+    However, in-memory NumPy arrays (``write_worker_results = False``) **do not** support
+    unlimited dimensions (pickle files cannot process shape specifications at all).
 
 
 .. _pickling:
