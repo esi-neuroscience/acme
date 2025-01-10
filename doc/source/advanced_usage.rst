@@ -11,9 +11,6 @@ use cases. Thus, ACME features a variety of options for
 custom-tailoring its functionality to specific problems. This section
 discusses settings details and associated technical intricacies.
 
-.. contents:: Quick Links
-    :depth: 3
-
 User-Function Requirements
 --------------------------
 The user-provided function `func` has to meet some basic requirements to

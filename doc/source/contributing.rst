@@ -11,9 +11,6 @@ ACME, please don't hesitate to get in touch via our
 `GitHub Issue Tracker <https://github.com/esi-neuroscience/acme/issues>`_.
 We're looking forward to hearing from you!
 
-.. contents:: Quick Links
-    :depth: 3
-
 Development Setup
 -----------------
 

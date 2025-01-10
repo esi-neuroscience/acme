@@ -11,9 +11,6 @@ independent tasks can be processed with :class:`~acme.ParallelMap` ("embarassing
 Inter-process communication, worker-synchronization or shared memory
 problems **will not work**.
 
-.. contents:: Quick Links
-    :depth: 2
-
 If Things Go Wrong
 ^^^^^^^^^^^^^^^^^^
 First and foremost, ensure that the function you want to execute in parallel

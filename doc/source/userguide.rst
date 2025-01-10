@@ -9,9 +9,6 @@ Learn how to get the most out of ACME for your own work by running through a
 quick but (hopefully) illustrative example that starts simple and subsequently
 turns on ACME's bells and whistles.
 
-.. contents:: Quick Links
-    :depth: 3
-
 Setup
 -----
 Assume the function defined below is supposed to be run multiple times

@@ -126,6 +126,7 @@ html_theme_options = {
     "globaltoc_depth": 1,
     "bootswatch_theme": "lumen",
     "navbar_links": [
+        ("Home", "index"),
         ("GitHub", "https://www.github.com/esi-neuroscience/acme", True),
     ],
 }
