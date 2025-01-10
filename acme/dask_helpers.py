@@ -859,7 +859,7 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
 
     # Prepare message for prompt
     if client.cluster.__class__.__name__ == "LocalCluster":
-        userClust = f"LocalCluster hosted on {client.scheduler_info()["address"]}"
+        userClust = f"LocalCluster hosted on {client.scheduler_info()['address']}"
     else:
         userName = getpass.getuser()
         outDir = client.cluster.job_header.partition("--output=")[-1]
