@@ -195,3 +195,9 @@ ACME's changelog follows the exemplary layout below:
 
 Feel free to add a short summary of your changes in the appropriate sections
 under `[Unreleased]`.
+
+Releases
+--------
+
+All necessary steps for preparing a new ACME release are summarized in
+`RELEASE.md <https://github.com/esi-neuroscience/acme/blob/main/RELEASE.md>`_.
