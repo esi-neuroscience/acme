@@ -9,7 +9,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
+Included a new convenience function `cobic_cluster_setup` to accommodate the HPC 
+cluster at CoBIC Frankfurt. Implementation of a feature request: ACME can now 
+allocate result datasets with arbitrary dimensions via the `result_shape` keyword. 
+In case it is not clear (or cumbersome) to determine the shape of an aggregate 
+results dataset a-priori, setting the appropriate dimension(s) to `np.inf` prompts 
+ACME to create a 
+[resizable HDF5 dataset](https://docs.h5py.org/en/stable/high/dataset.html#resizable-datasets). 
+
 ### NEW
+- Added support for "unlimited" datasets to allow flexible dimension 
+  specifications in `result_shape`. When setting the size of a dimension in 
+  `result_shape` to `np.inf`, ACME allocates a resizable HDF5 dataset for the 
+  results. This works for both virtual and regular datasets. 
+  
 ### CHANGED
 ### REMOVED
 - As announced in the previous release the `start_client` has been removed
@@ -24,7 +37,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   workers (especially in the "E880" partition on the ESI cluster). This
   has been fixed (cf #60)
 - A bug in `python-msgpack` under Python 3.12 triggered de-serialization
-  errors; pinned `python-msgpack` to version 1.0.5 (cf #59)
+  errors; temporarily pinned `python-msgpack` to version 1.0.5 but newer 
+  versions do not exhibit this problem (cf #59)
 
 ## [2023.12] - 2023-12-6
 Better support for non-x86 micro-architectures. On the ESI HPC cluster,
