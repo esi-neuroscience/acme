@@ -26,6 +26,7 @@ linux_x86:
     script:
     - source $HOME/miniconda/etc/profile.d/conda.sh
     - conda clean --all -y
+    - conda env update -f acme.yml --prune
     - conda activate acme
     - tox
 
@@ -43,6 +44,7 @@ macos_m1:
     script:
     - source /opt/conda/etc/profile.d/conda.sh
     - conda clean --all -y
+    - conda env update -f acme.yml --prune
     - conda activate acme
     - tox -p
 
@@ -60,12 +62,13 @@ slurm_x86:
     script:
     - source /opt/conda/etc/profile.d/conda.sh
     - source $HOME/.acme_codecov
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
     - export PYTHONPATH=$CI_PROJECT_DIR
     - rm -rf $CI_PROJECT_DIR/acme/__pycache__
     - rm -rf $CI_PROJECT_DIR/acme/tests/__pycache__
-    - srun -p DEV --mem=8000m -c 1 pytest
+    - srun -u -n 1 -p DEV --mem=8000m -c 1 pytest
     - codecov -t ${CODECOV_TOKEN}
 
 slurm_ppc64le:
@@ -81,12 +84,13 @@ slurm_ppc64le:
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
     - source /opt/conda/etc/profile.d/conda.sh
+    - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
     - export PYTHONPATH=$CI_PROJECT_DIR
     - rm -rf $CI_PROJECT_DIR/acme/__pycache__
     - rm -rf $CI_PROJECT_DIR/acme/tests/__pycache__
-    - srun -p E880 --mem=8000m -c 4 pytest
+    - srun -u -n 1 -p E880 --mem=8000m -c 4 pytest
 
 pypi_test:
     stage: upload
@@ -98,7 +102,6 @@ pypi_test:
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
     - source $HOME/miniconda/etc/profile.d/conda.sh
-    - conda update --yes conda
     - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
@@ -129,11 +132,7 @@ pypi_deploy:
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
     - source $HOME/miniconda/etc/profile.d/conda.sh
-    - conda update --yes conda
-    - conda clean --all -y
     - conda activate acme
-    - conda install --yes twine keyring rfc3986
-    - conda update --yes twine keyring rfc3986
     - rm -rf dist/ build/ esi_acme.egg-info/
     - python setup.py sdist bdist_wheel
     - twine upload --config-file=~/.esipypirc dist/*
