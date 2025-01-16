@@ -23,10 +23,11 @@ jobs:
       max-parallel: 5
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v4
+    - name: Set up miniforge
+      uses: conda-incubator/setup-miniconda@v3
       with:
-        python-version: '3.12'
+        environment-file: acme.yml
+        miniforge-version: latest
     - name: Install ACME
       run: |
         pip install -e .[dev]
