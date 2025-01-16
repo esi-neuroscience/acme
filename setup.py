@@ -30,7 +30,7 @@ for k in range(len(pipPkgs)):
 # Write conda environment file `envFile`
 allPkgs += ["python " + str(setupOpts["python_requires"]), "pip", {"pip" : pipPkgs}]
 ymlDict = {"name" : "acme",
-           "channels" : "conda-forge",
+           "channels" : ["conda-forge"],
            "dependencies" : allPkgs}
 header = "#\n" +\
     f"# Copyright © {datetime.datetime.now().strftime('%Y')} Ernst Strüngmann Institute (ESI) for Neuroscience " +\
