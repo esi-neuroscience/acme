@@ -14,7 +14,7 @@ Author Guidelines
 
 - [ ] Is the change set **< 400 lines**?
 - [ ] Is the code running locally **and** on HPC infrastructure?
-- [ ] Is the code running on all supported platforms (macOS, Linux and Windows)?
+- [ ] Is the code running on all supported platforms (macOS, Linux/Windows via WSL)?
 
 Reviewer Checklist
 ------------------

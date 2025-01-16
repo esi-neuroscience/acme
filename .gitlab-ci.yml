@@ -29,22 +29,6 @@ linux_x86:
     - conda activate acme
     - tox
 
-win_x86:
-    stage: tox
-    allow_failure: true
-    tags:
-    - windows10
-    only:
-    - main
-    - dev
-    variables:
-        PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
-        GIT_FETCH_EXTRA_FLAGS: --tags
-    script:
-    - conda clean --all -y
-    - conda.bat activate acme
-    - tox
-
 macos_m1:
     stage: tox
     allow_failure: true

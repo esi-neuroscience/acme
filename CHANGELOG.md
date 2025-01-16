@@ -9,12 +9,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
-Included a new convenience function `cobic_cluster_setup` to accommodate the HPC 
-cluster at CoBIC Frankfurt. Implementation of a feature request: ACME can now 
-allocate result datasets with arbitrary dimensions via the `result_shape` keyword. 
-In case it is not clear (or cumbersome) to determine the shape of an aggregate 
-results dataset a-priori, setting the appropriate dimension(s) to `np.inf` prompts 
-ACME to create a 
+Implementation of user's feature request: ACME can now allocate result datasets 
+with arbitrary dimensions via the `result_shape` keyword. In case it is not clear 
+(or cumbersome) to determine the shape of an aggregate results dataset a-priori,
+setting the appropriate dimension(s) to `np.inf` prompts ACME to create a 
 [resizable HDF5 dataset](https://docs.h5py.org/en/stable/high/dataset.html#resizable-datasets). 
 
 ### NEW
@@ -25,11 +23,12 @@ ACME to create a
   
 ### CHANGED
 ### REMOVED
-- As announced in the previous release the `start_client` has been removed
+- As announced in the previous release the `start_client` keyword has been removed
   from `local_cluster_setup` (starting a dask `LocalCluster` always starts
   a client anyway)
 
 ### DEPRECATED
+- Dropped support for Windows (ACME *should* work but is not tested any more)
 - Dropped support for Python 3.7
 
 ### FIXED

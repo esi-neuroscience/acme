@@ -19,11 +19,6 @@ import inspect
 import textwrap
 import numpy as np
 from tqdm import tqdm
-if sys.platform == "win32":                                             # pragma: no cover
-    # tqdm breaks term colors on Windows - fix that (tqdm issue #446)
-    import colorama
-    colorama.deinit()
-    colorama.init(strip=False)
 from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, get_client, LocalCluster
 from datetime import datetime, timedelta
