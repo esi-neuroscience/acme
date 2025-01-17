@@ -2,7 +2,7 @@
 #
 # Some quick shortcuts to quickly test ACME's proper functionality
 #
-# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 # in Cooperation with Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
