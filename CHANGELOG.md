@@ -1,5 +1,5 @@
  <!--
- Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+ Copyright (c) 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
  in Cooperation with Max Planck Society
  SPDX-License-Identifier: CC-BY-NC-SA-1.0
  -->
@@ -8,7 +8,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [Unreleased]
+## [2025.1]
 Implementation of user's feature request: ACME can now allocate result datasets 
 with arbitrary dimensions via the `result_shape` keyword. In case it is not clear 
 (or cumbersome) to determine the shape of an aggregate results dataset a-priori,
@@ -21,7 +21,6 @@ setting the appropriate dimension(s) to `np.inf` prompts ACME to create a
   `result_shape` to `np.inf`, ACME allocates a resizable HDF5 dataset for the 
   results. This works for both virtual and regular datasets. 
   
-### CHANGED
 ### REMOVED
 - As announced in the previous release the `start_client` keyword has been removed
   from `local_cluster_setup` (starting a dask `LocalCluster` always starts
