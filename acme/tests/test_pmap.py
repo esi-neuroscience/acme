@@ -386,6 +386,8 @@ class TestParallelMap():
                 out.append(h5f[key]["result_0"][()][0])
         assert np.array_equal(out, expected)
 
+        cluster_cleanup()
+
         def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
             return (sum(x) + y) * z * w.max()
 
@@ -410,6 +412,8 @@ class TestParallelMap():
             for k, key in enumerate(h5f.keys()):
                 out.append(h5f[key]["result_0"][()][0])
         assert np.array_equal(out, expected)
+
+        time.sleep(2.0)
 
         expected = list(map(g, n_workers*[x], y, list(z), n_workers*[w]))
         pmap = ParallelMap(g, x, y, z=z, w=w, n_inputs=n_workers)

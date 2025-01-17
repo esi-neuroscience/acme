@@ -22,7 +22,6 @@ linux_x86:
     variables:
         PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
-        NO_SLURM: "true"
     script:
     - source $HOME/miniconda/etc/profile.d/conda.sh
     - conda clean --all -y
@@ -46,7 +45,7 @@ macos_m1:
     - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
-    - tox -p
+    - tox
 
 slurm_x86:
     stage: slurm
