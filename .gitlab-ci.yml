@@ -45,7 +45,10 @@ macos_m1:
     - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
-    - tox
+    - export PYTHONPATH=$CI_PROJECT_DIR
+    - rm -rf $CI_PROJECT_DIR/acme/__pycache__
+    - rm -rf $CI_PROJECT_DIR/acme/tests/__pycache__
+    - pytest
 
 slurm_x86:
     stage: slurm
