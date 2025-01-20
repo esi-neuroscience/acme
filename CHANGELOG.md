@@ -8,6 +8,16 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [Unreleased]
+Included new convenience function `cobic_cluster_setup` for the HPC cluster at
+CoBIC Frankfurt.
+
+### NEW
+### CHANGED
+### REMOVED
+### DEPRECATED
+### FIXED
+
 ## [2025.1]
 Implementation of user's feature request: ACME can now allocate result datasets 
 with arbitrary dimensions via the `result_shape` keyword. In case it is not clear 
