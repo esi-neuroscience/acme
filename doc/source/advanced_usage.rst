@@ -1,4 +1,4 @@
-.. Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+.. Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 .. in Cooperation with Max Planck Society
 
 .. SPDX-License-Identifier: CC-BY-NC-SA-1.0
@@ -10,9 +10,6 @@ so that it can be a drop-in parallelization engine for a wide spectrum of
 use cases. Thus, ACME features a variety of options for
 custom-tailoring its functionality to specific problems. This section
 discusses settings details and associated technical intricacies.
-
-.. contents:: Quick Links
-    :depth: 3
 
 User-Function Requirements
 --------------------------
@@ -249,7 +246,7 @@ create the desired array, the keyword ``result_shape`` can be used to tell
     import numpy as np
 
     M = 10
-    N = M -1
+    N = M - 1
     K = 200
     a = np.random.default_rng().random((M, 2*M))
     with ParallelMap(matconstruct, a, range(K), n_workers=50, result_shape=(None, M, N)) as pmap:
@@ -268,7 +265,7 @@ aggregate results container only contains the single Virtual Dataset `"result_0"
 .. note::
 
     By default, ACME uses
-    `Virtual HDF5 Datasets <https://support.hdfgroup.org/HDF5/docNewFeatures/NewFeaturesVirtualDatasetDocs.html>`_
+    `Virtual HDF5 Datasets <https://support.hdfgroup.org/documentation/hdf5-docs/advanced_topics/intro_VDS.html>`_
     for slotting results of
     concurrent computational runs. The real datasets in the generated payload
     files are mapped together into a single virtual dataset via the a-priori
@@ -384,6 +381,61 @@ which yields
              [ 0.3445 , -0.1846 , -0.0252 , -0.2454 , -0.2363 , -0.07697,  0.1531 ,  0.337  ,  1.     ]],
             ...
             ...
+
+Unlimited Dataset Dimensions (``np.inf`` in ``result_shape``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Sometimes the final shape of an array is not straight-forward to predict
+upfront. Assume sensor data acquired by 200 probes needs to be smoothed
+and stored in a single array for further downstream processing. Each sensor
+emits a single data-point per time step, i.e., a 1D time-series, start and
+stop of sensor recordings have been synchronized by hardware triggers.
+Thus, a set of 200 1D-timeseries of the same length needs to be smoothed
+and stored in a ``200 x nSamples`` array, where ``nSamples`` is not known
+a-priori. Instead of manually inspecting the sensor data to garner the exact
+value of ``nSamples``, ACME can allocate HDF5 datasets of variable dimensions
+by using ``np.inf`` in ``result_shape``:
+
+.. code-block:: python
+
+    import numpy as np
+    from scipy.ndimage import uniform_filter1d
+    from acme import ParallelMap
+
+    # Construct 200 artificial time-series
+    # (sine wave + 10% additive Gaussian noise)
+    # mocking sensor data
+    nChannels = 200
+    sine_wave = np.sin(np.linspace(0, 2*np.pi, 15000))
+    sensor_data = [sine_wave + 0.1 * np.random.randn(sine_wave.size) for _ in range(nChannels)]
+
+    # Apply a moving average filter to all channels in parallel
+    with ParallelMap(uniform_filter1d,
+                     sensor_data,
+                     size=10,
+                     mode="nearest",
+                     n_workers=10,
+                     result_shape=(None, np.inf)) as pmap:
+        pmap.compute()
+
+Inspecting the generated HDF5 container shows that ACME created a dataset with 200
+rows and an "unlimited" number of columns (up to the HDF5 per-axis limit of 2^64).
+
+.. code-block:: python
+
+    >>> import h5py
+    >>> h5f = h5py.File(pmap.results_container, "r")
+    >>> h5f["result_0"].maxshape # no limit on no. of columns
+    (200, None)
+    >>> h5f["result_0"].shape # actual shape correctly inferred from data
+    (200, 15000)
+    >>> h5f["result_0"].is_virtual # still a virtual dataset
+    True
+
+.. note::
+    Unlimited dimensions are supported for on-disk results in HDF5 containers,
+    for both virtual and regular datasets (``single_file = True`` or ``single_file = False``)
+    However, in-memory NumPy arrays (``write_worker_results = False``) **do not** support
+    unlimited dimensions (pickle files cannot process shape specifications at all).
 
 
 .. _pickling:

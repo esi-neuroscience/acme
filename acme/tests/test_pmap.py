@@ -1,7 +1,7 @@
 #
 # Testing module for ACME's `ParallelMap` interface
 #
-# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 # in Cooperation with Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -17,6 +17,7 @@ import inspect
 import subprocess
 import getpass
 import time
+import math
 import itertools
 import logging
 import h5py
@@ -91,7 +92,7 @@ def lowpass_hard(
         taskID: Optional[int] = None) -> None:
     channel = arr_like[:, taskID]
     res = signal.filtfilt(b, a, channel, padlen=padlen)
-    h5name = os.path.join(res_dir, res_base +"{}.h5".format(taskID))
+    h5name = os.path.join(res_dir, f"{res_base}{taskID}.h5")
     with h5py.File(h5name, "w") as h5f:
         h5f.create_dataset(dset_name, data=res)
     return
@@ -155,7 +156,7 @@ class TestParallelMap():
         # Create tmp directory and create data-containers
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), tmpName)
         if useSLURM:
-            tempDir = "/cs/home/{}/{}".format(getpass.getuser(), tmpName)
+            tempDir = f"/cs/home/{getpass.getuser()}/{tmpName}"
         shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         sigName = os.path.join(tempDir, "sigdata.h5")
@@ -211,27 +212,27 @@ class TestParallelMap():
         # not enough positional args
         with pytest.raises(ValueError) as valerr:
             ParallelMap(simple_func, 4, setup_interactive=False)
-            assert "simple_func expects 2 positional arguments ('x', 'y'), found 1" in str(valerr.value)
+        assert "simple_func expects 2 positional arguments ('x', 'y'), found 1" in str(valerr.value)
         # invalid kwargs
         with pytest.raises(ValueError) as valerr:
             ParallelMap(simple_func, 4, 4, z=3, w=4, setup_interactive=False)
-            assert "simple_func accepts at maximum 1 keyword arguments ('z'), found 2" in str(valerr.value)
+        assert "simple_func accepts at maximum 1 keyword arguments ('z'), found 2" in str(valerr.value)
         # ill-posed parallelization: two candidate lists for input distribution
         with pytest.raises(ValueError) as valerr:
             ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], setup_interactive=False)
-            assert "automatic input distribution failed: found 2 objects containing 2 to 4 elements" in str(valerr.value)
+        assert "automatic input distribution failed: found 2 objects containing 2 to 4 elements" in str(valerr.value)
         # ill-posed parallelization: two candidate lists for input distribution (`x` and `w`)
         with pytest.raises(ValueError) as valerr:
             ParallelMap(medium_func, [1, 2, 3], None, w=[np.ones((3,3)), 2 * np.ones((3,3))], setup_interactive=False)
-            assert "automatic input distribution failed: found 2 objects containing 2 to 3 elements." in str(valerr.value)
+        assert "automatic input distribution failed: found 2 objects containing 2 to 3 elements." in str(valerr.value)
         # invalid input spec
         with pytest.raises(ValueError) as valerr:
             ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=3, setup_interactive=False)
-            assert "No object has required length of 3 matching `n_inputs`" in str(valerr.value)
+        assert "No object has required length of 3 matching `n_inputs`" in str(valerr.value)
         # invalid input spec: `w` expects a NumPy array, thus it is not considered for input distribution
         with pytest.raises(ValueError) as valerr:
             ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=8, setup_interactive=False)
-            assert "No object has required length of 8 matching `n_inputs`" in str(valerr.value)
+        assert "No object has required length of 8 matching `n_inputs`" in str(valerr.value)
 
         # Check if other parameters  are parsed correctly
         with pytest.raises(TypeError):
@@ -290,7 +291,7 @@ class TestParallelMap():
             client.retire_workers(list(client.scheduler_info()['workers']), close_workers=True)
             with pytest.raises(RuntimeError) as rerr:
                 pmap.daemon.compute()
-                assert "no active workers found" in str(rerr.value)
+            assert "no active workers found" in str(rerr.value)
 
             # Annihilate client slot and ensure pmap does not do anything funky
             pmap.daemon.client = None
@@ -299,7 +300,7 @@ class TestParallelMap():
         # Finally, test ACMEdaemon only accepts `ParallelMap` objects
         with pytest.raises(TypeError) as tperr:
             ACMEdaemon("invalid")
-            assert "`pmap` has to be a `ParallelMap` instance, not <class 'str'>" in str(tperr.value)
+        assert "`pmap` has to be a `ParallelMap` instance, not <class 'str'>" in str(tperr.value)
 
         # Clean up testing folder and any running clients
         if testclient is None:
@@ -336,6 +337,34 @@ class TestParallelMap():
             out == h5f["result_0"][()] # returns a NumPy array of shape (4,)
         assert np.array_equal(out, expected)
 
+        mockName = f"mock_data_{platform.machine()}"
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), mockName)
+        if useSLURM:
+            tempDir = f"/cs/home/{getpass.getuser()}/{mockName}"
+        shutil.rmtree(tempDir, ignore_errors=True)
+        os.makedirs(tempDir, exist_ok=True)
+        outDirs.append(tempDir)
+
+        # Assume only the channel count but not the number of samples is known
+        nChannels = 10
+        nSamples = 1234
+        mock_data = np.random.rand(nChannels, nSamples)
+        mock_file = os.path.join(tempDir, "mock_data.npy")
+        np.save(mock_file, mock_data)
+
+        def mock_processing(val):
+            data = np.load(mock_file)
+            return val * data
+
+        with ParallelMap(mock_processing, [2, 4, 6, 8], result_shape=(None, nChannels, np.inf)) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        with h5py.File(pmap.results_container, "r") as h5f:
+            mock_processed = h5f["result_0"][()] # returns a NumPy array of shape (4, nChannels, nSamples)
+        for k, val in enumerate([2, 4, 6, 8]):
+            assert np.array_equal(mock_processed[k], val * mock_data)
+
         with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
             result = pmap.compute() # returns a 4-element list
         assert result == expected
@@ -356,6 +385,8 @@ class TestParallelMap():
             for k, key in enumerate(h5f.keys()):
                 out.append(h5f[key]["result_0"][()][0])
         assert np.array_equal(out, expected)
+
+        cluster_cleanup()
 
         def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
             return (sum(x) + y) * z * w.max()
@@ -381,6 +412,8 @@ class TestParallelMap():
             for k, key in enumerate(h5f.keys()):
                 out.append(h5f[key]["result_0"][()][0])
         assert np.array_equal(out, expected)
+
+        time.sleep(2.0)
 
         expected = list(map(g, n_workers*[x], y, list(z), n_workers*[w]))
         pmap = ParallelMap(g, x, y, z=z, w=w, n_inputs=n_workers)
@@ -519,8 +552,8 @@ class TestParallelMap():
         with pytest.raises(KeyError) as keyerr:
             with h5py.File(colRes, "r") as h5col:
                 chNo = np.random.choice(self.nChannels, size=1)[0]
-                h5col["comp_{}".format(chNo)]["result_0"]
-            assert "unable to open external file" in str(keyerr.value)
+                h5col[f"comp_{chNo}"]["result_0"]
+        assert "unable to open external file" in str(keyerr.value)
 
         # Ensure `output_dir` is properly ignored if `write_worker_results` is `False`
         pmap = ParallelMap(lowpass_simple,
@@ -562,7 +595,7 @@ class TestParallelMap():
 
         # Compare computed single-channel results to expected low-freq signal
         for chNo in range(self.nChannels):
-            h5name = res_base + "{}.h5".format(chNo)
+            h5name = f"{res_base}{chNo}.h5"
             with h5py.File(os.path.join(tempDir2, h5name), "r") as h5f:
                 assert np.mean(np.abs(h5f[dset_name][()] - self.orig[:, chNo])) < self.tol
 
@@ -605,7 +638,7 @@ class TestParallelMap():
                 assert "8GB" in partition
                 memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
                 assert memory.size == 1
-                assert round(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
+                assert math.ceil(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
 
         # Wait a sec (literally) for dask to collect its bearings (after the
         # `get_client` above) before proceeding
@@ -833,7 +866,7 @@ class TestParallelMap():
         with h5py.File(pmap.results_container, "r") as h5col:
             dset = "comp_{}/result_{}"
             for chNo in range(self.nChannels):
-                assert len(h5col["comp_{}".format(chNo)].keys()) == 4
+                assert len(h5col[f"comp_{chNo}"].keys()) == 4
                 assert np.mean(np.abs(h5col[dset.format(chNo, 0)][()] - self.orig[:, chNo])) < self.tol
                 assert h5col[dset.format(chNo, 1)][()] == chNo
                 assert np.array_equal(h5col[dset.format(chNo, 2)][()], self.b)
@@ -860,7 +893,7 @@ class TestParallelMap():
             with h5py.File(pmap.results_container, "r") as h5single:
                 dset = "comp_{}/result_{}"
                 for chNo in range(self.nChannels):
-                    assert len(h5single["comp_{}".format(chNo)].keys()) == 4
+                    assert len(h5single[f"comp_{chNo}"].keys()) == 4
                     assert np.array_equal(h5single[dset.format(chNo, 0)][()], h5col[dset.format(chNo, 0)][()])
                     assert h5col[dset.format(chNo, 1)][()] == h5single[dset.format(chNo, 1)][()]
                     assert np.array_equal(h5col[dset.format(chNo, 2)][()], h5single[dset.format(chNo, 2)][()])
@@ -930,6 +963,23 @@ class TestParallelMap():
                     assert np.mean(np.abs(h5f["result_0"][()] - self.orig[:, chNo])) < self.tol
                     assert np.array_equal(h5col["result_0"][chNo, :], h5f["result_0"][()])
 
+        # As above but don't specify `nSamples`
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         result_shape=(None, np.inf),
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        infRes = str(pmap.results_container)
+
+        # Ensure not specifying `nSamples` did not change anything
+        with h5py.File(colRes, "r") as h5col:
+            with h5py.File(infRes, "r") as h5inf:
+                assert np.array_equal(h5col["result_0"][()], h5inf["result_0"][()])
+
         # Same but don't use a virtual dataset and transpose the final array
         with ParallelMap(lowpass_simple,
                          sigName,
@@ -941,15 +991,94 @@ class TestParallelMap():
             pmap.compute()
         outDirs.append(pmap.out_dir)
 
+        singleRes = str(pmap.results_container)
+
         # Ensure only one (data) file was generated
         assert glob(os.path.join(pmap.out_dir, "*.h5")) == [pmap.results_container]
 
         # Compare single file to virtual dataset
         with h5py.File(colRes, "r") as h5col:
-            with h5py.File(pmap.results_container, "r") as h5single:
+            with h5py.File(singleRes, "r") as h5single:
                 assert len(h5single.keys()) == 1
                 assert h5single["result_0"].is_virtual is False
                 assert np.array_equal(h5single["result_0"][()].T, h5col["result_0"][()])
+
+        # Use a resizable single hdf container (not specifying `nSamples`)
+        with ParallelMap(lowpass_simple,
+                         sigName,
+                         range(self.nChannels),
+                         result_shape=(np.inf, None),
+                         single_file=True,
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        singleInfRes = str(pmap.results_container)
+
+        # Ensure not specifying `nSamples` did not change anything
+        with h5py.File(singleRes, "r") as h5single:
+            with h5py.File(singleInfRes, "r") as h5singleinf:
+                assert np.array_equal(h5single["result_0"][()], h5singleinf["result_0"][()])
+
+        # More elaborate stacking/expendable dimension
+        with ParallelMap(simple_func,
+                         [elem * np.ones((3, 3)) for elem in [2, 4]],
+                         4,
+                         result_shape=(3, None, 3),
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        tripleDim = str(pmap.results_container)
+
+        with ParallelMap(simple_func,
+                         [elem * np.ones((3, 3)) for elem in [2, 4]],
+                         4,
+                         result_shape=(np.inf, None, 3),
+                         partition=defaultQ,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        tripleDimInf = str(pmap.results_container)
+
+        with h5py.File(tripleDim, "r") as h5triple:
+            with h5py.File(tripleDimInf, "r") as h5tripleinf:
+                assert np.array_equal(h5triple["result_0"][()], h5tripleinf["result_0"][()])
+
+        with ParallelMap(simple_func,
+                         [elem * np.ones((3, 3)) for elem in [2, 4]],
+                         4,
+                         result_shape=(3, None, 3),
+                         partition=defaultQ,
+                         single_file=True,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        tripleDimSingle = str(pmap.results_container)
+
+        with ParallelMap(simple_func,
+                         [elem * np.ones((3, 3)) for elem in [2, 4]],
+                         4,
+                         result_shape=(np.inf, None, 3),
+                         partition=defaultQ,
+                         single_file=True,
+                         setup_interactive=False) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.out_dir)
+
+        tripleDimSingleInf = str(pmap.results_container)
+
+        with h5py.File(tripleDimSingle, "r") as h5triple:
+            with h5py.File(tripleDimSingleInf, "r") as h5tripleinf:
+                assert np.array_equal(h5triple["result_0"][()], h5tripleinf["result_0"][()])
+
+        with h5py.File(tripleDim, "r") as h5triple:
+            with h5py.File(tripleDimSingleInf, "r") as h5tripleinf:
+                assert np.array_equal(h5triple["result_0"][()], h5tripleinf["result_0"][()])
 
         # Finally, ensure in-memory results-collection works as expected
         with ParallelMap(lowpass_simple,
@@ -986,7 +1115,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_dtype` has to be a string" in str(tperr)
+        assert "`result_dtype` has to be a string" in str(tperr)
         with pytest.raises(TypeError) as tperr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -996,7 +1125,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_dtype` has to be a valid NumPy datatype" in str(tperr)
+        assert "`result_dtype` has to be a valid NumPy datatype" in str(tperr)
 
         # Ensure borked shapes are caught
         with pytest.raises(TypeError) as tperr:
@@ -1007,7 +1136,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` has to be either `None` or tuple" in str(tperr)
+        assert "`result_shape` has to be either `None` or tuple" in str(tperr)
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -1016,7 +1145,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` must contain exactly one `None`" in str(valerr)
+        assert "`result_shape` must contain exactly one `None`" in str(valerr)
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -1025,7 +1154,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` must contain exactly one `None`" in str(valerr)
+        assert "`result_shape` must contain exactly one `None`" in str(valerr)
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -1034,7 +1163,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` must only contain numerical values" in str(valerr)
+        assert "`result_shape` must only contain numerical values" in str(valerr)
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -1043,7 +1172,7 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` must only contain non-negative integers" in str(valerr)
+        assert "`result_shape` must only contain non-negative integers" in str(valerr)
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(lowpass_simple,
                              sigName,
@@ -1052,7 +1181,26 @@ class TestParallelMap():
                              partition=defaultQ,
                              setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "`result_shape` must only contain non-negative integers" in str(valerr)
+        assert "`result_shape` must only contain non-negative integers" in str(valerr)
+        with pytest.raises(ValueError) as valerr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=(None, np.inf),
+                             partition=defaultQ,
+                             write_worker_results=False,
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+        assert "`np.inf` in `result_shape` is only valid if `write_worker_results` is `True`" in str(valerr)
+        with pytest.raises(ValueError) as valerr:
+            with ParallelMap(lowpass_simple,
+                             sigName,
+                             range(self.nChannels),
+                             result_shape=(None, np.inf, np.inf),
+                             partition=defaultQ,
+                             setup_interactive=False) as pmap:
+                pmap.compute()
+        assert "cannot use more than one `np.inf` in `result_shape`" in str(valerr)
 
         # Emergency pickling
         with ParallelMap(pickle_func,
@@ -1117,10 +1265,10 @@ class TestParallelMap():
                 assert h5f["result_0"].is_virtual is True
                 assert np.array_equal(h5f["result_0"][()], h5col["result_0"][()])
                 for k in range(pmap.n_calls):
-                    assert len(h5f["comp_{}".format(k)].keys()) == 3
-                    assert h5f["comp_{}/{}".format(k, "result_1")][()] == k
-                    assert np.array_equal(h5f["comp_{}/{}".format(k, "result_2")][()], self.b)
-                    assert np.array_equal(h5f["comp_{}/{}".format(k, "result_3")][()], self.a)
+                    assert len(h5f[f"comp_{k}"].keys()) == 3
+                    assert h5f[f"comp_{k}/result_1"][()] == k
+                    assert np.array_equal(h5f[f"comp_{k}/result_2"][()], self.b)
+                    assert np.array_equal(h5f[f"comp_{k}/result_3"][()], self.a)
 
         # Same w/single output container
         with ParallelMap(lowpass_medium,
@@ -1139,7 +1287,7 @@ class TestParallelMap():
                 assert len(h5f.keys()) == pmap.n_calls + 1
                 for k in range(pmap.n_calls):
                     for rk in range(1,4):
-                        dset = "comp_{}/result_{}".format(k, rk)
+                        dset = f"comp_{k}/result_{rk}"
                         assert np.array_equal(h5f[dset], h5ref[dset])
 
         # Finally, ensure in-memory results-collection works w/multiple returns
@@ -1155,12 +1303,12 @@ class TestParallelMap():
             assert np.array_equal(h5ref["result_0"][()], resInMem[0])
             rCount = 1
             for k in range(pmap.n_calls):
-                assert h5ref["comp_{}/{}".format(k, "result_1")][()] == resInMem[rCount]
-                rCount +=1
-                assert np.array_equal(h5ref["comp_{}/{}".format(k, "result_2")][()], resInMem[rCount])
-                rCount +=1
-                assert np.array_equal(h5ref["comp_{}/{}".format(k, "result_3")][()], resInMem[rCount])
-                rCount +=1
+                assert h5ref[f"comp_{k}/result_1"][()] == resInMem[rCount]
+                rCount += 1
+                assert np.array_equal(h5ref[f"comp_{k}/result_2"][()], resInMem[rCount])
+                rCount += 1
+                assert np.array_equal(h5ref[f"comp_{k}/result_3"][()], resInMem[rCount])
+                rCount += 1
 
         # Clean up created results directories
         for folder in outDirs:
@@ -1226,7 +1374,7 @@ class TestParallelMap():
                             partition=defaultQ,
                             setup_interactive=False) as pmap:
                 pmap.compute()
-            assert "Pickling of results does not support single output file creation" in str(valerr.value)
+        assert "Pickling of results does not support single output file creation" in str(valerr.value)
 
         # Test emergency pickling
         with ParallelMap(pickle_func,
@@ -1311,7 +1459,7 @@ class TestParallelMap():
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
         with pytest.raises(RuntimeError) as runerr:
             pmap.compute()
-            assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
+        assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
         pmap = ParallelMap(pickle_func,
                            self.sig,
                            self.b,
@@ -1326,7 +1474,7 @@ class TestParallelMap():
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
         with pytest.raises(RuntimeError) as runerr:
             pmap.compute()
-            assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
+        assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
 
         # Clean up testing folder
         for folder in outDirs:
@@ -1425,7 +1573,6 @@ class TestParallelMap():
             time.sleep(2)
             out = proc.stdout.read().decode()
             assert "ALL DONE" not in out
-            assert "CTRL + C acknowledged, client and workers successfully killed" in out
 
         # Ensure random exception does not immediately kill an active client
         scriptName = os.path.join(tempDir, "dummy3.py")
@@ -1751,12 +1898,12 @@ class TestParallelMap():
         if useSLURM:
 
             # Supply extra args to start client for actual tests
-            slurmOut = "/cs/home/{}/acme_out".format(getpass.getuser())
+            slurmOut = f"/cs/home/{getpass.getuser()}/acme_out"
             client = esi_cluster_setup(partition=defaultQ,
                                        n_workers=10,
-                                       job_extra=["--output={}".format(slurmOut)],
+                                       job_extra=[f"--output={slurmOut}"],
                                        interactive=False)
-            assert "--output={}".format(slurmOut) in client.cluster.job_header
+            assert f"--output={slurmOut}" in client.cluster.job_header
 
         else:
             client = esi_cluster_setup(partition="auto", interactive=False)

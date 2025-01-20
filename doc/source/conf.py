@@ -1,7 +1,7 @@
 #
 # Configuration file for the Sphinx documentation builder.
 #
-# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 # in Cooperation with Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -89,7 +89,7 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 
 # Custom sidebar templates, maps document names to template names.
-#html_sidebars = {}
+html_sidebars = {"**" : ["localtoc.html"]}
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
@@ -115,15 +115,18 @@ html_theme_options = {
     # Render the next and previous page links in navbar. (Default: true)
     "navbar_sidebarrel": False,
     # Render the current pages TOC in the navbar. (Default: true)
-    "navbar_pagenav": True,
+    "navbar_pagenav": False,
     # Tab name for the current pages TOC. (Default: "Page")
-    "navbar_pagenav_name": "On This Page",
+    "navbar_pagenav_name": None,
+
+    'globaltoc_includehidden': True,
 
     # Global TOC depth for "site" navbar tab. (Default: 1)
     # Switching to -1 shows all levels.
-    "globaltoc_depth": 2,
+    "globaltoc_depth": 1,
     "bootswatch_theme": "lumen",
     "navbar_links": [
+        ("Home", "index"),
         ("GitHub", "https://www.github.com/esi-neuroscience/acme", True),
     ],
 }

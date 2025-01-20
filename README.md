@@ -1,5 +1,5 @@
 <!--
-Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+Copyright (c) 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 in Cooperation with Max Planck Society
 SPDX-License-Identifier: CC-BY-NC-SA-1.0
 -->
@@ -177,7 +177,8 @@ See also [Where Are My Results?](https://esi-acme.readthedocs.io/en/latest/userg
 
 ### Collect Results in Single HDF5 Dataset
 
-If possible, results can be slotted into a single HDF5 dataset:
+If possible, results can be slotted into a single HDF5 dataset using the
+`result_shape` keyword (`None` denotes the dimension for stacking results):
 
 ```python
 def f(x, y, z=3):
@@ -194,6 +195,27 @@ import h5py
 
 with h5py.File(pmap.results_container, "r") as h5f:
   out = h5f["result_0"][()] # returns a NumPy array of shape (4,)
+```
+
+Datasets support "unlimited" dimensions that do not have to be set a priori
+(use `np.inf` in `result_shape` to denote a dimension of arbitrary size)
+
+```python
+# Assume only the channel count but not the number of samples is known
+nChannels = 10
+nSamples = 1234
+mock_data = np.random.rand(nChannels, nSamples)
+np.save("mock_data.npy", mock_data)
+
+def mock_processing(val):
+  data = np.load("mock_data.npy")
+  return val * data
+
+with ParallelMap(mock_processing, [2, 4, 6, 8], result_shape=(None, nChannels, np.inf)) as pmap:
+  pmap.compute()
+
+with h5py.File(pmap.results_container, "r") as h5f:
+  out = h5f["result_0"][()] # returns a NumPy array of shape (4, nChannels, nSamples)
 ```
 
 More examples can be found in

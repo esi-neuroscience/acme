@@ -1,4 +1,4 @@
-.. Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+.. Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 .. in Cooperation with Max Planck Society
 
 .. SPDX-License-Identifier: CC-BY-NC-SA-1.0
@@ -10,9 +10,6 @@ times in parallel. Thus, only problems that can be split up into
 independent tasks can be processed with :class:`~acme.ParallelMap` ("embarassingly parallel workloads").
 Inter-process communication, worker-synchronization or shared memory
 problems **will not work**.
-
-.. contents:: Quick Links
-    :depth: 2
 
 If Things Go Wrong
 ^^^^^^^^^^^^^^^^^^

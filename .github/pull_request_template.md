@@ -1,5 +1,5 @@
 <!--
-Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+Copyright (c) 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 in Cooperation with Max Planck Society
 SPDX-License-Identifier: CC-BY-NC-SA-1.0
 -->
@@ -14,7 +14,7 @@ Author Guidelines
 
 - [ ] Is the change set **< 400 lines**?
 - [ ] Is the code running locally **and** on HPC infrastructure?
-- [ ] Is the code running on all supported platforms (macOS, Linux and Windows)?
+- [ ] Is the code running on all supported platforms (macOS, Linux/Windows via WSL)?
 
 Reviewer Checklist
 ------------------

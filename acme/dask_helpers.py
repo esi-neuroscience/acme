@@ -1,7 +1,7 @@
 #
 # Helper routines for working w/dask
 #
-# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 # in Cooperation with Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -19,11 +19,6 @@ import inspect
 import textwrap
 import numpy as np
 from tqdm import tqdm
-if sys.platform == "win32":                                             # pragma: no cover
-    # tqdm breaks term colors on Windows - fix that (tqdm issue #446)
-    import colorama
-    colorama.deinit()
-    colorama.init(strip=False)
 from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, get_client, LocalCluster
 from datetime import datetime, timedelta
@@ -144,7 +139,7 @@ def esi_cluster_setup(
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Backwards compatibility: legacy keywords are converted to new nomenclature
     if any(kw in kwargs for kw in __deprecated__):
@@ -184,15 +179,14 @@ def esi_cluster_setup(
         # SLURM is not installed: either allocate `LocalCluster` or just leave
         if proc.returncode > 0:
             if interactive:
-                msg = "{name:s} SLURM does not seem to be installed on this machine " +\
-                    "({host:s}). Do you want to start a local multi-processing " +\
+                msg = f"{funcName} SLURM does not seem to be installed on this machine " +\
+                    f"({socket.gethostname()}). Do you want to start a local multi-processing " +\
                     "computing client instead? "
-                startLocal = user_yesno(msg.format(name=funcName, host=socket.gethostname()),
-                                        default="no")
+                startLocal = user_yesno(msg, default="no")
             else:
                 startLocal = True
             if startLocal:
-                return local_cluster_setup(interactive=interactive, start_client=start_client)
+                return local_cluster_setup(interactive=interactive)
 
         # SLURM is installed, but something's wrong
         msg = "Cannot access SLURM queuing system from node %s: %s "
@@ -224,7 +218,7 @@ def esi_cluster_setup(
                 gbQueues = np.unique([int(queue.split("GB")[0]) for queue in availPartitions if queue[0].isdigit()])
                 memDiff = np.abs(gbQueues - memEstimate)
                 queueIdx = np.where(memDiff == memDiff.min())[0][-1]
-                partition = "{}GBXS".format(gbQueues[queueIdx])
+                partition = f"{gbQueues[queueIdx]}GBXS"
             else:
                 partition = "E880"
                 mem_per_worker = f"{memEstimate} GB"
@@ -249,7 +243,7 @@ def esi_cluster_setup(
     if cores_per_worker is None:
         try:
             log.debug("Using `scontrol` to get partition info")
-            pc = subprocess.run("scontrol -o show partition {}".format(partition),
+            pc = subprocess.run(f"scontrol -o show partition {partition}",
                                 capture_output=True, check=True, shell=True, text=True)
             defMem = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
             log.debug("Found DefMemPerCPU=%d", defMem)
@@ -259,8 +253,8 @@ def esi_cluster_setup(
             raise IOError("%s %s"%(funcName, msg%(str(exc))))
 
         # Use ESI-specific x86_64 partition layout (8GB(S/X/L), 16GB(S/X/L), ... )
-        # to get infer memory and core count; use "sane" (fat quotes)
-        # defaults on IBM POWER (if nothing was provided, use 4 cores/16 GB per worker)
+        # to infer memory and core count; use "sane" (fat quotes) defaults on IBM POWER
+        # (if nothing was provided, use 4 cores/16 GB per worker)
         if mArch == "x86_64":
             memPerCore = 8000
         else:
@@ -297,17 +291,15 @@ def esi_cluster_setup(
     if not any(option.startswith("--output") or option.startswith("-o") for option in job_extra):
         log.debug("Auto-populating `--output` setting for sbatch")
         usr = getpass.getuser()
-        slurm_wdir = "/cs/slurm/{usr:s}/{usr:s}_{date:s}"
-        slurm_wdir = slurm_wdir.format(usr=usr,
-                                       date=datetime.now().strftime('%Y%m%d-%H%M%S'))
+        slurm_wdir = f"/cs/slurm/{usr}/{usr}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
         os.makedirs(slurm_wdir, exist_ok=True)
         log.debug("Using %s for slurm logs", slurm_wdir)
         out_files = os.path.join(slurm_wdir, "slurm-%j.out")
-        job_extra.append("--output={}".format(out_files))
+        job_extra.append(f"--output={out_files}")
         log.debug("Setting `--output=%s`", out_files)
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
-    return slurm_cluster_setup(partition, cores_per_worker, n_workers,      # type: ignore
+    return slurm_cluster_setup(partition, cores_per_worker, n_workers,
                                processes_per_worker, mem_per_worker,
                                n_workers_startup, timeout, interactive,
                                interactive_wait, start_client, job_extra,
@@ -320,7 +312,7 @@ def slurm_cluster_setup(
         n_cores: int = 1,
         n_workers: int = 1,
         processes_per_worker: int = 1,
-        mem_per_worker: str = "1GB",
+        mem_per_worker: Optional[str] = "1GB",
         n_workers_startup: int = 1,
         timeout: int = 60,
         interactive: bool = True,
@@ -347,8 +339,8 @@ def slurm_cluster_setup(
         Number of processes to use per SLURM job (=worker). Should be greater
         than one only if the chosen partition contains nodes that expose multiple
         cores per job.
-    mem_per_worker : str
-        Memory allocation for each worker
+    mem_per_worker : str or None
+        Memory allocation for each worker. If `None`, partition's `DefMemPerCPU` is queried.
     n_workers_startup : int
         Number of spawned SLURM workers to wait for. The code does not return until either
         `n_workers_startup` SLURM jobs are running or the `timeout` interval (see
@@ -394,7 +386,7 @@ def slurm_cluster_setup(
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Backwards compatibility: legacy keywords are converted to new nomenclature
     if any(kw in kwargs for kw in __deprecated__):
@@ -461,10 +453,10 @@ def slurm_cluster_setup(
 
     # Get memory limit (*in MB*) of chosen partition (guaranteed to exist, cf. above)
     log.debug("Use `scontrol` to fetch partition's memory limit")
-    pc = subprocess.run("scontrol -o show partition {}".format(partition),
+    pc = subprocess.run(f"scontrol -o show partition {partition}",
                         capture_output=True, check=True, shell=True, text=True)
     try:
-        mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0])
+        mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0]) - 500
     except IndexError:
         mem_lim = np.inf                                            # type: ignore
     log.debug("Found a limit of  %s MB", str(mem_lim))
@@ -473,7 +465,7 @@ def slurm_cluster_setup(
     if mem_per_worker is None:
         if np.isinf(mem_lim):
             try:
-                mem_per_worker = pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0] + "MB"
+                mem_per_worker = f"{int(pc.stdout.strip().partition('DefMemPerCPU=')[-1].split()[0]) - 500}MB"
             except IndexError:
                 raise ValueError("Cannot infer any default memory setting from partition %s"%partition)
         else:
@@ -542,7 +534,7 @@ def slurm_cluster_setup(
     # Ensure validity of requested worker processes
     try:
         scalar_parser(processes_per_worker, varname="processes_per_worker",
-                      ntype="int_like", lims=[1, 16])
+                      ntype="int_like", lims=[1, np.inf])
     except Exception as exc:
         log.error("Error parsing `processes_per_worker`")
         raise exc
@@ -578,14 +570,14 @@ def slurm_cluster_setup(
     # Create `SLURMCluster` object using provided parameters
     log.debug("Instantiating `SLURMCluster` object")
     cluster = SLURMCluster(cores=n_cores,
+                           job_cpu=n_cores,
                            memory=mem_per_worker,
                            processes=processes_per_worker,
                            local_directory=slurm_wdir,
                            queue=partition,
                            python=sys.executable,
-                           job_directives_skip=["-t", "--mem"],
+                           job_directives_skip=["-t 00:30:00"],
                            job_extra_directives=job_extra)
-                           # interface="asdf", # interface is set via `psutil.net_if_addrs()`
 
     # Compute total no. of workers and up-scale cluster accordingly
     if n_workers_startup < n_workers:
@@ -622,7 +614,7 @@ def _get_slurm_partitions() -> List:
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Retrieve all partitions currently available in SLURM
     log.debug("Use `sinfo` to fetch available partitions")
@@ -657,7 +649,7 @@ def _cluster_waiter(
     wrkrs = count_online_workers(cluster)
     to = str(timedelta(seconds=timeout))[2:]
     fmt = "{desc}: {n}/{total} \t[elapsed time {elapsed} | timeout at " + to + "]"
-    ani = tqdm(desc="{} SLURM workers ready".format(funcName), total=total_workers,
+    ani = tqdm(desc=f"{funcName} SLURM workers ready", total=total_workers,
                leave=True, bar_format=fmt, initial=wrkrs, position=0)
     counter = 0
     while count_online_workers(cluster) < total_workers and counter < timeout:
@@ -673,11 +665,9 @@ def _cluster_waiter(
         msg = "SLURM workers could not be started within given time-out " +\
               "interval of %d seconds"
         log.info(msg, timeout)
-        query = "{name:s} Do you want to [k]eep waiting for 60s, [a]bort or " +\
-                "[c]ontinue with {wrk:d} workers?"
-        choice = user_input(query.format(name=funcName, wrk=wrkrs),
-                            valid=["k", "a", "c"], default="c", timeout=interactive_wait)
-
+        query = f"{funcName} Do you want to [k]eep waiting for 60s, [a]bort or " +\
+                f"[c]ontinue with {wrkrs} workers?"
+        choice = user_input(query, valid=["k", "a", "c"], default="c", timeout=interactive_wait)
         if choice == "k":
             return _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
         elif choice == "a":
@@ -686,9 +676,9 @@ def _cluster_waiter(
             return True
         else:
             if wrkrs == 0:
-                query = "{} Cannot continue with 0 workers. Do you want to " +\
+                query = f"{funcName} Cannot continue with 0 workers. Do you want to " +\
                         "[k]eep waiting for 60s or [a]bort?"
-                choice = user_input(query.format(funcName), valid=["k", "a"],
+                choice = user_input(query, valid=["k", "a"],
                                     default="a", timeout=60)
                 if choice == "k":
                     _cluster_waiter(cluster, funcName, total_workers, 60, True, 60)
@@ -703,8 +693,7 @@ def _cluster_waiter(
 def local_cluster_setup(
         n_workers: Optional[int] = None,
         mem_per_worker: Optional[str] = None,
-        interactive: bool = True,
-        start_client: bool = True) -> Union[Client, LocalCluster, None]:
+        interactive: bool = True) -> Union[Client, None]:
     """
     Start a local distributed Dask multi-processing cluster
 
@@ -720,18 +709,12 @@ def local_cluster_setup(
         If `True`, a confirmation dialog is displayed to ensure proper encapsulation
         of calls to `local_cluster_setup` inside a script's main module block.
         See Notes for details. If `interactive` is `False`, the dialog is not shown.
-    start_client : bool
-        DEPRECATED. Will be removed in next release.
-        If `True`, a distributed computing client is launched and attached to
-        the workers. If `start_client` is `False`, only a distributed
-        computing cluster is started to which compute-clients can connect.
 
     Returns
     -------
-    proc : object
-        A distributed computing client (if ``start_client = True``) or
-        a distributed computing cluster (otherwise). If a client cannot
-        be started, `proc` is set to `None`.
+    client : distributed.Client or None
+        A distributed computing client. If a client cannot be started,
+        `proc` is set to `None`.
 
     Notes
     -----
@@ -781,7 +764,7 @@ def local_cluster_setup(
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Determine if cluster allocation is happening interactively
     if not isinstance(interactive, bool):
@@ -790,12 +773,6 @@ def local_cluster_setup(
         raise TypeError("%s %s"%(funcName, msg%(str(type(interactive)))))
     log.debug("Using `interactive = %s`", str(interactive))
 
-    # Determine if a dask client was requested
-    if not isinstance(start_client, bool) or start_client is False:
-        log.warning("The keyword `start_client` in `local_cluster_setup` is DEPRECATED and will be ignored.")
-        start_client = True
-
-    # ...if not, print warning/info message
     if not is_jupyter():
         msg = """\
         If you use a script to start a local parallel computing client, please ensure
@@ -816,9 +793,9 @@ def local_cluster_setup(
     # Additional safe-guard: if a script is executed, double-check with the user
     # for proper main idiom usage
     if interactive:                                                     # pragma: no cover
-        msg = "{name:s} If launched from a script, did you wrap your code " +\
+        msg = f"{funcName} If launched from a script, did you wrap your code " +\
             "inside a __main__ module block?"
-        if not user_yesno(msg.format(name=funcName), default="no"):
+        if not user_yesno(msg, default="no"):
             return None
 
     # Start the actual distributed client
@@ -831,9 +808,7 @@ def local_cluster_setup(
         client = Client()
     msg = "Local parallel computing client ready, dashboard accessible at %s"
     log.info(msg, client.cluster.dashboard_link)
-    if start_client:
-        return client
-    return client.cluster
+    return client
 
 
 def cluster_cleanup(client: Optional[Client] = None) -> None:
@@ -858,7 +833,7 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Attempt to establish connection to dask client
     if client is None:
@@ -879,12 +854,12 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
 
     # Prepare message for prompt
     if client.cluster.__class__.__name__ == "LocalCluster":
-        userClust = "LocalCluster hosted on {}".format(client.scheduler_info()["address"])
+        userClust = f"LocalCluster hosted on {client.scheduler_info()['address']}"
     else:
         userName = getpass.getuser()
         outDir = client.cluster.job_header.partition("--output=")[-1]
-        jobID = outDir.partition("{}_".format(userName))[-1].split(os.sep)[0]
-        userClust = "cluster {0}_{1}".format(userName, jobID)
+        jobID = outDir.partition(f"{userName}_")[-1].split(os.sep)[0]
+        userClust = f"cluster {userName}_{jobID}"
     nWorkers = count_online_workers(client.cluster)
 
     # First gracefully shut down all workers, then close client

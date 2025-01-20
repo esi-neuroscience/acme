@@ -1,7 +1,7 @@
 #
 # Auxiliaries needed across the entire package
 #
-# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 # in Cooperation with Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -62,7 +62,7 @@ def sizeOf(
     global callCount
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Protect against circular object references
     callCount += 1
@@ -127,7 +127,7 @@ def _scalar_parser(
     """
 
     # Get name of calling method/function
-    funcName = "<{}>".format(inspect.currentframe().f_back.f_code.co_name)      # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Make sure `var` is a scalar-like number
     msg = "%s `%s` has to be %s between %s and %s, not %s"

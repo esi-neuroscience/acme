@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# Copyright (c) 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 # in Cooperation with Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -21,12 +21,17 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 5
+    defaults:
+      run:
+        shell: bash -el {0}
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v4
+    - name: Set up miniforge
+      uses: conda-incubator/setup-miniconda@v3
       with:
-        python-version: '3.12'
+        channels: conda-forge
+        environment-file: acme.yml
+        miniforge-version: latest
     - name: Install ACME
       run: |
         pip install -e .[dev]

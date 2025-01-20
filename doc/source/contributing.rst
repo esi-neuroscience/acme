@@ -1,4 +1,4 @@
-.. Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+.. Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 .. in Cooperation with Max Planck Society
 
 .. SPDX-License-Identifier: CC-BY-NC-SA-1.0
@@ -11,15 +11,14 @@ ACME, please don't hesitate to get in touch via our
 `GitHub Issue Tracker <https://github.com/esi-neuroscience/acme/issues>`_.
 We're looking forward to hearing from you!
 
-.. contents:: Quick Links
-    :depth: 3
-
 Development Setup
 -----------------
 
 You want to work on ACME? Great! Simply follow the steps below to get up
-and running (the instructions assume you are working on Linux/macOS - if
-you want to set up a Windows environment )
+and running. The instructions assume you are working on Linux/macOS - if
+you have a Windows machine, please use
+`Windows Subsystem for Linux <https://learn.microsoft.com/en-us/windows/wsl/about>`_
+to set up a Linux environment for running ACME.
 
 1. Fork the ACME repo on GitHub as explained in `Fork a repo <https://docs.github.com/en/get-started/quickstart/fork-a-repo>`_
 2. Clone your shiny new fork on your local machine (or cluster node):
@@ -39,21 +38,10 @@ you want to set up a Windows environment )
    is set up correctly (for more details see ACME's
    `testing-README <https://github.com/esi-neuroscience/acme/blob/master/acme/tests/README.md>`_)
 
-   .. tabs::
+   .. code-block:: shell
 
-       .. tab:: Linux/macOS
-
-           .. code-block:: shell
-
-               cd tests/
-               ./run_tests.sh pytest
-
-       .. tab:: Windows
-
-           .. code-block:: shell
-
-               cd tests/
-               run_tests.cmd pytest
+       cd tests/
+       ./run_tests.sh pytest
 
 5. If everything looks fine, install ACME in "editable" mode. This creates
    a symlink to your local git repo in your environment's ``site-packages``
@@ -78,21 +66,11 @@ branch from ``[dev]`` in your fork and push your work to this branch. Once
 you're done with your changes, please launch a full test-run to ensure
 ACME's proper functionality:
 
-.. tabs::
 
-    .. tab:: Linux/macOS
+.. code-block:: shell
 
-        .. code-block:: shell
-
-            cd tests/
-            ./run_tests.sh pytest
-
-    .. tab:: Windows
-
-        .. code-block:: shell
-
-            cd tests/
-            run_tests.cmd pytest
+    cd tests/
+    ./run_tests.sh pytest
 
 Similarly, please use a static code checker to verify ACME's source code integrity.
 By default, our development environment comes with `mypy`. To perform
@@ -198,3 +176,9 @@ ACME's changelog follows the exemplary layout below:
 
 Feel free to add a short summary of your changes in the appropriate sections
 under `[Unreleased]`.
+
+Releases
+--------
+
+All necessary steps for preparing a new ACME release are summarized in
+`RELEASE.md <https://github.com/esi-neuroscience/acme/blob/main/RELEASE.md>`_.

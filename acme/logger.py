@@ -1,7 +1,7 @@
 #
 # ACME's logging facilities
 #
-# Copyright © 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+# Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 # in Cooperation with Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -45,7 +45,7 @@ def prepare_log(
     """
 
     # For later reference: dynamically fetch name of current function
-    funcName = "<{}>".format(inspect.currentframe().f_code.co_name)     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Ensure `logname` can be processed
     if not isinstance(logname, str):
@@ -107,11 +107,13 @@ def prepare_log(
     # temporary buffering of all log messages
     if len(log.handlers) == 0:
         stdoutHandler = logging.StreamHandler()
+        stdoutHandler.setFormatter(streamFrmt)
         log.addHandler(stdoutHandler)
         memHandler = handlers.MemoryHandler(1000,
                                             flushLevel=logging.ERROR,
                                             target=None,
                                             flushOnClose=True)
+        memHandler.setFormatter(streamFrmt)
         log.addHandler(memHandler)
 
     # If log-file creation was requested, add a target to the initially
@@ -127,7 +129,6 @@ def prepare_log(
     # and formatter
     for h in log.handlers:
         h.setLevel(loglevel)
-        h.setFormatter(streamFrmt)
 
     return
 

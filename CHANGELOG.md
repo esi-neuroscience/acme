@@ -1,5 +1,5 @@
  <!--
- Copyright (c) 2023 Ernst Strüngmann Institute (ESI) for Neuroscience
+ Copyright (c) 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
  in Cooperation with Max Planck Society
  SPDX-License-Identifier: CC-BY-NC-SA-1.0
  -->
@@ -7,6 +7,36 @@
 # Changelog of ACME
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
+
+## [2025.1]
+Implementation of user's feature request: ACME can now allocate result datasets 
+with arbitrary dimensions via the `result_shape` keyword. In case it is not clear 
+(or cumbersome) to determine the shape of an aggregate results dataset a-priori,
+setting the appropriate dimension(s) to `np.inf` prompts ACME to create a 
+[resizable HDF5 dataset](https://docs.h5py.org/en/stable/high/dataset.html#resizable-datasets). 
+
+### NEW
+- Added support for "unlimited" datasets to allow flexible dimension 
+  specifications in `result_shape`. When setting the size of a dimension in 
+  `result_shape` to `np.inf`, ACME allocates a resizable HDF5 dataset for the 
+  results. This works for both virtual and regular datasets. 
+  
+### REMOVED
+- As announced in the previous release the `start_client` keyword has been removed
+  from `local_cluster_setup` (starting a dask `LocalCluster` always starts
+  a client anyway)
+
+### DEPRECATED
+- Dropped support for Windows (ACME *should* work but is not tested any more)
+- Dropped support for Python 3.7
+
+### FIXED
+- Custom resource allocations were not correctly propagated to dask
+  workers (especially in the "E880" partition on the ESI cluster). This
+  has been fixed (cf #60)
+- A bug in `python-msgpack` under Python 3.12 triggered de-serialization
+  errors; temporarily pinned `python-msgpack` to version 1.0.5 but newer 
+  versions do not exhibit this problem (cf #59)
 
 ## [2023.12] - 2023-12-6
 Better support for non-x86 micro-architectures. On the ESI HPC cluster,
