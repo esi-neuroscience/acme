@@ -82,6 +82,12 @@ If all tests are passing, merge changes into ``[dev]`` branch.
 
 ## Deployment
 
+Actual deployment of a new release requires several manual steps for publishing 
+to PyPI and conda-forge, respectively. **Note**: these steps have to be performed
+in the order shown here!
+
+### 1. Publish to PyPI
+
 > Ensure you're working in ``[dev]``, not ``[main]``!
 
 1. Update dependencies/supported Python version in [setup.cfg](./setup.cfg)
@@ -110,34 +116,41 @@ If all tests are passing, merge changes into ``[dev]`` branch.
    ```
 
 Finally, open a PR into ``[main]``. Once merged, wait for the CI pipeline
-to finish and click the play button to publish to PyPi. Then wait for the
-`regro-cf-autotick-bot` to open an PR in ACME's conda-forge feedstock.
-Checkout the bot's branch and run the Docker-based conda-forge test suite.
+to finish and click the play button to publish to PyPi. 
 
-```bash
-cd esi-acme-feedstock/
-git pull
-git checkout -t origin/2023.12_h898bc9
-sudo -i
-./build-locally.py
+### 2. Publish to `conda-forge`
+
+Wait for the `regro-cf-autotick-bot` to open an PR in ACME's 
+[conda-forge feedstock](https://github.com/conda-forge/esi-acme-feedstock).
+Check out the bot's fork of the feedstock into a separate directory and 
+switch to the branch shown in the PR:
+
+```bash 
+git clone git@github.com:regro-cf-autotick-bot/esi-acme-feedstock.git /path/to/bot-forge/
+git checkout -t origin/2025.1_hf4c7f2
 ```
-
-**WARNING**: As of Dec. 2023, in Linux, the local build script has to
-be run as `root` (even if Docker is installed with root-less support).
-This will trigger the error
-``fatal: detected dubious ownership in repository at '/home/conda/feedstock_root'
-``. To do this, change the `docker run` command in
-`esi-acme-feedstock/.scripts/run_docker_build.sh`:
-
-```bash
-           bash -c \
-           "git config --global --add safe.directory '/home/conda/feedstock_root' && /home/conda/feedstock_root/${PROVIDER_DIR}/build_steps.sh"
-```
-
 Change dependencies as needed in `meta.yaml`. Take care (not) to bump
 the `build/number` as explained in
 [Updating esi-acme-feedstock](https://github.com/conda-forge/esi-acme-feedstock#updating-esi-acme-feedstock).
-Commit changes and push to the bots branch. Once done, merge the PR.
+Run the Docker-based testing pipeline:
+
+```bash
+sudo ./build-locally.py
+```
+
+If the pipeline completes successfully, commit and push your changes. Once all 
+GitHub actions are done, review and merge the bot's PR. 
+
+## 3. GitHub Release
+
+Create a new GitHub release based on the tag created in Step #1: go to 
+[ACME's GitHub page](https://github.com/esi-neuroscience/acme) and click on 
+*Releases*. Choose *Draft a new release* and pick the most recently created tag. 
+Choose the tag's title as *Release title* and copy the corresponding section from 
+`CHANGELOG.md` in the field saying *Describe this release* (use previous releases 
+as template and click *Preview* to check markdown formatting). Scroll to the 
+bottom of the page and ensure the box next to *Set as the latest release* is 
+ticked. Finally, click on *Publish release*. 
 
 ## Post-Release Cleanup
 
