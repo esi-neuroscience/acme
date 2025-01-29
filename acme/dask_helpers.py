@@ -22,14 +22,14 @@ from tqdm import tqdm
 from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, get_client, LocalCluster
 from datetime import datetime, timedelta
-from typing import List, Optional, Any, Union
+from typing import List, Optional, Any, Union, Tuple
 
 # Local imports
 from acme import __deprecated__, __deprecation_wrng__
 from .shared import user_input, user_yesno, is_jupyter
 from .spy_interface import scalar_parser, log
 
-__all__: List["str"] = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm_cluster_setup"]
+__all__: List["str"] = ["esi_cluster_setup", "bic_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm_cluster_setup"]
 
 
 # Setup SLURM workers on the ESI HPC cluster
@@ -294,7 +294,7 @@ def bic_cluster_setup(
 
     # If either core-count or mem-spec is undefined, go and ask partition for `DefMeMPerCPU`
     if cores_per_worker is None or mem_per_worker is None:
-        _probe_scontrol()
+        # _probe_scontrol() FIXME
         try:
             log.debug("Using `scontrol` to get partition info")
             pc = subprocess.run(f"scontrol -o show partition {partition}",
@@ -978,7 +978,7 @@ def _probe_auto_partition(
         memEstimate = int(mem_per_worker.replace("estimate_memuse:", ""))
         mem_per_worker = "auto"
         log.info("Automatically selecting SLURM partition...")
-        gbQueues = np.unique([int(queue.split("GB")[0]) for queue in availPartitions if queue[0].isdigit()])
+        gbQueues = np.unique([int(queue.split("GB")[0]) for queue in avail_partitions if queue[0].isdigit()])
         memDiff = np.abs(gbQueues - memEstimate)
         queueIdx = np.where(memDiff == memDiff.min())[0][-1]
         partition = f"{gbQueues[queueIdx]}GBXS"
@@ -1001,7 +1001,7 @@ def _parse_partition(
         lgl = "'" + "or '".join(opt + "' " for opt in valid)
         msg = "Invalid partition selection %s, available SLURM partitions are %s"
         log.error(msg, str(partition), lgl)
-        raise ValueError("%s %s"%(funcName, msg%(str(partition), lgl)))
+        raise ValueError(msg%(str(partition), lgl))
     log.debug("Found `partition = %s`", partition)
 
     return
