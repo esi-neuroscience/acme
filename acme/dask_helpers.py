@@ -151,10 +151,14 @@ def esi_cluster_setup(
                   and `n_workers_startup = n_jobs_startup`")
 
     # Don't start a new cluster on top of an existing one
-    _probe_existing_client(start_client)
+    active_client = _probe_existing_client(start_client)
+    if active_client:
+        return active_client
 
     # Check if SLURM's `sinfo` can be accessed
-    _probe_sinfo(interactive)
+    start_local = _probe_sinfo_or_start_local(interactive)
+    if start_local:
+        return local_cluster_setup(interactive=interactive)
 
     # Use default by-worker process count or extract it from anonymous keyword args (if provided)
     processes_per_worker = kwargs.pop("processes_per_worker", 1)
@@ -269,10 +273,14 @@ def bic_cluster_setup(
     funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Don't start a new cluster on top of an existing one
-    _probe_existing_client(start_client)
+    active_client = _probe_existing_client(start_client)
+    if active_client:
+        return active_client
 
     # Check if SLURM's `sinfo` can be accessed
-    _probe_sinfo(interactive)
+    start_local = _probe_sinfo_or_start_local(interactive)
+    if start_local:
+        return local_cluster_setup(interactive=interactive)
 
     # Use default by-worker process count or extract it from anonymous keyword args (if provided)
     processes_per_worker = kwargs.pop("processes_per_worker", 1)
@@ -922,7 +930,7 @@ def _probe_existing_client(start_client : bool) -> Union[Client, SLURMCluster, L
     return
 
 
-def _probe_sinfo(interactive : bool) -> Union[LocalCluster, None]:
+def _probe_sinfo_or_start_local(interactive : bool) -> bool:
     """
     Check if SLURM's `sinfo` can be accessed
     """
@@ -933,6 +941,7 @@ def _probe_sinfo(interactive : bool) -> Union[LocalCluster, None]:
     _, err = proc.communicate()
 
     # Any non-zero return-code means SLURM is not ready to use
+    startLocal = False
     if proc.returncode != 0:
 
         # SLURM is not installed: either allocate `LocalCluster` or just leave
@@ -944,15 +953,13 @@ def _probe_sinfo(interactive : bool) -> Union[LocalCluster, None]:
                 startLocal = user_yesno(msg, default="no")
             else:
                 startLocal = True
-            if startLocal:
-                return local_cluster_setup(interactive=interactive)
 
-        # SLURM is installed, but something's wrong
-        msg = "Cannot access SLURM queuing system from node %s: %s "
-        log.error(msg, socket.gethostname(), err)
-        raise IOError("%s"%(msg%(socket.gethostname(), err)))
+        if not startLocal:
+            msg = "Cannot access SLURM queuing system from node %s: %s "
+            log.error(msg, socket.gethostname(), err)
+            raise IOError("%s"%(msg%(socket.gethostname(), err)))
 
-    return
+    return startLocal
 
 
 def _probe_auto_partition(
