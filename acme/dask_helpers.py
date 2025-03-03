@@ -170,7 +170,7 @@ def esi_cluster_setup(
     # Fetch available and define invalid partitions and probe for auto-selection
     avail_partitions = _get_slurm_partitions()
     invalid_partitions = ["VISppc", "VISx86"]
-    auto_partition, auto_memory = _probe_auto_partition(partition, avail_partitions, invalid_partitions)
+    auto_partition, auto_memory = _probe_auto_partition(partition, avail_partitions, invalid_partitions, mem_per_worker)
     if auto_partition is not None:
         if mArch == "x86_64":
             partition = auto_partition
@@ -178,7 +178,7 @@ def esi_cluster_setup(
         else:
             partition = "E880"
             mem_per_worker = auto_memory
-        msg = "Picked partition %s based on estimated memory consumption of %d GB"
+        msg = "Picked partition %s based on estimated memory consumption of %s GB"
         log.info(msg, partition, auto_memory)
     else:
         if (partition == "E880" and mArch == "x86_64") or \
@@ -292,7 +292,7 @@ def bic_cluster_setup(
     # Fetch available and define invalid partitions and probe for auto-selection
     avail_partitions = _get_slurm_partitions()
     invalid_partitions = ["VISppc", "VISx86"]
-    auto_partition, _ = _probe_auto_partition(partition, avail_partitions, invalid_partitions)
+    auto_partition, _ = _probe_auto_partition(partition, avail_partitions, invalid_partitions, mem_per_worker)
     if auto_partition is not None:
         partition = auto_partition
         mem_per_worker = None
@@ -339,7 +339,7 @@ def bic_cluster_setup(
             else:
                 partition = "E880"
                 mem_per_worker = f"{memEstimate} GB"
-            msg = "Picked partition %s based on estimated memory consumption of %d GB"
+            msg = "Picked partition %s based on estimated memory consumption of %s GB"
             log.info(msg, partition, memEstimate)
         else:
             if (partition == "E880" and mArch == "x86_64") or \
@@ -971,9 +971,6 @@ def _probe_auto_partition(
     If partition is "auto" use `mem_per_worker` to pick pseudo-optimal partition
     """
 
-    # Make sure we're in a valid partition
-    _parse_partition(partition, avail_partitions, invalid_partitions)
-
     # Note: the `np.where` gymnastic below is necessary since `argmin` refuses
     # to return multiple matches; if `mem_per_worker` is 12, then ``memDiff = [4, 4, ...]``,
     # however, 8GB won't fit a 12GB worker, so we have to pick the second match 16GB
@@ -988,12 +985,13 @@ def _probe_auto_partition(
         gbQueues = np.unique([int(queue.split("GB")[0]) for queue in avail_partitions if queue[0].isdigit()])
         memDiff = np.abs(gbQueues - memEstimate)
         queueIdx = np.where(memDiff == memDiff.min())[0][-1]
-        partition = f"{gbQueues[queueIdx]}GBXS"
-        mem_per_worker = f"{memEstimate} GB"
+        auto_partition = f"{gbQueues[queueIdx]}GBXS"
+        auto_memory = f"{memEstimate} GB"
     else:
-        partition = mem_per_worker = None
+        _parse_partition(partition, avail_partitions, invalid_partitions)
+        auto_partition = auto_memory = None
 
-    return partition, mem_per_worker
+    return auto_partition, auto_memory
 
 
 def _parse_partition(
