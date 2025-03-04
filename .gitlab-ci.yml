@@ -20,7 +20,6 @@ linux_x86:
     - main
     - dev
     variables:
-        PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
     - source $HOME/miniconda/etc/profile.d/conda.sh
@@ -38,7 +37,6 @@ macos_m1:
     - main
     - dev
     variables:
-        PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
     - source /opt/conda/etc/profile.d/conda.sh
@@ -59,7 +57,7 @@ slurm_x86:
     - main
     - dev
     variables:
-        PYTEST_ADDOPTS: "--color=yes --tb=short --verbose --cov=acme/ --cov-config=.coveragerc --cov-report=xml"
+        PYTEST_ADDOPTS: "--cov=acme/ --cov-config=.coveragerc --cov-report=xml"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
     - source /opt/conda/etc/profile.d/conda.sh
@@ -82,7 +80,6 @@ slurm_ppc64le:
     - main
     - dev
     variables:
-        PYTEST_ADDOPTS: "--color=yes --tb=short --verbose"
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
     - source /opt/conda/etc/profile.d/conda.sh
