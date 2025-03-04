@@ -9,37 +9,86 @@
 #
 
 # First and foremost, check if `srun` is available
-_useSLURM=$(command -v srun)
+useSLURM=$(command -v srun)
 
-# Stuff only relevant in here
-_self=$(basename "$BASH_SOURCE")
-_selfie="${_self%.*}"
-_ppname="<$_selfie>"
-
-# Brief help message explaining script usage
+# Display brief help message explaining script usage
 usage()
 {
     echo "
-usage: $_selfie COMMAND
+$(basename "$0") [--help] pytest|tox [PYTESTOPTS]
 
-Run ACME's testing pipeline via SLURM
+usage:
+
+    $(basename "$0") pytest [PYTESTOPTS]
+    $(basename "$0") tox [PYTESTOPTS]
+
+Run ACME's testing pipeline via SLURM or locally.
 
 Arguments:
-  COMMAND
-    pytest        perform testing using pytest in current user environment
-                  (if SLURM is available, tests are executed via `srun`)
-    tox           use tox to set up a new virtual environment (as defined in tox.ini)
-                  and run tests within this newly created env
-    -h or --help  show this help message and exit
-Example:
-  $_selfie pytest
+    pytest       perform testing using pytest in current user environment
+                 (if SLURM is available, tests are executed via `srun`)
+    tox          use tox to set up a new virtual environment (as defined in tox.ini)
+                 and run tests within this environment
+    PYTESTOPTS   OPTIONAL: any additional options to be passed on to pytest
+    --help       OPTIONAL: show this help message and exit
+
+Examples:
+    $(basename "$0") pytest
+        Runs testing pipeline in current user environment using settings found
+        in pytest.ini
+    $(basename "$0") pytest --pdb
+        Runs testing pipeline in current user environment using settings found
+        in pytest.ini and the additional option --pdb so that pytest
+        drops to PDB in case of errors
 "
 }
 
 # Running this script w/no arguments displays the above help message
 if [ "$1" == "" ]; then
     usage
+    exit 0
 fi
+
+# Parse any provided options
+optArray=()
+testargs=()
+while :; do
+    case "$1" in
+        "")
+            break
+            ;;
+        pytest)
+	        optArray+=("pytest")
+            ;;
+        tox)
+	        optArray+=("tox")
+            ;;
+        --help)
+	        optArray+=("help")
+            ;;
+        *)
+            testargs+=("$1")
+            ;;
+    esac
+    shift
+done
+
+# Parse mutually exclusive CLI args
+if [[ "${#optArray[@]}" -gt 1 ]]; then
+    echo "ERROR: Too many options provided"
+    exit 1
+fi
+if [[ "${#optArray[@]}" -lt 1 ]]; then
+    echo "ERROR: At least one valid option required"
+    exit 1
+fi
+
+# Include additional coverage options
+if [[ -z "${testargs}" ]]; then
+    testargs=()
+fi
+testargs+=("--cov=../../acme")
+testargs+=("--cov-config=../../.coveragerc")
 
 # Define default SLURM partition based on architecture we're running on
 mArch=`uname -m`
@@ -55,46 +104,43 @@ else
     toxCPU=8
 fi
 
-# Set up "global" pytest options for running test-suite (coverage is only done in local pytest runs)
-export PYTEST_ADDOPTS="--color=yes --tb=short --verbose"
+# (Re)set PYTHONPATH to make local import of ACME possible
+# (attempt to) preserve already set PYTHONPATH
+if [ -n "${PYTHONPATH+x}" ]; then
+    ptmp="${PYTHONPATH}"
+fi
+export PYTHONPATH=$(cd ../../ && pwd)
 
-# The while construction allows parsing of multiple positional/optional args (future-proofing...)
-while [ "$1" != "" ]; do
-    case "$1" in
-        pytest)
-            shift
-            export PYTHONPATH=$(cd ../../ && pwd)
-            if [ $_useSLURM ]; then
-                CMD="srun -u -n 1 -p ${pytestQ} --mem=8000m -c ${pytestCPU} pytest"
-            else
-                PYTEST_ADDOPTS="${PYTEST_ADDOPTS} --cov=../../acme --cov-config=../../.coveragerc"
-                export PYTEST_ADDOPTS
-                CMD="pytest"
-            fi
-            echo ">>>"
-            echo ">>> Running ${CMD} ${PYTEST_ADDOPTS}"
-            echo ">>>"
-            ${CMD}
-            ;;
-        tox)
-            shift
-            if [ $_useSLURM ]; then
-                CMD="srun -u -p ${toxQ} --mem=8000m -c ${toxCPU} tox"
-            else
-                CMD="tox"
-            fi
-            echo ">>>"
-            echo ">>> Running ${CMD} "
-            echo ">>>"
-            ${CMD}
-            ;;
-        -h | --help)
-            shift
-            usage
-            ;;
-        *)
-            shift
-            echo "$_ppname invalid argument '$1'"
-            ;;
-    esac
+# Execute appropriate testing command
+for option in "${optArray[@]}"; do
+    if [[ "${option}" == "help" ]]; then
+	    usage
+    elif [[ "${option}" == "pytest" ]]; then
+        cmd="pytest"
+        if [ "${useSLURM}" ]; then
+            cmd="srun -u -n 1 -p ${pytestQ} --mem=8000m -c ${pytestCPU} ${cmd}"
+        fi
+        cmd="${cmd} ${testargs[@]}"
+        echo ">>>"
+        echo ">>> Running ${cmd}"
+        echo ">>>"
+        ${cmd}
+    elif [[ "${option}" == "tox" ]]; then
+        cmd="tox"
+        if [ $_useSLURM ]; then
+            cmd="srun -u -p ${toxQ} --mem=8000m -c ${toxCPU} ${cmd}"
+        fi
+        cmd="${cmd} ${testargs[@]}"
+        echo ">>>"
+        echo ">>> Running ${cmd} "
+        echo ">>>"
+        ${cmd}
+    fi
 done
+
+# Reset PYTHONPATH if it was set before
+if [ -n "${ptmp+x}" ]; then
+    PYTHONPATH="${ptmp}"
+fi
+
+exit 0
