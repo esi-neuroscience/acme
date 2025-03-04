@@ -169,7 +169,7 @@ def esi_cluster_setup(
 
     # Fetch available and define invalid partitions and probe for auto-selection
     avail_partitions = _get_slurm_partitions()
-    invalid_partitions = ["VISppc", "VISx86"]
+    invalid_partitions = ["PREPO", "ESI"]
     auto_partition, auto_memory = _probe_auto_partition(partition, avail_partitions, invalid_partitions, mem_per_worker)
     if auto_partition is not None:
         if mArch == "x86_64":
@@ -194,16 +194,7 @@ def esi_cluster_setup(
 
     # If either core-count or mem-spec is undefined, go and ask partition for `DefMeMPerCPU`
     if cores_per_worker is None or mem_per_worker is None:
-        try:
-            log.debug("Using `scontrol` to get partition info")
-            pc = subprocess.run(f"scontrol -o show partition {partition}",
-                                capture_output=True, check=True, shell=True, text=True)
-            defMem = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
-            log.debug("Found DefMemPerCPU=%d", defMem)
-        except Exception as exc:
-            msg = "Cannot fetch available memory per CPU in SLURM: %s"
-            log.error(msg, str(exc))
-            raise IOError("%s %s"%(funcName, msg%(str(exc))))
+        defMem = _probe_scontrol(partition)
 
     # If not explicitly provided, extract by-worker CPU core count from
     # partition via `DefMeMPerCPU` and `mem_per_worker` (if defined)
@@ -212,15 +203,13 @@ def esi_cluster_setup(
         # Use ESI-specific x86_64 partition layout (8GB(S/X/L), 16GB(S/X/L), ... )
         # to infer memory and core count; use "sane" (fat quotes) defaults on IBM POWER
         # (if nothing was provided, use 4 cores/16 GB per worker)
+        if mem_per_worker is not None:
+            defMem = int(mem_per_worker.replace("MB", ""))
         if mArch == "x86_64":
             memPerCore = 8000
         else:
-            if mem_per_worker is not None:
-                defMem = int(mem_per_worker.replace("MB", ""))
-            else:
+            if mem_per_worker is None:
                 defMem = 16000                  # default to 4 cores per worker if no mem req was specified
-                mem_per_worker = f"{defMem} MB"
-                log.debug("No `mem_per_worker` specified, using default of %d MB", defMem)
             memPerCore = 4000
 
         # Set core-count per worker (applies to both x86_64 and ppc64le)
@@ -230,6 +219,7 @@ def esi_cluster_setup(
     # If `mem_per_worker` is still unassigned, use exactred `DefMemPerCPU` value
     if mem_per_worker is None:
         mem_per_worker = f"{defMem}MB"
+        log.debug("No `mem_per_worker` specified, using default of %s", mem_per_worker)
 
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
     # but we may need to append to it, so ensure that's possible)
@@ -292,72 +282,59 @@ def bic_cluster_setup(
     # Fetch available and define invalid partitions and probe for auto-selection
     avail_partitions = _get_slurm_partitions()
     invalid_partitions = ["VISppc", "VISx86"]
-    auto_partition, _ = _probe_auto_partition(partition, avail_partitions, invalid_partitions, mem_per_worker)
+    auto_partition, auto_memory = _probe_auto_partition(partition, avail_partitions, invalid_partitions, mem_per_worker)
     if auto_partition is not None:
-        partition = auto_partition
+        if mArch == "x86_64":
+            partition = f"{auto_partition}x86"
+        else:
+            partition = f"{auto_partition}ppc"
         mem_per_worker = None
+        msg = "Picked partition %s based on estimated memory consumption of %s GB"
+        log.info(msg, partition, auto_memory)
 
     # Convert memory selections to MB, "auto" is converted to `None`
     mem_per_worker = _probe_mem_spec(mem_per_worker)
 
     # If either core-count or mem-spec is undefined, go and ask partition for `DefMeMPerCPU`
     if cores_per_worker is None or mem_per_worker is None:
-        # _probe_scontrol() FIXME
-        try:
-            log.debug("Using `scontrol` to get partition info")
-            pc = subprocess.run(f"scontrol -o show partition {partition}",
-                                capture_output=True, check=True, shell=True, text=True)
-            defMem = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
-            log.debug("Found DefMemPerCPU=%d", defMem)
-        except Exception as exc:
-            msg = "Cannot fetch available memory per CPU in SLURM: %s"
-            log.error(msg, str(exc))
-            raise IOError("%s %s"%(funcName, msg%(str(exc))))
+        defMem = _probe_scontrol(partition)
 
+    # If not explicitly provided, extract by-worker CPU core count from
+    # partition via `DefMeMPerCPU` and `mem_per_worker` (if defined)
+    if cores_per_worker is None:
+        memPerCore = 8000
+        if mem_per_worker is not None:
+            defMem = int(mem_per_worker.replace("MB", ""))
+        cores_per_worker = max(1, int(defMem / memPerCore))
+        log.debug("Derived core-count from partition: `cores_per_worker=%d`", cores_per_worker)
 
-    # If partition is "auto" use `mem_per_worker` to pick pseudo-optimal partition
-    # Note: the `np.where` gymnastic below is necessary since `argmin` refuses
-    # to return multiple matches; if `mem_per_worker` is 12, then ``memDiff = [4, 4, ...]``,
-    # however, 8GB won't fit a 12GB worker, so we have to pick the second match 16GB
+    # If `mem_per_worker` is still unassigned, use exactred `DefMemPerCPU` value
+    if mem_per_worker is None:
+        mem_per_worker = f"{defMem}MB"
+        log.debug("No `mem_per_worker` specified, using default of %s", mem_per_worker)
 
+    # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
+    # but we may need to append to it, so ensure that's possible)
+    _probe_job_extra(job_extra)
 
-    if isinstance(partition, str):
-        if partition == "auto":
-            if not isinstance(mem_per_worker, str) or mem_per_worker.find("estimate_memuse:") < 0:
-                msg = "Cannot auto-select partition without first invoking memory estimation in `ParallelMap`. "
-                log.error(msg)
-                raise IOError("%s %s"%(funcName, msg))
-            memEstimate = int(mem_per_worker.replace("estimate_memuse:", ""))
-            mem_per_worker = "auto"
-            log.info("Automatically selecting SLURM partition...")
-            availPartitions = _get_slurm_partitions()
-            if mArch == "x86_64":
-                gbQueues = np.unique([int(queue.split("GB")[0]) for queue in availPartitions if queue[0].isdigit()])
-                memDiff = np.abs(gbQueues - memEstimate)
-                queueIdx = np.where(memDiff == memDiff.min())[0][-1]
-                partition = f"{gbQueues[queueIdx]}GBXS"
-            else:
-                partition = "E880"
-                mem_per_worker = f"{memEstimate} GB"
-            msg = "Picked partition %s based on estimated memory consumption of %s GB"
-            log.info(msg, partition, memEstimate)
-        else:
-            if (partition == "E880" and mArch == "x86_64") or \
-               (mArch == "ppc64le" and partition != "E880"):
-                otherArch = list(set(["x86_64", "ppc64le"]).difference([mArch]))[0]
-                msg = "Cannot start SLURM workers in partition %s with " +\
-                    "architecture %s from submitting host with architecture %s. " +\
-                    "Start x86_64 workers from esi-svhpc{1,2,3} and POWER workers from the hub."
-                raise ValueError(msg%(partition, otherArch, mArch))
-
-    _probe_job_extra()
+    # If '--output' was not provided, append default output folder to `job_extra`
+    if not any(option.startswith("--output") or option.startswith("-o") for option in job_extra):
+        log.debug("Auto-populating `--output` setting for sbatch")
+        usr = getpass.getuser()
+        slurm_wdir = f"/mnt/hpc/home/{usr}/slurm/{usr}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        os.makedirs(slurm_wdir, exist_ok=True)
+        log.debug("Using %s for slurm logs", slurm_wdir)
+        out_files = os.path.join(slurm_wdir, "slurm-%j.out")
+        job_extra.append(f"--output={out_files}")
+        log.debug("Setting `--output=%s`", out_files)
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
     return slurm_cluster_setup(partition, cores_per_worker, n_workers,
                                processes_per_worker, mem_per_worker,
                                n_workers_startup, timeout, interactive,
                                interactive_wait, start_client, job_extra,
-                               invalid_partitions=["VISppc", "VISx86"], **kwargs)
+                               avail_partitions=avail_partitions,
+                               invalid_partitions=invalid_partitions, **kwargs)
 
 
 # Setup SLURM cluster
@@ -985,7 +962,7 @@ def _probe_auto_partition(
         gbQueues = np.unique([int(queue.split("GB")[0]) for queue in avail_partitions if queue[0].isdigit()])
         memDiff = np.abs(gbQueues - memEstimate)
         queueIdx = np.where(memDiff == memDiff.min())[0][-1]
-        auto_partition = f"{gbQueues[queueIdx]}GBXS"
+        auto_partition = f"{gbQueues[queueIdx]}GBS"
         auto_memory = f"{memEstimate} GB"
     else:
         _parse_partition(partition, avail_partitions, invalid_partitions)
@@ -1055,5 +1032,23 @@ def _probe_job_extra(job_extra : List) -> None:
         msg = "`job_extra` has to be a list, not %s"
         log.error(msg, str(type(job_extra)))
         raise TypeError(msg%(str(type(job_extra))))
+
+    return
+
+
+def _probe_scontrol(partition : str) -> int:
+    """
+    (Attempt to) Infer default mem-to-cpu setting from partition
+    """
+    try:
+        log.debug("Using `scontrol` to get partition info")
+        pc = subprocess.run(f"scontrol -o show partition {partition}",
+                            capture_output=True, check=True, shell=True, text=True)
+        defMem = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
+        log.debug("Found DefMemPerCPU=%d", defMem)
+    except Exception as exc:
+        msg = "Cannot fetch available memory per CPU in SLURM: %s"
+        log.error(msg, str(exc))
+        raise IOError(msg%(str(exc)))
 
     return
