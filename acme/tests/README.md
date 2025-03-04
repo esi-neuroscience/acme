@@ -47,19 +47,11 @@ pytest_args = ["-v", "--pyargs", "acme", "-k", "test_simple_filter"]
 pytest.main(pytest_args)
 ```
 
-If ACME is **not** installed in your `site-packages` directory, open a
-terminal and add ACME to your Python path first:
+If ACME is **not** installed in your `site-packages` directory, you can use 
+[run_tests.sh](./run_tests.sh) with appropriate arguments, e.g., 
 
-```bash
-cd acme/acme/tests/
-export PYTHONPATH=$(cd ../../ && pwd)
-```
-
-Then pick a testing function and run it, e.g., to execute the `test_simple_filter`
-test, you can use
-
-```bash
-pytest -v test_pmap.py -k 'test_simple_filter'
+``` bash
+./run_tests.sh pytest test_pmap.py -k 'test_simple_filter'
 ```
 
 Use pytest's extensive [command line arguments](https://docs.pytest.org/en/6.2.x/usage.html)
@@ -69,5 +61,5 @@ command line output, use the `-s` flag, to drop to
 provide the `--pdb` option
 
 ```bash
-pytest -sv test_pmap.py -k 'test_simple_filter' --pdb
+./run_tests.sh pytest -s test_pmap.py -k 'test_simple_filter' --pdb
 ```
