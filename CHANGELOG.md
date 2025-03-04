@@ -9,11 +9,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
-Included new convenience function `cobic_cluster_setup` for the HPC cluster at
+Included new convenience function `bic_cluster_setup` for the HPC cluster at
 CoBIC Frankfurt.
 
 ### NEW
 ### CHANGED
+- Updated testing setup (use centralized [pytest.ini](./acme/tests/pytest.ini) 
+  configuration to not pollute tests with duplicate `PYTEST_ADDOPTS` exports
+- Modernized the convenience script [run_tests.sh](./acme/tests/run_tests.sh): 
+  the script can now process arbitrary pytest options (run single tests, drop 
+  to PDB on error etc.)
+
 ### REMOVED
 ### DEPRECATED
 ### FIXED
