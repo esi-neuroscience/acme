@@ -1051,4 +1051,4 @@ def _probe_scontrol(partition : str) -> int:
         log.error(msg, str(exc))
         raise IOError(msg%(str(exc)))
 
-    return
+    return defMem
