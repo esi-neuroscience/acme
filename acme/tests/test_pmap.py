@@ -1691,7 +1691,7 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked
         if onESI and useSLURM:
-            assert f"Picked partition {defaultQ} based on estimated memory consumption of 3 GB" in logTxt
+            assert "Picked partition 8GBS based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
         # output HDF5 files were removed
@@ -1756,7 +1756,7 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked (again)
         if onESI and useSLURM:
-            assert f"Picked partition {defaultQ} based on estimated memory consumption of 3 GB" in logTxt
+            assert "Picked partition 8GBS based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling should not have generated any output
         outDirs.append(pmap.daemon.out_dir)
@@ -1820,7 +1820,7 @@ class TestParallelMap():
             with open(customLog3, "r", encoding="utf8") as f:
                 logTxt = f.read()
             assert "Estimated memory consumption across 5 runs" in logTxt
-            assert f"Picked partition {defaultQ}" in logTxt
+            assert "Picked partition 8GBS" in logTxt
             outDirs.append(pmap.out_dir)
 
         # Clean up
