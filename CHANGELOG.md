@@ -13,7 +13,12 @@ Included new convenience function `bic_cluster_setup` for the HPC cluster at
 CoBIC Frankfurt.
 
 ### NEW
+- New helper function `is_bic_node` to determine if ACME is running on the CoBIC
+  HPC cluster
+
 ### CHANGED
+- Changed default partition-type from "XS" to "S" on the ESI HPC cluster when 
+  letting ACME automatically choose a partition 
 - Updated testing setup (use centralized [pytest.ini](./acme/tests/pytest.ini) 
   configuration to not pollute tests with duplicate `PYTEST_ADDOPTS` exports
 - Modernized the convenience script [run_tests.sh](./acme/tests/run_tests.sh): 

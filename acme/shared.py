@@ -107,6 +107,17 @@ def is_esi_node() -> bool:
     return socket.gethostname().startswith("esi-sv") and os.path.isdir("/cs")
 
 
+def is_bic_node() -> bool:
+    """
+    Returns `True` if code is running on a CoBIC cluster node, `False` otherwise
+    """
+
+    # Fetch ACME logger and write debug message
+    log = logging.getLogger("ACME")
+    log.debug("Test if hostname matches the pattern 'bic-sv*'")
+    return socket.gethostname().startswith("bic-sv") and os.path.isdir("/mnt/hpc")
+
+
 def is_x86_node() -> bool:
     """
     Returns `True` if code is running on an x86_64 node, `False` otherwise

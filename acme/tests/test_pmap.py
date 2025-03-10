@@ -32,8 +32,8 @@ from numpy.typing import NDArray
 from typing import Any, Optional, Union, Dict
 
 # Import main actors here
-from acme import ParallelMap, ACMEdaemon, cluster_cleanup, esi_cluster_setup
-from conftest import skip_if_not_linux, useSLURM, onESI, onx86, defaultQ
+from acme import ParallelMap, ACMEdaemon, cluster_cleanup, esi_cluster_setup, bic_cluster_setup
+from conftest import skip_if_not_linux, useSLURM, onESI, onBIC, onx86, defaultQ
 
 # Define custom types
 realArrayLike = Union[float, NDArray[np.float64]]
@@ -155,8 +155,8 @@ class TestParallelMap():
 
         # Create tmp directory and create data-containers
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), tmpName)
-        if useSLURM:
-            tempDir = f"/cs/home/{getpass.getuser()}/{tmpName}"
+        if useSLURM and (onESI or onBIC):
+            tempDir = f"/mnt/hpc/home/{getpass.getuser()}/{tmpName}"
         shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         sigName = os.path.join(tempDir, "sigdata.h5")
@@ -339,8 +339,8 @@ class TestParallelMap():
 
         mockName = f"mock_data_{platform.machine()}"
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), mockName)
-        if useSLURM:
-            tempDir = f"/cs/home/{getpass.getuser()}/{mockName}"
+        if useSLURM and (onESI or onBIC):
+            tempDir = f"/mnt/hpc/home/{getpass.getuser()}/{mockName}"
         shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         outDirs.append(tempDir)
@@ -568,8 +568,8 @@ class TestParallelMap():
 
         # Simulate user-defined results-directory not auto-populated by ACME
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
-        if useSLURM:
-            tempDir2 = f"/cs/home/{getpass.getuser()}/acme_tmp_lowpass_hard_{platform.machine()}"
+        if useSLURM and (onESI or onBIC):
+            tempDir2 = f"/mnt/hpc/home/{getpass.getuser()}/acme_tmp_lowpass_hard_{platform.machine()}"
         shutil.rmtree(tempDir2, ignore_errors=True)
         os.makedirs(tempDir2, exist_ok=True)
 
@@ -1898,11 +1898,17 @@ class TestParallelMap():
         if useSLURM:
 
             # Supply extra args to start client for actual tests
-            slurmOut = f"/cs/home/{getpass.getuser()}/acme_out"
-            client = esi_cluster_setup(partition=defaultQ,
-                                       n_workers=10,
-                                       job_extra=[f"--output={slurmOut}"],
-                                       interactive=False)
+            slurmOut = f"/mnt/hpc/home/{getpass.getuser()}/acme_out"
+            inputArgs = {"partition" : defaultQ,
+                         "n_workers" : 10,
+                         "job_extra" : [f"--output={slurmOut}"],
+                         "interactive" : False}
+            if onESI:
+                client = esi_cluster_setup(**inputArgs)
+            elif onBIC:
+                client = bic_cluster_setup(**inputArgs)
+            else:
+                return
             assert f"--output={slurmOut}" in client.cluster.job_header
 
         else:
