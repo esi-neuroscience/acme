@@ -403,11 +403,10 @@ class TestParallelMap():
         setup_kwargs = {"partition" : defaultQ,
                         "n_workers" : n_workers,
                         "interactive" : False}
-        if onESI:
-            client = esi_cluster_setup(**setup_kwargs)
-
-        elif onBIC:
+        if onBIC:
             client = bic_cluster_setup(**setup_kwargs)
+        else:
+            client = esi_cluster_setup(**setup_kwargs)
 
         expected = list(map(f, n_workers*[x], y, list(z), n_workers*[w]))
         pmap = ParallelMap(f, x, y, z=z, w=w, n_inputs=n_workers)
