@@ -1816,13 +1816,13 @@ class TestParallelMap():
                 # Ensure the right partition was picked (16GBXY, not 8GBXY on x86)
                 if onESI:
                     if onx86:
-                        assert "16GB" in hob_head
+                        assert "16GB" in job_head
                     else:
                         memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
                         assert memory.size == 1
                         assert round(memory[0] / 1000**3) == int(memUse.split(":")[1])
                 else:
-                    assert "16GB" in hob_head
+                    assert "16GB" in job_head
 
                 cluster_cleanup(client)
 
