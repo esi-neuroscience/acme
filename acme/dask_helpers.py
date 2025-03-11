@@ -631,6 +631,9 @@ def _get_slurm_partitions() -> List:
         log.error(msg, socket.gethostname(), err)
         raise IOError("%s %s"%(funcName, msg%(socket.gethostname(), err)))
 
+    # Remove asterisk appended to any default partitions
+    out = out.replace("*", "")
+
     # Return formatted subprocess shell output
     log.debug("Found partitions: %s", out)
     return out.split()
