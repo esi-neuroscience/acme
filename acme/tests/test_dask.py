@@ -14,7 +14,7 @@ import numpy as np
 import dask.distributed as dd
 
 # Import main actors here
-from acme import cluster_cleanup, esi_cluster_setup, slurm_cluster_setup, local_cluster_setup
+from acme import cluster_cleanup, esi_cluster_setup, bic_cluster_setup, slurm_cluster_setup, local_cluster_setup
 from conftest import useSLURM, onESI, onBIC, onx86, defaultQ
 
 
