@@ -13,6 +13,9 @@ Included new convenience function `bic_cluster_setup` for the HPC cluster at
 CoBIC Frankfurt.
 
 ### NEW
+- Added two new (optional) keywords to `slurm_cluster_setup`: `worker_extra_args` 
+  can be used to pass additional options for configuring Dask workers. Similarly, 
+  `scheduler_options` propagates custom settings to the Dask scheduler. 
 - New helper function `is_bic_node` to determine if ACME is running on the CoBIC
   HPC cluster
 

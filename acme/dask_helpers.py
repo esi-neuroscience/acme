@@ -22,7 +22,7 @@ from tqdm import tqdm
 from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, get_client, LocalCluster
 from datetime import datetime, timedelta
-from typing import List, Optional, Any, Union, Tuple
+from typing import List, Optional, Any, Union, Tuple, Dict
 
 # Local imports
 from acme import __deprecated__, __deprecation_wrng__
@@ -328,6 +328,13 @@ def bic_cluster_setup(
         job_extra.append(f"--output={out_files}")
         log.debug("Setting `--output=%s`", out_files)
 
+    # # CoBIC-specific: only specific ports are available on the hubs
+    # # FIXME
+    # if socket.gethostname().startswith("bic-svhub0") and \
+    #    os.path.isfile("/usr/local/bin/squeue_summary"):
+    #     ifname = get_hub_interface() # should be in shared
+    #     dashPort = get_free_hub_port()
+
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
     return slurm_cluster_setup(partition, cores_per_worker, n_workers,
                                processes_per_worker, mem_per_worker,
@@ -350,14 +357,16 @@ def slurm_cluster_setup(
         interactive_wait: int = 10,
         start_client: bool = True,
         job_extra: List = [],
+        worker_extra_args: Optional[List[str]],
+        scheduler_options: Optional[Dict],
         avail_partitions: List = [],
         invalid_partitions: List = [],
         **kwargs: Optional[Any]) -> Union[Client, SLURMCluster, None]:
     """
     Start a distributed Dask cluster of parallel processing workers using SLURM
 
-    **NOTE** If you are working on the ESI HPC cluster, please use
-    :func:`~acme.esi_cluster_setup` instead!
+    **NOTE** If you are working on the ESI or CoBIC HPC cluster, please use
+    :func:`~acme.esi_cluster_setup` and :func:`~acme.bic_cluster_setup` instead!
 
     Parameters
     ----------
@@ -397,6 +406,10 @@ def slurm_cluster_setup(
         computing cluster is started to which compute-clients can connect.
     job_extra : list
         Extra sbatch parameters to pass to SLURMCluster.
+    worker_extra_args : list or None
+        Additional arguments to be passed to :class:`distributed.Worker`
+    scheduler_options : dict or None
+        Additional arguments to be passed to :class:`distributed.Scheduler`
     avail_partition : list
         List of valid partition names (strings) that are available for launching
         dask workers. If not provided, partitions are fetched at runtime using `sinfo`
@@ -569,6 +582,13 @@ def slurm_cluster_setup(
         slurm_wdir = None
     log.debug("Using `local_directory = %s`", slurm_wdir)
 
+    # Pick up any additional scheduler/worker args to be passed to SLURMCluster
+    extra_args = {}
+    if worker_extra_args:
+        extra_args["worker_extra_args"] = worker_extra_args
+    if scheduler_options:
+        extra_args["scheduler_options"] = scheduler_options
+
     # Create `SLURMCluster` object using provided parameters
     log.debug("Instantiating `SLURMCluster` object")
     cluster = SLURMCluster(cores=n_cores,
@@ -579,7 +599,8 @@ def slurm_cluster_setup(
                            queue=partition,
                            python=sys.executable,
                            job_directives_skip=["-t 00:30:00"],
-                           job_extra_directives=job_extra)
+                           job_extra_directives=job_extra,
+                           **extra_args)
 
     # Compute total no. of workers and up-scale cluster accordingly
     if n_workers_startup < n_workers:
