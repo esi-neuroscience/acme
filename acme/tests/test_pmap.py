@@ -400,7 +400,14 @@ class TestParallelMap():
         z = range(n_workers)
         w = np.ones((8, 1))
 
-        client = esi_cluster_setup(partition=defaultQ, n_workers=n_workers, interactive=False)
+        setup_kwargs = {"partition" : defaultQ,
+                        "n_workers" : n_workers,
+                        "interactive" : False}
+        if onESI:
+            client = esi_cluster_setup(**setup_kwargs)
+
+        elif onBIC:
+            client = bic_cluster_setup(**setup_kwargs)
 
         expected = list(map(f, n_workers*[x], y, list(z), n_workers*[w]))
         pmap = ParallelMap(f, x, y, z=z, w=w, n_inputs=n_workers)
@@ -1539,67 +1546,68 @@ class TestParallelMap():
             assert "Successfully shut down" in out
 
         # Almost identical script, this time use an externally started client
-        scriptName = os.path.join(tempDir, "dummy2.py")
-        scriptContents = \
-            "from acme import ParallelMap, esi_cluster_setup\n" +\
-            "import time\n" +\
-            "def long_running(dummy):\n" +\
-            "   time.sleep(10)\n" +\
-            "   return\n" +\
-            "if __name__ == '__main__':\n" +\
-            f"   client = esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n" +\
-            "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False, verbose=True) as pmap: \n" +\
-            "       pmap.compute()\n" +\
-            "   print('ALL DONE')\n"
-        with open(scriptName, "w", encoding="utf8") as f:
-            f.write(scriptContents)
+        if onESI:
+            scriptName = os.path.join(tempDir, "dummy2.py")
+            scriptContents = \
+                "from acme import ParallelMap, esi_cluster_setup\n" +\
+                "import time\n" +\
+                "def long_running(dummy):\n" +\
+                "   time.sleep(10)\n" +\
+                "   return\n" +\
+                "if __name__ == '__main__':\n" +\
+                f"   client = esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n" +\
+                "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False, verbose=True) as pmap: \n" +\
+                "       pmap.compute()\n" +\
+                "   print('ALL DONE')\n"
+            with open(scriptName, "w", encoding="utf8") as f:
+                f.write(scriptContents)
 
-        # Test script functionality in both Python and iPython
-        for pshell in pshells:
+            # Test script functionality in both Python and iPython
+            for pshell in pshells:
+                proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
+                                        shell=True, start_new_session=True,
+                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+                logStr = "This is ACME"
+                buffer = bytearray()
+                timeout = 60
+                t0 = time.time()
+                for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
+                    buffer.extend(line)
+                    if logStr in line.decode("utf8"):
+                        break
+                assert logStr in buffer.decode("utf8")
+                time.sleep(2)
+                os.killpg(proc.pid, sys_signal.SIGINT)
+                time.sleep(2)
+                out = proc.stdout.read().decode()
+                assert "ALL DONE" not in out
+
+            # Ensure random exception does not immediately kill an active client
+            scriptName = os.path.join(tempDir, "dummy3.py")
+            scriptContents = \
+                "from acme import esi_cluster_setup\n" +\
+                "import time\n" +\
+                "if __name__ == '__main__':\n" +\
+                f"   esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n" +\
+                "   time.sleep(60)\n"
+            with open(scriptName, "w", encoding="utf8") as f:
+                f.write(scriptContents)
             proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
                                     shell=True, start_new_session=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
-            logStr = "This is ACME"
-            buffer = bytearray()
-            timeout = 60
-            t0 = time.time()
-            for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
-                buffer.extend(line)
-                if logStr in line.decode("utf8"):
-                    break
-            assert logStr in buffer.decode("utf8")
-            time.sleep(2)
-            os.killpg(proc.pid, sys_signal.SIGINT)
-            time.sleep(2)
-            out = proc.stdout.read().decode()
-            assert "ALL DONE" not in out
 
-        # Ensure random exception does not immediately kill an active client
-        scriptName = os.path.join(tempDir, "dummy3.py")
-        scriptContents = \
-            "from acme import esi_cluster_setup\n" +\
-            "import time\n" +\
-            "if __name__ == '__main__':\n" +\
-            f"   esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n" +\
-            "   time.sleep(60)\n"
-        with open(scriptName, "w", encoding="utf8") as f:
-            f.write(scriptContents)
-        proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
-                                shell=True, start_new_session=True,
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+            # Give the client time to start up, then send a floating-point exception
+            # (equivalent to a `ZeroDivsionError` to the child process)
+            time.sleep(5)
+            assert proc.poll() is None
+            proc.send_signal(sys_signal.SIGFPE)
 
-        # Give the client time to start up, then send a floating-point exception
-        # (equivalent to a `ZeroDivsionError` to the child process)
-        time.sleep(5)
-        assert proc.poll() is None
-        proc.send_signal(sys_signal.SIGFPE)
-
-        # Ensure the `ZeroDivsionError` did not kill the process. Then terminate it
-        # and confirm that the floating-exception was propagated correctly
-        assert proc.poll() is None
-        proc.terminate()
-        proc.wait()
-        assert proc.returncode in [-sys_signal.SIGFPE.value, -sys_signal.SIGTERM.value]
+            # Ensure the `ZeroDivsionError` did not kill the process. Then terminate it
+            # and confirm that the floating-exception was propagated correctly
+            assert proc.poll() is None
+            proc.terminate()
+            proc.wait()
+            assert proc.returncode in [-sys_signal.SIGFPE.value, -sys_signal.SIGTERM.value]
 
         # Clean up tmp folder
         shutil.rmtree(tempDir, ignore_errors=True)
@@ -1690,7 +1698,7 @@ class TestParallelMap():
         assert "Estimated memory consumption across 2 runs" in logTxt
 
         # If running on the ESI cluster, ensure the correct partition has been picked
-        if onESI and useSLURM:
+        if useSLURM and (onESI or onBIC):
             assert "Picked partition 8GBS based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
@@ -1755,7 +1763,7 @@ class TestParallelMap():
         assert "Estimated memory consumption across 5 runs" in logTxt
 
         # If running on the ESI cluster, ensure the correct partition has been picked (again)
-        if onESI and useSLURM:
+        if useSLURM and (onESI or onBIC):
             assert "Picked partition 8GBS based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling should not have generated any output
@@ -1769,6 +1777,7 @@ class TestParallelMap():
 
         # Assert that `partition="auto"` has no effect in `LocalCluster` case
         if not useSLURM:
+
             with ParallelMap(memtest_func,
                              np.arange(2),
                              2,
@@ -1783,45 +1792,57 @@ class TestParallelMap():
 
         else:
 
-            # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_worker!
-            with pytest.raises(IOError):
-                esi_cluster_setup(partition="auto", mem_per_worker="invalid")
+            # Check auto-partition selection on ESI/BIC clusters
+            if onESI or onBIC:
+                if onESI:
+                    setup_func = esi_cluster_setup
+                else:
+                    setup_func = bic_cluster_setup
 
-            # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`
-            # with `mem_per_worker='esstimate_memuse:XY'`
-            memUse = "estimate_memuse:12"
-            client = esi_cluster_setup(partition="auto",
-                                       mem_per_worker=memUse,
-                                       n_workers=1,
-                                       interactive=False)
+                # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_worker!
+                with pytest.raises(IOError):
+                    setup_func(partition="auto", mem_per_worker="invalid")
 
-            # Ensure the right partition was picked (16GBXY, not 8GBXY on x86)
-            if onx86:
-                assert "16GB" in client.cluster.job_header.split("-p ")[1].split("\n")[0]
-            else:
-                memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
-                assert memory.size == 1
-                assert round(memory[0] / 1000**3) == int(memUse.split(":")[1])
+                # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`
+                # with `mem_per_worker='esstimate_memuse:XY'`
+                memUse = "estimate_memuse:12"
+                client = setup_func(partition="auto",
+                                    mem_per_worker=memUse,
+                                    n_workers=1,
+                                    interactive=False)
 
-            cluster_cleanup(client)
+                job_head = client.cluster.job_header.split("-p ")[1].split("\n")[0]
 
-            # Full run (finally) w/10 workers, 5 of em get mem-profiled
-            with ParallelMap(memtest_func,
-                             np.arange(10),
-                             2,
-                             sleeper=35,
-                             arrsize=arrsize,
-                             partition="auto",
-                             logfile=customLog3,
-                             setup_interactive=False) as pmap:
-                pmap.compute()
+                # Ensure the right partition was picked (16GBXY, not 8GBXY on x86)
+                if onESI:
+                    if onx86:
+                        assert "16GB" in hob_head
+                    else:
+                        memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+                        assert memory.size == 1
+                        assert round(memory[0] / 1000**3) == int(memUse.split(":")[1])
+                else:
+                    assert "16GB" in hob_head
 
-            # Check correct partition and no. of workers profiled
-            with open(customLog3, "r", encoding="utf8") as f:
-                logTxt = f.read()
-            assert "Estimated memory consumption across 5 runs" in logTxt
-            assert "Picked partition 8GBS" in logTxt
-            outDirs.append(pmap.out_dir)
+                cluster_cleanup(client)
+
+                # Full run (finally) w/10 workers, 5 of em get mem-profiled
+                with ParallelMap(memtest_func,
+                                 np.arange(10),
+                                 2,
+                                 sleeper=35,
+                                 arrsize=arrsize,
+                                 partition="auto",
+                                 logfile=customLog3,
+                                 setup_interactive=False) as pmap:
+                    pmap.compute()
+
+                # Check correct partition and no. of workers profiled
+                with open(customLog3, "r", encoding="utf8") as f:
+                    logTxt = f.read()
+                assert "Estimated memory consumption across 5 runs" in logTxt
+                assert "Picked partition 8GBS" in logTxt
+                outDirs.append(pmap.out_dir)
 
         # Clean up
         shutil.rmtree(tempDir, ignore_errors=True)
