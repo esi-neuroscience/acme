@@ -356,11 +356,11 @@ def slurm_cluster_setup(
         interactive: bool = True,
         interactive_wait: int = 10,
         start_client: bool = True,
+        worker_extra_args: Optional[List[str]],
+        scheduler_options: Optional[Dict],
         job_extra: List = [],
         avail_partitions: List = [],
         invalid_partitions: List = [],
-        worker_extra_args: Optional[List[str]],
-        scheduler_options: Optional[Dict],
         **kwargs: Optional[Any]) -> Union[Client, SLURMCluster, None]:
     """
     Start a distributed Dask cluster of parallel processing workers using SLURM
@@ -404,6 +404,10 @@ def slurm_cluster_setup(
         If `True`, a distributed computing client is launched and attached to
         the dask worker cluster. If `start_client` is `False`, only a distributed
         computing cluster is started to which compute-clients can connect.
+    worker_extra_args : list or None
+        Additional arguments to be passed to :class:`distributed.Worker`
+    scheduler_options : dict or None
+        Additional arguments to be passed to :class:`distributed.Scheduler`
     job_extra : list
         Extra sbatch parameters to pass to SLURMCluster.
     avail_partition : list
@@ -412,10 +416,6 @@ def slurm_cluster_setup(
     invalid_partition : list
         List of partition names (strings) that are not available for launching
         dask workers.
-    worker_extra_args : list or None
-        Additional arguments to be passed to :class:`distributed.Worker`
-    scheduler_options : dict or None
-        Additional arguments to be passed to :class:`distributed.Scheduler`
 
     Returns
     -------
