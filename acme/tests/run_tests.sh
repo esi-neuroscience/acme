@@ -90,18 +90,36 @@ fi
 testargs+=("--cov=../../acme")
 testargs+=("--cov-config=../../.coveragerc")
 
-# Define default SLURM partition based on architecture we're running on
-mArch=`uname -m`
-if [ "${mArch}" == "x86_64" ]; then
-    pytestQ="8GBL"
-    pytestCPU=1
-    toxQ="16GBL"
-    toxCPU=2
-else
-    pytestQ="E880"
-    pytestCPU=4
-    toxQ="E880"
-    toxCPU=8
+# On ESI and CoBIC HPC clusters, explicitly define default SLURM partitions to use
+if [ "${useSLURM}" ]; then
+    mArch=`uname -m`
+    if [[ "${HOSTNAME}" == "esi-sv"* ]]; then
+        if [ "${mArch}" == "x86_64" ]; then
+            pytestQ="8GBL"
+            pytestCPU=1
+            toxQ="16GBL"
+            toxCPU=2
+        else
+            pytestQ="E880"
+            pytestCPU=4
+            toxQ="E880"
+            toxCPU=8
+        fi
+    elif [[ "${HOSTNAME}" == "bic-sv"* ]]; then
+        if [ "${mArch}" == "x86_64" ]; then
+            pytestQ="8GBMx86"
+            pytestCPU=1
+            toxQ="16GBMx86"
+            toxCPU=2
+        else
+            pytestQ="-p 16GBLppc"
+            pytestCPU=2
+            toxQ="-p 16GBLppc"
+            toxCPU=2
+        fi
+    else
+        echo "WARNING: Unknown HPC environment ${HOSTNAME} - falling back to SLURM defaults"
+    fi
 fi
 
 # (Re)set PYTHONPATH to make local import of ACME possible
@@ -118,7 +136,11 @@ for option in "${optArray[@]}"; do
     elif [[ "${option}" == "pytest" ]]; then
         cmd="pytest"
         if [ "${useSLURM}" ]; then
-            cmd="srun -u -n 1 -p ${pytestQ} --mem=8000m -c ${pytestCPU} ${cmd}"
+            if [ -n "${pytestQ+x}" ]; then
+                cmd="srun -u -n 1 -p ${pytestQ} --mem=8000m -c ${pytestCPU} ${cmd}"
+            else
+                cmd="srun -u -n 1 ${cmd}"
+            fi
         fi
         cmd="${cmd} ${testargs[@]}"
         echo ">>>"
@@ -128,7 +150,11 @@ for option in "${optArray[@]}"; do
     elif [[ "${option}" == "tox" ]]; then
         cmd="tox"
         if [ $_useSLURM ]; then
-            cmd="srun -u -p ${toxQ} --mem=8000m -c ${toxCPU} ${cmd}"
+            if [ -n "${toxQ+x}" ]; then
+                cmd="srun -u -p ${toxQ} --mem=8000m -c ${toxCPU} ${cmd}"
+            else
+                cmd="srun -u ${cmd}"
+            fi
         fi
         cmd="${cmd} ${testargs[@]}"
         echo ">>>"
