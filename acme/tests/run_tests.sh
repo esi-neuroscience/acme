@@ -112,9 +112,9 @@ if [ "${useSLURM}" ]; then
             toxQ="16GBMx86"
             toxCPU=2
         else
-            pytestQ="-p 16GBLppc"
+            pytestQ="16GBLppc"
             pytestCPU=2
-            toxQ="-p 16GBLppc"
+            toxQ="16GBLppc"
             toxCPU=2
         fi
     else
