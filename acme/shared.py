@@ -136,7 +136,7 @@ def get_interface(ipaddress : str) -> str:
     """
 
     log = logging.getLogger("ACME")
-    log.debug("Find NIC associated to %s", ipaddress)
+    log.debug("Scanning for NIC associated to %s", ipaddress)
     for iface, iflist in psutil.net_if_addrs().items():
         for psobj in iflist:
             if ipaddress in psobj.address:
@@ -144,6 +144,29 @@ def get_interface(ipaddress : str) -> str:
     err = "IP address %s not associated to any NIC"
     log.error(err, ipaddress)
     raise ValueError(err%(ipaddress))
+
+
+def get_free_port(
+        lo : int,
+        hi: int) -> int:
+    """
+    Returns lowest open port in the given range `lo` to `hi`
+    """
+
+    log = logging.getLogger("ACME")
+    log.debug("Looking for open ports in the range %d to %d", lo, hi)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    port = lo
+    while port <= hi:
+        try:
+            sock.bind(("", port))
+            sock.close()
+            return port
+        except OSError:
+            port += 1
+    err = "Could not find open port in the range %d-%d"
+    log.error(err, lo, hi)
+    raise IOError(err%(lo,hi))
 
 
 def _scalar_parser(
