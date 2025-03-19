@@ -16,8 +16,11 @@ CoBIC Frankfurt.
 - Added two new (optional) keywords to `slurm_cluster_setup`: `worker_extra_args` 
   can be used to pass additional options for configuring Dask workers. Similarly, 
   `scheduler_options` propagates custom settings to the Dask scheduler. 
-- New helper function `is_bic_node` to determine if ACME is running on the CoBIC
+- New helper function `is_bic_node` determines if ACME is running on the CoBIC
   HPC cluster
+- New helper function `get_interface` finds the name of the network interface 
+  associated to a given IP address
+- New helper function `get_free_port` finds the lowest open port in a given range 
 
 ### CHANGED
 - Changed default partition-type from "XS" to "S" on the ESI HPC cluster when 
