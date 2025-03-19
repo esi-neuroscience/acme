@@ -119,43 +119,34 @@ def test_cluster_setup():
                             "mem_per_worker" : "9000MB",
                             "interactive" : False}
 
-            # Over-allocation of memory should default to partition max
-            # (this should work on all clusters but we don't know partition
-            # names, QoS rules etc.)
-            if onBIC:
-                client = setup_func(**setup_kwargs)
-            else:
+            # Attempted architecture change on ESI node should trigger an exception
+            if onESI:
                 if onx86:
-                    client = setup_func(**setup_kwargs)
-
-                    # Attempt to start a client on ppc64le at ESI
                     with pytest.raises(ValueError) as valerr:
                         setup_func(partition="E880")
                     assert "ppc64le from submitting host with architecture x86_64" in str(valerr.value)
-
                 else:
-
-                    # Attempt to start a client on x86 at ESI
                     with pytest.raises(ValueError) as valerr:
                         esi_cluster_setup(partition="8GBXS")
-                        assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
+                    assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
 
-                    # Define queue for testing CPU allocations below
-                    tmpQ = defaultQ
+            # Over-allocation of memory should default to partition max
+            # (this should work on all clusters but we don't know partition
+            # names, QoS rules etc.)
+            client = setup_func(**setup_kwargs)
+            memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+            assert memory.size == 1
+            assert np.ceil(memory / 1000**3)[0] == 8
 
-            if client:
-                memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
-                assert memory.size == 1
-                assert np.ceil(memory / 1000**3)[0] == 8
+            # Invoking `setup_func` with existing client must not start a new one
+            clnt = setup_func(partition="16GBS", n_workers=2, interactive=False)
+            assert clnt == client
+            cluster_cleanup(client)
 
-                # Invoking `setup_func` with existing client must not start a new one
-                clnt = setup_func(partition="16GBS", n_workers=2, interactive=False)
-                assert clnt == client
-                cluster_cleanup(client)
-
-            # If not yet done, define queue for testing CPU allocations below
-            if not tmpQ:
-                tmpQ = "24GBS"
+            # Define queue for testing CPU allocations below
+            tmpQ = "24GBS"
+            if onESI and not onx86:
+                tmpQ = defaultQ
 
             # Specify CPU count manually
             n_cores = 3
