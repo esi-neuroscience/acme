@@ -144,9 +144,16 @@ def test_cluster_setup():
             cluster_cleanup(client)
 
             # Define queue for testing CPU allocations below
-            tmpQ = "24GBS"
-            if onESI and not onx86:
-                tmpQ = defaultQ
+            if onESI:
+                if onx86:
+                    tmpQ = "24GBS"
+                else:
+                    tmpQ = defaultQ
+            else:
+                if onx86:
+                    tmpQ = "32GBSx86"
+                else:
+                    tmpQ = "32GBSppc"
 
             # Specify CPU count manually
             n_cores = 3
