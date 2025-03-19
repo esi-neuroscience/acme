@@ -34,7 +34,9 @@ CoBIC Frankfurt.
 ### REMOVED
 ### DEPRECATED
 ### FIXED
-
+- Adapted helper script `run_tests.sh` to use SLURM defaults when running on 
+  unknown HPC clusters
+  
 ## [2025.1]
 Implementation of user's feature request: ACME can now allocate result datasets 
 with arbitrary dimensions via the `result_shape` keyword. In case it is not clear 
