@@ -16,6 +16,7 @@ import select
 import subprocess
 import inspect
 import logging
+import psutil
 import traceback
 import numpy as np
 import dask.distributed as dd
@@ -127,6 +128,23 @@ def is_x86_node() -> bool:
     log = logging.getLogger("ACME")
     log.debug("Test if host is x86_64 micro-architecture")
     return platform.machine() == "x86_64"
+
+
+def get_interface(ipaddress : str) -> str:
+    """
+    Returns the name of the first network interface associated to `ipaddress`
+    """
+
+    log = logging.getLogger("ACME")
+    log.debug("Find NIC associated to %s", ipaddress)
+    for iface, iflist in psutil.net_if_addrs().items():
+        for psobj in iflist:
+            if ipaddress in psobj.address:
+                return iface
+    err = "IP address %s not associated to any NIC"
+    log.error(err, ipaddress)
+    raise ValueError(err%(ipaddress))
+
 
 def _scalar_parser(
         var: Any,

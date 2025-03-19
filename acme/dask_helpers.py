@@ -26,7 +26,7 @@ from typing import List, Optional, Any, Union, Tuple, Dict
 
 # Local imports
 from acme import __deprecated__, __deprecation_wrng__
-from .shared import user_input, user_yesno, is_jupyter
+from .shared import user_input, user_yesno, is_jupyter, get_interface
 from .spy_interface import scalar_parser, log
 
 __all__: List["str"] = ["esi_cluster_setup", "bic_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm_cluster_setup"]
@@ -328,12 +328,12 @@ def bic_cluster_setup(
         job_extra.append(f"--output={out_files}")
         log.debug("Setting `--output=%s`", out_files)
 
-    # # CoBIC-specific: only specific ports are available on the hubs
-    # # FIXME
-    # if socket.gethostname().startswith("bic-svhub0") and \
-    #    os.path.isfile("/usr/local/bin/squeue_summary"):
-    #     ifname = get_hub_interface() # should be in shared
-    #     dashPort = get_free_hub_port()
+    # CoBIC-specific: only specific ports are available on the hubs
+    if socket.gethostname().startswith("bic-svhub0") and \
+       os.path.isfile("/usr/local/bin/squeue_summary"):
+        ifname = get_interface("172.18.90")
+
+        # dashPort = get_free_hub_port()
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
     return slurm_cluster_setup(partition, cores_per_worker, n_workers,
