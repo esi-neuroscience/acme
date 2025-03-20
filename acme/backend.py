@@ -35,9 +35,9 @@ from numpy.typing import ArrayLike
 
 # Local imports
 from . import __path__
-from .dask_helpers import (esi_cluster_setup, local_cluster_setup,
+from .dask_helpers import (esi_cluster_setup, bic_cluster_setup, local_cluster_setup,
                            slurm_cluster_setup, cluster_cleanup, count_online_workers)
-from .shared import user_yesno, is_esi_node, is_slurm_node
+from .shared import user_yesno, is_esi_node, is_slurm_node, is_bic_node
 from .logger import prepare_log
 isSpyModule = False
 if "syncopy" in sys.modules:            # pragma: no cover
@@ -390,8 +390,8 @@ class ACMEdaemon(object):
 
         else:
             # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
-            if self.has_slurm:
-                outDir = f"/cs/home/{getpass.getuser()}/"
+            if is_esi_node() or is_bic_node():
+                outDir = f"/mnt/hpc/home/{getpass.getuser()}/"
             else:                                                       # pragma: no cover
                 outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
             outDir = os.path.join(outDir, f"ACME_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}")
@@ -699,6 +699,14 @@ class ACMEdaemon(object):
                 msg = "Running on ESI compute node, Calling `esi_cluster_setup`"
                 log.debug(msg)
                 self.client = esi_cluster_setup(partition=partition, n_workers=n_workers,               # type: ignore
+                                                mem_per_worker=mem_per_worker, timeout=setup_timeout,
+                                                interactive=setup_interactive, start_client=True)
+
+            # All set, remaining input processing is done by respective `*_cluster_setup` routines
+            elif is_bic_node():
+                msg = "Running on CoBIC compute node, Calling `bic_cluster_setup`"
+                log.debug(msg)
+                self.client = bic_cluster_setup(partition=partition, n_workers=n_workers,               # type: ignore
                                                 mem_per_worker=mem_per_worker, timeout=setup_timeout,
                                                 interactive=setup_interactive, start_client=True)
 
