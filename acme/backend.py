@@ -685,13 +685,13 @@ class ACMEdaemon(object):
                 msg = "%s `partition` has to be 'auto' or a valid SLURM partition name, not %s"
                 raise TypeError(msg%(self.objName, str(type(partition))))
             if partition == "auto":
-                if is_esi_node():
+                if is_esi_node() or is_bic_node():
                     msg = "Automatic SLURM partition selection is experimental"
                     log.warning(msg)
                     mem_per_worker = self.estimate_memuse()
                 else:                                                   # pragma: no cover
                     err = "Automatic SLURM partition selection currently only available " +\
-                        "on the ESI HPC cluster. "
+                        "on ESI/CoBIC HPC clusters "
                     log.error(err)
 
             # All set, remaining input processing is done by respective `*_cluster_setup` routines
