@@ -625,9 +625,9 @@ class TestParallelMap():
         logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
         assert len(logFileList) == 1
         logFile = logFileList[0]
-        # If running on the ESI cluster, account for /cs/home
-        if onESI and useSLURM:
-            assert "/cs/home/" in logFile
+        # If running on ESI/CoBIC clusters, account for /mnt/hpc/home
+        if useSLURM and (onESI or onBIC):
+            assert "/mnt/hpc/home/" in logFile
         else:
             assert os.path.dirname(os.path.realpath(__file__)) in logFile
         with open(logFile, "r", encoding="utf8") as fl:
