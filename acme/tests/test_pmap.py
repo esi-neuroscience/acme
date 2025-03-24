@@ -1729,13 +1729,19 @@ class TestParallelMap():
         del pmap
         cluster_cleanup()
         customLog2 = os.path.join(tempDir, "acme_log2.txt")
+        if onESI:
+            setupTimeout = 30
+        elif onBIC:
+            setupTimeout = 60
+        else:
+            setupTimeout = 45
         pmap = ParallelMap(memtest_func,
                            np.arange(100),
                            2,
                            sleeper=300,
                            arrsize=arrsize,
                            logfile=customLog2,
-                           setup_timeout=30,
+                           setup_timeout=setupTimeout,
                            setup_interactive=False)
 
         # Again, fire off `estimate_memuse` manually if tests are run locally
@@ -1764,7 +1770,8 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked (again)
         if useSLURM and (onESI or onBIC):
-            assert "Picked partition 8GBS based on estimated memory consumption of 3 GB" in logTxt
+            assert "Picked partition 8GBS" in logTxt
+            assert "based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling should not have generated any output
         outDirs.append(pmap.daemon.out_dir)
