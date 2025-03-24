@@ -1698,7 +1698,8 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked
         if useSLURM and (onESI or onBIC):
-            assert "Picked partition 8GBS based on estimated memory consumption of 3 GB" in logTxt
+            assert "Picked partition 8GBS" in logTxt
+            assert "based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
         # output HDF5 files were removed
