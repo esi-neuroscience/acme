@@ -13,7 +13,7 @@ import pytest
 
 # Import main actors here
 from acme.shared import is_slurm_node, is_esi_node, is_bic_node, is_x86_node
-from acme.dask_helpers import esi_cluster_setup, bic_cluster_setup
+from acme.dask_helpers import esi_cluster_setup, bic_cluster_setup, slurm_cluster_setup
 
 # Construct decorators for skipping certain tests
 skip_if_not_linux = pytest.mark.skipif(sys.platform != "linux", reason="Only works in Linux")
@@ -45,3 +45,4 @@ elif onBIC:
     setup_func = bic_cluster_setup
 else:
     defaultQ = "auto"
+    setup_func = slurm_cluster_setup
