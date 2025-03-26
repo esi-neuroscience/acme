@@ -449,9 +449,9 @@ class TestParallelMap():
         # On ESI/BIC clusters: start a SLURM client once to speed up test execution
         if testclient is None and useSLURM:
             if onESI:
-                client = esi_cluster_setup(partition=defaultQ, n_workers=range(self.nChannels))
+                client = esi_cluster_setup(partition=defaultQ, n_workers=self.nChannels)
             if onBIC:
-                client = bic_cluster_setup(partition=defaultQ, n_workers=range(self.nChannels))
+                client = bic_cluster_setup(partition=defaultQ, n_workers=self.nChannels)
 
         # Parallelize across channels, write results to disk
         with ParallelMap(lowpass_simple,
@@ -956,9 +956,9 @@ class TestParallelMap():
         # On ESI/BIC clusters: start a SLURM client once to speed up test execution
         if testclient is None and useSLURM:
             if onESI:
-                client = esi_cluster_setup(partition=defaultQ, n_workers=range(self.nChannels))
+                client = esi_cluster_setup(partition=defaultQ, n_workers=self.nChannels)
             if onBIC:
-                client = bic_cluster_setup(partition=defaultQ, n_workers=range(self.nChannels))
+                client = bic_cluster_setup(partition=defaultQ, n_workers=self.nChannels)
 
         # Parallelize across channels, write results to disk
         with ParallelMap(lowpass_simple,
