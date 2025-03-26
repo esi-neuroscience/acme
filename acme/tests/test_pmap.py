@@ -32,12 +32,14 @@ from numpy.typing import NDArray
 from typing import Any, Optional, Union, Dict
 
 # Import main actors here
-from acme import ParallelMap, ACMEdaemon, cluster_cleanup, esi_cluster_setup, bic_cluster_setup
-from conftest import skip_if_not_linux, useSLURM, onESI, onBIC, onx86, defaultQ
+from acme import ParallelMap, ACMEdaemon, cluster_cleanup, local_cluster_setup, esi_cluster_setup
+from conftest import skip_if_not_linux, useSLURM, onESI, onBIC, onx86, defaultQ, setup_func
 
 # Define custom types
 realArrayLike = Union[float, NDArray[np.float64]]
 realArray = NDArray[np.float64]
+
+#
 
 # Functions that act as stand-ins for user-funcs
 def simple_func(
@@ -400,13 +402,11 @@ class TestParallelMap():
         z = range(n_workers)
         w = np.ones((8, 1))
 
-        setup_kwargs = {"partition" : defaultQ,
-                        "n_workers" : n_workers,
-                        "interactive" : False}
-        if onBIC:
-            client = bic_cluster_setup(**setup_kwargs)
+        if useSLURM:
+            if onESI or onBIC:
+                setup_func(partition=defaultQ, n_workers=n_workers, interactive=False)
         else:
-            client = esi_cluster_setup(**setup_kwargs)
+            local_cluster_setup()
 
         expected = list(map(f, n_workers*[x], y, list(z), n_workers*[w]))
         pmap = ParallelMap(f, x, y, z=z, w=w, n_inputs=n_workers)
@@ -447,11 +447,8 @@ class TestParallelMap():
         outDirs = []
 
         # On ESI/BIC clusters: start a SLURM client once to speed up test execution
-        if testclient is None and useSLURM:
-            if onESI:
-                client = esi_cluster_setup(partition=defaultQ, n_workers=self.nChannels)
-            if onBIC:
-                client = bic_cluster_setup(partition=defaultQ, n_workers=self.nChannels)
+        if testclient is None and useSLURM and (onESI or onBIC):
+            setup_func(partition=defaultQ, n_workers=self.nChannels, interactive=False)
 
         # Parallelize across channels, write results to disk
         with ParallelMap(lowpass_simple,
@@ -954,11 +951,8 @@ class TestParallelMap():
         nSamples = self.fs * self.nTrials
 
         # On ESI/BIC clusters: start a SLURM client once to speed up test execution
-        if testclient is None and useSLURM:
-            if onESI:
-                client = esi_cluster_setup(partition=defaultQ, n_workers=self.nChannels)
-            if onBIC:
-                client = bic_cluster_setup(partition=defaultQ, n_workers=self.nChannels)
+        if testclient is None and useSLURM and (onESI or onBIC):
+            client = setup_func(partition=defaultQ, n_workers=self.nChannels, interactive=False)
 
         # Parallelize across channels, write results to disk
         with ParallelMap(lowpass_simple,
@@ -1819,17 +1813,13 @@ class TestParallelMap():
 
             # Check auto-partition selection on ESI/BIC clusters
             if onESI or onBIC:
-                if onESI:
-                    setup_func = esi_cluster_setup
-                else:
-                    setup_func = bic_cluster_setup
 
                 # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_worker!
                 with pytest.raises(IOError):
-                    setup_func(partition="auto", mem_per_worker="invalid")
+                    setup_func(partition="auto", mem_per_worker="invalid", interactive=False)
 
-                # Simulate `ParallelMap(partition="auto",...)` call by invoking `esi_cluster_setup`
-                # with `mem_per_worker='esstimate_memuse:XY'`
+                # Simulate `ParallelMap(partition="auto",...)` call by invoking
+                # `esi_cluster_setup`/`bic_cluster_setup` with `mem_per_worker='esstimate_memuse:XY'`
                 memUse = "estimate_memuse:12"
                 client = setup_func(partition="auto",
                                     mem_per_worker=memUse,
@@ -1942,21 +1932,14 @@ class TestParallelMap():
 
         # Test custom SLURM cluster setup
         if useSLURM:
-
-            # Supply extra args to start client for actual tests
-            slurmOut = f"/mnt/hpc/home/{getpass.getuser()}/acme_out"
-            inputArgs = {"partition" : defaultQ,
-                         "n_workers" : 10,
-                         "job_extra" : [f"--output={slurmOut}"],
-                         "interactive" : False}
-            if onESI:
-                client = esi_cluster_setup(**inputArgs)
-            elif onBIC:
-                client = bic_cluster_setup(**inputArgs)
+            if onESI or onBIC:
+                client = setup_func(partition=defaultQ,
+                                    n_workers=10,
+                                    job_extra=[f"--output={slurmOut}"],
+                                    interactive=False)
             else:
                 return
             assert f"--output={slurmOut}" in client.cluster.job_header
-
         else:
             client = esi_cluster_setup(partition="auto", interactive=False)
         print("Allocated client")
