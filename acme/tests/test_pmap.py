@@ -404,9 +404,9 @@ class TestParallelMap():
 
         if useSLURM:
             if onESI or onBIC:
-                setup_func(partition=defaultQ, n_workers=n_workers, interactive=False)
+                client = setup_func(partition=defaultQ, n_workers=n_workers, interactive=False)
         else:
-            local_cluster_setup()
+            client = local_cluster_setup()
 
         expected = list(map(f, n_workers*[x], y, list(z), n_workers*[w]))
         pmap = ParallelMap(f, x, y, z=z, w=w, n_inputs=n_workers)
