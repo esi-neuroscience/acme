@@ -1933,6 +1933,7 @@ class TestParallelMap():
         # Test custom SLURM cluster setup
         if useSLURM:
             if onESI or onBIC:
+                slurmOut = f"/mnt/hpc/home/{getpass.getuser()}/acme_out"
                 client = setup_func(partition=defaultQ,
                                     n_workers=10,
                                     job_extra=[f"--output={slurmOut}"],
