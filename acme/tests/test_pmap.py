@@ -406,7 +406,7 @@ class TestParallelMap():
             if onESI or onBIC:
                 client = setup_func(partition=defaultQ, n_workers=n_workers, interactive=False)
         else:
-            client = local_cluster_setup()
+            client = local_cluster_setup(interactive=False)
 
         expected = list(map(f, n_workers*[x], y, list(z), n_workers*[w]))
         pmap = ParallelMap(f, x, y, z=z, w=w, n_inputs=n_workers)
