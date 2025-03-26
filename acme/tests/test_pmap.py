@@ -446,6 +446,13 @@ class TestParallelMap():
         # Collect auto-generated output directories in list for later cleanup
         outDirs = []
 
+        # On ESI/BIC clusters: start a SLURM client once to speed up test execution
+        if testclient is None and useSLURM:
+            if onESI:
+                client = esi_cluster_setup(partition=defaultQ, n_workers=range(self.nChannels))
+            if onBIC:
+                client = bic_cluster_setup(partition=defaultQ, n_workers=range(self.nChannels))
+
         # Parallelize across channels, write results to disk
         with ParallelMap(lowpass_simple,
                          sigName,
@@ -946,6 +953,13 @@ class TestParallelMap():
         # Compute result length needed to determine final shape
         nSamples = self.fs * self.nTrials
 
+        # On ESI/BIC clusters: start a SLURM client once to speed up test execution
+        if testclient is None and useSLURM:
+            if onESI:
+                client = esi_cluster_setup(partition=defaultQ, n_workers=range(self.nChannels))
+            if onBIC:
+                client = bic_cluster_setup(partition=defaultQ, n_workers=range(self.nChannels))
+
         # Parallelize across channels, write results to disk
         with ParallelMap(lowpass_simple,
                          sigName,
@@ -1323,6 +1337,10 @@ class TestParallelMap():
         # Wait a second (literally) so that no new parallel workers started by
         # `test_existing_cluster` erroneously use existing HDF files
         time.sleep(1.0)
+
+        # Close SLURM client allocated on ESI/BIC clusters
+        if testclient is None and useSLURM and (onESI or onBIC):
+            cluster_cleanup(client)
 
         return testclient
 
