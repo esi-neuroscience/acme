@@ -1078,4 +1078,4 @@ def _probe_scontrol(partition : str) -> int:
         log.error(msg, str(exc))
         raise IOError(msg%(str(exc)))
 
-    return defMem
+    return max(1000, defMem - 500)
