@@ -10,9 +10,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 Included new convenience function `bic_cluster_setup` for the HPC cluster at
-CoBIC Frankfurt.
+CoBIC Frankfurt. Analogous to the similarly named helper function built for 
+the ESI HPC cluster, `bic_cluster_setup` simplifies creating a Dask parallel 
+computing client. For instance, the following command transparently launches 10 
+SLURM workers in the `8GBSppc` partition:
+
+```python
+client = bic_cluster_setup(n_workers=10, partition="8GBSppc")
+```
+
+Additionally, ACME's automatic partition selection has been extended to also support 
+workloads running on the CoBIC HPC cluster. Similarly, all customization settings 
+supported by `esi_cluster_setup` are also available in `bic_cluster_setup`, e.g., 
+`cores_per_worker` can be used together with `mem_per_worker`
+and `job_extra` to create specialized computing clients custom-tailored
+to specific workload requirements, e.g.,
+
+```python
+client = bic_cluster_setup(n_workers=10,
+                           cores_per_worker=3,
+                           mem_per_worker="12GB",
+                           job_extra=["--job-name='myjob'"],
+                           partition="32GBSppc")
+```
+
+More information can be found in ACME's [online documentation](https://esi-acme.readthedocs.io/en/latest/)
 
 ### NEW
+- New convenience function `bic_cluster_setup` to streamline managing Dask 
+  parallel computing clients on the CoBIC HPC cluster. 
 - Added two new (optional) keywords to `slurm_cluster_setup`: `worker_extra_args` 
   can be used to pass additional options for configuring Dask workers. Similarly, 
   `scheduler_options` propagates custom settings to the Dask scheduler. 
