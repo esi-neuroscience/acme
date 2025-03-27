@@ -17,6 +17,7 @@ import getpass
 import time
 import inspect
 import textwrap
+import psutil
 import numpy as np
 from tqdm import tqdm
 from dask_jobqueue import SLURMCluster
@@ -453,10 +454,10 @@ def bic_cluster_setup(                                                          
     if ishub:
         ifname = get_interface("192.168.161")
         hubip = psutil.net_if_addrs()[ifname][0].address
-        sshcmd = "ssh -L {port}:localhost:{port}"
+        sshcmd = f"ssh -L {port}:localhost:{port}"
     else:
         hubip = "192.168.161.221"
-        sshcmd = "ssh -L {port}:{ip}:{port}"
+        sshcmd = f"ssh -L {port}:{ip}:{port}"
     msg = "Connect to dashboard by starting a new ssh tunnel via %s %s@%s"
     log.info(msg, sshcmd, username, hubip)
     msg = "Open your browser and go to http://localhost:%s"
