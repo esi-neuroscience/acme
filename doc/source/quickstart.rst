@@ -28,12 +28,13 @@ ACME can be installed using ``pip`` or ``conda``:
 
             pip install esi-acme
 
-ACME is the parallelization engine of `Syncopy <https://pypi.org/project/esi-syncopy/>`_.
-If you're working on the ESI HPC cluster installing ACME and/or SyNCoPy is only necessary if
-you create your own conda environment.
+If you're working on the ESI or CoBIC HPC clusters installing ACME is only
+necessary if you create your own conda environment.
 On the ESI cluster, all current pre-configured reference environments
 (`ESI-202xa/b`) provide the respective most recent ACME version. These environments
-can be easily started using the `ESI JupyterHub <https://jupyterhub.esi.local>`_
+can be easily started using the `ESI JupyterHub <https://jupyterhub.esi.local>`_.
+On the CoBIC cluster, ACME is pre-installed in the pre-configured
+`neuro-conda <https://github.com/neuro-conda/neuro-conda>`_ environments (`neuro-conda-202xa/b`).
 
 For Developers
 ^^^^^^^^^^^^^^
@@ -76,7 +77,7 @@ around :class:`distributed.LocalCluster` and :class:`dask_jobqueue.SLURMCluster`
 which perform the actual heavy lifting.
 Thus, instead of letting ACME automatically allocate a worker swarm, more
 fine-grained control over resource allocation and management can be achieved
-by running :func:`~acme.slurm_cluster_setup` (on an HPC cluster managed by the
+by running :func:`~acme.slurm_cluster_setup` (on any HPC cluster managed by the
 `SLURM Workload Manager <https://slurm.schedmd.com/documentation.html>`_) or
 :func:`~acme.local_cluster_setup` (on local multi-processing hardware)
 **before** launching the actual calculation. For example,
@@ -104,18 +105,29 @@ For instance,
 
     esiClient = esi_cluster_setup(partition="16GBXL", n_workers=10)
 
-starts 10 concurrent SLURM workers in the `16GBXL` queue (no need to further
+starts 10 concurrent SLURM workers in the `16GBXL` partition (no need to further
 specify CPU core count or memory requirements).
+
+Analogously, on the CoBIC HPC cluster, the routine :func:`~acme.bic_cluster_setup`
+provides similar functionality, e.g.,
+
+.. code-block:: python
+
+    bicClient = bic_cluster_setup(partition="16GBSppc", n_workers=10)
+
+starts 10 concurrent SLURM workers in the `16GBSppc` partition (similarly, CPU
+core count and memory requirements are set automatically).
 
 .. note::
     Since ACME internally relies on `distributed <https://distributed.dask.org/en/stable/>`_
     and `dask_jobqueue <https://jobqueue.dask.org/en/latest/>`_ it can leverage
     any HPC infrastructure (CPU nodes, GPU nodes etc.) managed by SLURM, PBS,
-    SGE, Moab etc. For users of the ESI HPC cluster ACME offers the above
-    presented convenience function :func:`~acme.esi_cluster_setup`, however,
-    the underlying general purpose setup routine :func:`acme.slurm_cluster_setup`
-    (which is invoked by :func:`~acme.esi_cluster_setup`) can be used to
-    start a parallel worker cluster on any distributed system controlled by SLURM.
+    SGE, Moab etc. For users of the ESI and CoBIC HPC clusters ACME offers the above
+    presented convenience functions :func:`~acme.esi_cluster_setup` and
+    :func:`~acme.bic_cluster_setup`. However, the underlying general purpose
+    setup routine :func:`acme.slurm_cluster_setup` (which is invoked by these
+    convenience functions) can be used on its own to start a parallel worker
+    cluster on any distributed system controlled by SLURM.
     If you are interested in having a `*_cluster_setup` routine for your institution's
     HPC infrastructure being included in ACME, please open an issue in our
     `GitHub Issue Tracker <https://github.com/esi-neuroscience/acme/issues>`_.

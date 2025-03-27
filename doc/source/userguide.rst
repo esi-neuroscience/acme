@@ -306,8 +306,8 @@ Reuse Worker Clients
 Instead of letting ACME automatically start and stop parallel worker clients
 witch each invocation of :class:`~acme.ParallelMap`, a dask :class:`distributed.Client`
 can be customized and set up manually **before** launching the actual concurrent
-computation. The convenience functions :func:`~acme.slurm_cluster_setup` (on HPC
-clusters managed by the
+computation. The convenience functions :func:`~acme.slurm_cluster_setup` (on any HPC
+cluster managed by the
 `SLURM Workload Manager <https://slurm.schedmd.com/documentation.html>`_)
 and :func:`~acme.local_cluster_setup` (on local multi-core machines) provide
 this functionality by wrapping :class:`dask_jobqueue.SLURMCluster` and
@@ -317,9 +317,11 @@ up the allocated client and distributes computational payload across the
 workers collected inside.
 
 .. note::
-    The routine :func:`~acme.esi_cluster_setup` is specifically geared to the
-    SLURM setup of the ESI HPC cluster. If you are working on the ESI cluster,
-    please use :func:`~acme.esi_cluster_setup` to allocate computing clients.
+    The routines :func:`~acme.esi_cluster_setup` and :func:`~acme.bic_cluster_setup`
+    are specifically geared to the SLURM setup of the ESI and CoBIC HPC clusters,
+    respectively. Thus, if you are working on the ESI/CoBIC cluster,
+    please use :func:`~acme.esi_cluster_setup`/:func:`~acme.bic_cluster_setup`
+    to allocate computing clients.
 
 Alternatively, instead of manually setting up computing resources using the
 ``*_cluster_setup`` routines, any distributed client automatically sized and

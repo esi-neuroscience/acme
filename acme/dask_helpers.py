@@ -488,7 +488,7 @@ def slurm_cluster_setup(
     Start a distributed Dask cluster of parallel processing workers using SLURM
 
     **NOTE** If you are working on the ESI or CoBIC HPC cluster, please use
-    :func:`~acme.esi_cluster_setup` and :func:`~acme.bic_cluster_setup` instead!
+    :func:`~acme.esi_cluster_setup` or :func:`~acme.bic_cluster_setup` instead!
 
     Parameters
     ----------
@@ -515,7 +515,7 @@ def slurm_cluster_setup(
         could be started in the provided waiting period (determined by `timeout`).
         The code waits `interactive_wait` seconds for a user choice - if none is
         provided, it continues with the current number of running workers (if greater
-        than zero). If `interactive` is `False` and no worker could not be started
+        than zero). If `interactive` is `False` and no worker could be started
         within `timeout` seconds, a `TimeoutError` is raised.
     interactive_wait : int
         Countdown interval (seconds) to wait for a user response in case fewer than
@@ -551,6 +551,7 @@ def slurm_cluster_setup(
     --------
     dask_jobqueue.SLURMCluster : launch a dask cluster of SLURM workers
     esi_cluster_setup : start a SLURM worker cluster on the ESI HPC infrastructure
+    bic_cluster_setup : start a SLURM worker cluster on the CoBIC HPC infrastructure
     local_cluster_setup : start a local Dask multi-processing cluster on the host machine
     cluster_cleanup : remove dangling parallel processing worker-clusters
     """
@@ -907,7 +908,8 @@ def local_cluster_setup(
     See also
     --------
     distributed.LocalCluster : create local worker cluster
-    esi_cluster_setup : Start a distributed Dask cluster using SLURM
+    esi_cluster_setup : start a SLURM worker cluster on the ESI HPC infrastructure
+    bic_cluster_setup : start a SLURM worker cluster on the CoBIC HPC infrastructure
     cluster_cleanup : remove dangling parallel processing worker-clusters
     """
 
@@ -976,6 +978,7 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
     See also
     --------
     esi_cluster_setup : Launch SLURM workers on the ESI compute cluster
+    bic_cluster_setup : Launch SLURM workers on the CoBIC compute cluster
     slurm_cluster_setup : start a distributed Dask cluster of parallel processing workers using SLURM
     local_cluster_setup : start a local Dask multi-processing cluster on the host machine
     """
