@@ -126,7 +126,7 @@ def test_cluster_setup():
                     assert "ppc64le from submitting host with architecture x86_64" in str(valerr.value)
                 else:
                     with pytest.raises(ValueError) as valerr:
-                        setup_func(partition="8GBXSx86", interactive=False)
+                        setup_func(partition="8GBSx86", interactive=False)
                     assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
 
             # Over-allocation of memory should default to partition max
