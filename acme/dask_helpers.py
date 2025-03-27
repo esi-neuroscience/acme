@@ -180,14 +180,13 @@ def esi_cluster_setup(
             mem_per_worker = auto_memory
         msg = "Picked partition %s based on estimated memory consumption of %s GB"
         log.info(msg, partition, auto_memory)
-    else:
-        if (partition == "E880" and mArch == "x86_64") or \
-           (mArch == "ppc64le" and partition != "E880"):
-            otherArch = list(set(["x86_64", "ppc64le"]).difference([mArch]))[0]
-            msg = "Cannot start SLURM workers in partition %s with " +\
-                "architecture %s from submitting host with architecture %s. " +\
-                "Start x86_64 workers from esi-svhpc{1,2,3} and POWER workers from the hub."
-            raise ValueError(msg%(partition, otherArch, mArch))
+    if (partition == "E880" and mArch == "x86_64") or \
+       (mArch == "ppc64le" and partition != "E880"):
+        otherArch = list(set(["x86_64", "ppc64le"]).difference([mArch]))[0]
+        msg = "Cannot start SLURM workers in partition %s with " +\
+            "architecture %s from submitting host with architecture %s. " +\
+            "Start x86_64 workers from esi-svhpc{1,2,3} and POWER workers from the hub."
+        raise ValueError(msg%(partition, otherArch, mArch))
 
     # Convert memory selections to MB, "auto" is converted to `None`
     mem_per_worker = _probe_mem_spec(mem_per_worker)
@@ -388,7 +387,7 @@ def bic_cluster_setup(                                                          
         msg = "Cannot start SLURM workers in partition %s with " +\
               "architecture %s from submitting host with architecture %s. " +\
               "Please start x86_64 workers from bic-svhpcx86[01-06] and POWER workers from the hub(s)."
-            raise ValueError(msg%(partition, otherArch, mArch))
+        raise ValueError(msg%(partition, otherArch, mArch))
 
     # Convert memory selections to MB, "auto" is converted to `None`
     mem_per_worker = _probe_mem_spec(mem_per_worker)
