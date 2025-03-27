@@ -426,8 +426,8 @@ def bic_cluster_setup(                                                          
         log.debug("Setting `--output=%s`", out_files)
 
     # CoBIC-specific: only specific ports are available on the hubs
-    if socket.gethostname().startswith("bic-svhub0") and \
-       os.path.isfile("/usr/local/bin/squeue_summary"):
+    ishub = socket.gethostname().startswith("bic-svhub0")
+    if ishub and os.path.isfile("/usr/local/bin/squeue_summary"):
         ifname = get_interface("172.18.90")
         schedPort = get_free_port(60001, 63000)
         scheduler_options = {"port": schedPort, "interface" : ifname}
@@ -435,13 +435,34 @@ def bic_cluster_setup(                                                          
         scheduler_options = None
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
-    return slurm_cluster_setup(partition, cores_per_worker, n_workers,
-                               processes_per_worker, mem_per_worker,
-                               n_workers_startup, timeout, interactive,
-                               interactive_wait, start_client, job_extra,
-                               scheduler_options=scheduler_options,
-                               avail_partitions=avail_partitions,
-                               invalid_partitions=invalid_partitions, **kwargs)
+    daskobj =  slurm_cluster_setup(partition, cores_per_worker, n_workers,
+                                   processes_per_worker, mem_per_worker,
+                                   n_workers_startup, timeout, interactive,
+                                   interactive_wait, start_client, job_extra,
+                                   scheduler_options=scheduler_options,
+                                   avail_partitions=avail_partitions,
+                                   invalid_partitions=invalid_partitions, **kwargs)
+
+    # Emit short explainer how to connect to Dashboard
+    if isinstance(daskobj, Client):
+        dblink = daskobj.cluster.dashboard_link
+    else:
+        dblink = daskobj.dashboard_link
+    ip, port = dblink[dblink.find("http://") + len("http://"):dblink.rfind("/status")].split(":")
+    username = getpass.getuser()
+    if ishub:
+        ifname = get_interface("192.168.161")
+        hubip = psutil.net_if_addrs()[ifname][0].address
+        sshcmd = "ssh -L {port}:localhost:{port}"
+    else:
+        hubip = "192.168.161.221"
+        sshcmd = "ssh -L {port}:{ip}:{port}"
+    msg = "Connect to dashboard by starting a new ssh tunnel via %s %s@%s"
+    log.info(msg, sshcmd, username, hubip)
+    msg = "Open your browser and go to http://localhost:%s"
+    log.info(msg, port)
+
+    return daskobj
 
 
 # Setup SLURM cluster

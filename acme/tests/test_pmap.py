@@ -1744,7 +1744,7 @@ class TestParallelMap():
         if onESI:
             setupTimeout = 30
         elif onBIC:
-            setupTimeout = 60
+            setupTimeout = 90
         else:
             setupTimeout = 45
         pmap = ParallelMap(memtest_func,
