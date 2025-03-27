@@ -394,7 +394,7 @@ def bic_cluster_setup(                                                          
         memPerCore = 8000
         if mem_per_worker is not None:
             defMem = int(mem_per_worker.replace("MB", ""))
-        cores_per_worker = max(1, int(defMem / memPerCore))
+        cores_per_worker = max(1, round(defMem / memPerCore))
         log.debug("Derived core-count from partition: `cores_per_worker=%d`", cores_per_worker)
 
     # If `mem_per_worker` is still unassigned, use exactred `DefMemPerCPU` value
