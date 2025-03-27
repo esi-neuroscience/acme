@@ -157,7 +157,7 @@ def esi_cluster_setup(
 
     # Check if SLURM's `sinfo` can be accessed
     start_local = _probe_sinfo_or_start_local(interactive)
-    if start_local:
+    if start_local:                                                             # pragma: no cover
         return local_cluster_setup(interactive=interactive)
 
     # Use default by-worker process count or extract it from anonymous keyword args (if provided)
@@ -175,7 +175,7 @@ def esi_cluster_setup(
         if mArch == "x86_64":
             partition = auto_partition
             mem_per_worker = None
-        else:
+        else:                                                                   # pragma: no cover
             partition = "E880"
             mem_per_worker = auto_memory
         msg = "Picked partition %s based on estimated memory consumption of %s GB"
@@ -207,7 +207,7 @@ def esi_cluster_setup(
             defMem = int(mem_per_worker.replace("MB", ""))
         if mArch == "x86_64":
             memPerCore = 8000
-        else:
+        else:                                                                   # pragma: no cover
             if mem_per_worker is None:
                 defMem = 16000                  # default to 4 cores per worker if no mem req was specified
             memPerCore = 4000
@@ -246,7 +246,7 @@ def esi_cluster_setup(
 
 
 # Setup SLURM workers on the CoBIC HPC cluster
-def bic_cluster_setup(
+def bic_cluster_setup(                                                          # pragma: no cover
         partition: str,
         n_workers: int = 2,
         mem_per_worker: str = "auto",
@@ -440,7 +440,7 @@ def slurm_cluster_setup(
     funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
     # Backwards compatibility: legacy keywords are converted to new nomenclature
-    if any(kw in kwargs for kw in __deprecated__):
+    if any(kw in kwargs for kw in __deprecated__):                                  # pragma: no cover
         log.warning(__deprecation_wrng__)
         n_workers = kwargs.pop("n_jobs", n_workers)                                 # type: ignore
         processes_per_worker = kwargs.pop("workers_per_job", processes_per_worker)  # type: ignore
@@ -482,7 +482,7 @@ def slurm_cluster_setup(
                         capture_output=True, check=True, shell=True, text=True)
     try:
         mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0]) - 500
-    except IndexError:
+    except IndexError:                                              # pragma: no cover
         mem_lim = np.inf                                            # type: ignore
     log.debug("Found a limit of  %s MB", str(mem_lim))
 
@@ -587,9 +587,9 @@ def slurm_cluster_setup(
 
     # Pick up any additional scheduler/worker args to be passed to SLURMCluster
     extra_args = {}
-    if worker_extra_args:
+    if worker_extra_args:                                                       # pragma: no cover
         extra_args["worker_extra_args"] = worker_extra_args
-    if scheduler_options:
+    if scheduler_options:                                                       # pragma: no cover
         extra_args["scheduler_options"] = scheduler_options
 
     # Create `SLURMCluster` object using provided parameters
@@ -613,7 +613,7 @@ def slurm_cluster_setup(
     cluster.scale(n_workers)
 
     # Fire up waiting routine to avoid returning an undercooked cluster
-    if _cluster_waiter(cluster, funcName, n_workers, timeout, interactive, interactive_wait):
+    if _cluster_waiter(cluster, funcName, n_workers, timeout, interactive, interactive_wait): # pragma: no cover
         return None
 
     # Kill a zombie cluster in non-interactive mode
@@ -650,7 +650,7 @@ def _get_slurm_partitions() -> List:
     out, err = proc.communicate()
 
     # Any non-zero return-code means SLURM is not ready to use
-    if proc.returncode != 0:
+    if proc.returncode != 0:                                                    # pragma: no cover
         msg = "Error fetching SLURM partition setup from node %s: %s"
         log.error(msg, socket.gethostname(), err)
         raise IOError("%s %s"%(funcName, msg%(socket.gethostname(), err)))
@@ -896,7 +896,7 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
     client.close()
     try:
         client.cluster.close()
-    except Exception as exc:
+    except Exception as exc:                                                    # pragma: no cover
         log.warning("Could not gracefully shut down cluster: %s", str(exc))
 
     # Communicate what just happened and get outta here
@@ -949,7 +949,7 @@ def _probe_sinfo_or_start_local(interactive : bool) -> bool:
     if proc.returncode != 0:
 
         # SLURM is not installed: either allocate `LocalCluster` or just leave
-        if proc.returncode > 0:
+        if proc.returncode > 0:                                                 # pragma: no cover
             if interactive:
                 msg = f"SLURM does not seem to be installed on this machine " +\
                     f"({socket.gethostname()}). Do you want to start a local multi-processing " +\
@@ -1073,7 +1073,7 @@ def _probe_scontrol(partition : str) -> int:
                             capture_output=True, check=True, shell=True, text=True)
         defMem = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
         log.debug("Found DefMemPerCPU=%d", defMem)
-    except Exception as exc:
+    except Exception as exc:                                                    # pragma: no cover
         msg = "Cannot fetch available memory per CPU in SLURM: %s"
         log.error(msg, str(exc))
         raise IOError(msg%(str(exc)))

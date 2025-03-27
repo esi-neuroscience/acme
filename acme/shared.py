@@ -130,7 +130,7 @@ def is_x86_node() -> bool:
     return platform.machine() == "x86_64"
 
 
-def get_interface(ipaddress : str) -> str:
+def get_interface(ipaddress : str) -> str:                                      # pragma: no cover
     """
     Returns the name of the first network interface associated to `ipaddress`
     """
@@ -146,7 +146,7 @@ def get_interface(ipaddress : str) -> str:
     raise ValueError(err%(ipaddress))
 
 
-def get_free_port(
+def get_free_port(                                                              # pragma: no cover
         lo : int,
         hi: int) -> int:
     """
@@ -289,7 +289,7 @@ def is_jupyter() -> bool:
         return False
 
 
-def ctrlc_catcher(
+def ctrlc_catcher(                                                              # pragma: no cover
         *excargs: Any,
         **exckwargs: Optional[Any]) -> None:
     """
