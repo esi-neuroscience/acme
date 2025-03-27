@@ -258,6 +258,95 @@ def bic_cluster_setup(                                                          
         start_client: bool = True,
         job_extra: List = [],
         **kwargs: Optional[Any]) -> Union[Client, SLURMCluster, LocalCluster]:
+    """
+    Start a Dask distributed SLURM worker cluster on the CoBIC HPC infrastructure
+
+    Parameters
+    ----------
+    partition : str
+        Name of SLURM partition/queue to start workers in. Use the command `sinfo`
+        in the terminal to see a list of available SLURM partitions on the CoBIC HPC
+        cluster.
+    n_workers : int
+        Number of SLURM workers (=jobs) to spawn
+    mem_per_worker : str
+        Memory booking for each worker. Can be specified either in megabytes
+        (e.g., ``mem_per_worker = 1500MB``) or gigabytes (e.g., ``mem_per_worker = "2GB"``).
+        If `mem_per_worker` is `"auto"` it is attempted to infer a sane default value
+        from the chosen partition, e.g., for ``partition = "8GBSppc"`` `mem_per_worker` is
+        automatically set to the allowed maximum of `'8GB'`.
+        Note, even in partitions with guaranteed memory bookings, it is possible to allocate less
+        memory than the allowed maximum per worker to spawn numerous low-memory
+        workers. See Examples for details.
+    cores_per_worker : None or int
+        Number of CPU cores allocated for each worker. If `None`, core-count
+        is set based on partition settings (`DefMemPerCPU`).
+    n_workers_startup : int
+        Number of spawned workers to wait for. If `n_workers_startup` is `1` (default),
+        the code does not proceed until either 1 SLURM job is running or the
+        `timeout` interval has been exceeded.
+    timeout : int
+        Number of seconds to wait for requested workers to start (see `n_workers_startup`).
+    interactive : bool
+        If `True`, user input is queried in case not enough workers (set by `n_workers_startup`)
+        could be started in the provided waiting period (determined by `timeout`).
+        The code waits `interactive_wait` seconds for a user choice - if none is
+        provided, it continues with the current number of running workers (if greater
+        than zero). If `interactive` is `False` and no worker could not be started
+        within `timeout` seconds, a `TimeoutError` is raised.
+    interactive_wait : int
+        Countdown interval (seconds) to wait for a user response in case fewer than
+        `n_workers_startup` workers could be started. If no choice is provided within
+        the given time, the code automatically proceeds with the current number of
+        active dask workers.
+    start_client : bool
+        If `True`, a distributed computing client is launched and attached to
+        the dask worker cluster. If `start_client` is `False`, only a distributed
+        computing cluster is started to which compute-clients can connect.
+    job_extra : list
+        Extra sbatch parameters to pass to SLURMCluster.
+    **kwargs : dict
+        Additional keyword arguments can be used to control job-submission details.
+
+    Returns
+    -------
+    proc : object
+        A distributed computing client (if ``start_client = True``) or
+        a distributed computing cluster (otherwise).
+
+    Examples
+    --------
+    The following command launches 10 SLURM workers with 2 gigabytes memory each
+    in the `8GBSppc` partition
+
+    >>> client = bic_cluster_setup(n_workers=10, partition="8GBSppc", mem_per_worker="2GB")
+
+    Use default settings to start 2 SLURM workers in the 16GBSppc partition
+    (allocating 2 cores and 16 GB memory per worker)
+
+    >>> client = bic_cluster_setup(partition="16GBSppc")
+
+    The underlying distributed computing cluster can be accessed using
+
+    >>> client.cluster
+
+    Notes
+    -----
+    The employed parallel computing engine relies on the concurrent processing library
+    `Dask <https://docs.dask.org/en/latest/>`_. Thus, the distributed computing
+    clients generated here are in fact instances of :class:`distributed.Client`.
+    This function specifically acts  as a wrapper for :class:`dask_jobqueue.SLURMCluster`.
+    Users familiar with Dask in general and its distributed scheduler and cluster
+    objects in particular, may leverage Dask's entire API to fine-tune parallel
+    processing jobs to their liking (if wanted).
+
+    See also
+    --------
+    dask_jobqueue.SLURMCluster : launch a dask cluster of SLURM workers
+    slurm_cluster_setup : start a distributed Dask cluster of parallel processing workers using SLURM
+    local_cluster_setup : start a local Dask multi-processing cluster on the host machine
+    cluster_cleanup : remove dangling parallel processing worker-clusters
+    """
 
     # For later reference: dynamically fetch name of current function
     funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
