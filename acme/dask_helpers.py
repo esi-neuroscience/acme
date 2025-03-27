@@ -381,6 +381,15 @@ def bic_cluster_setup(                                                          
         msg = "Picked partition %s based on estimated memory consumption of %s GB"
         log.info(msg, partition, auto_memory)
 
+    # Prevent cross-architecture client startups
+    if (mArch == "ppc64le" and "x86" in partition) or \
+       (mArch == "x86" and "ppc64le" in partition):
+        otherArch = list(set(["x86_64", "ppc64le"]).difference([mArch]))[0]
+        msg = "Cannot start SLURM workers in partition %s with " +\
+              "architecture %s from submitting host with architecture %s. " +\
+              "Please start x86_64 workers from bic-svhpcx86[01-06] and POWER workers from the hub(s)."
+            raise ValueError(msg%(partition, otherArch, mArch))
+
     # Convert memory selections to MB, "auto" is converted to `None`
     mem_per_worker = _probe_mem_spec(mem_per_worker)
 

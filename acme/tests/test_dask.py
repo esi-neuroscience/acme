@@ -109,7 +109,7 @@ def test_cluster_setup():
         # Tests specific to the ESI HPC cluster
         if onESI or onBIC:
 
-            # Attempted architecture change on ESI node should trigger an exception
+            # Attempted architecture change on ESI/BIC node should trigger an exception
             if onESI:
                 if onx86:
                     with pytest.raises(ValueError) as valerr:
@@ -118,6 +118,15 @@ def test_cluster_setup():
                 else:
                     with pytest.raises(ValueError) as valerr:
                         setup_func(partition="8GBXS", interactive=False)
+                    assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
+            else:
+                if onx86:
+                    with pytest.raises(ValueError) as valerr:
+                        setup_func(partition="8GBSppc", interactive=False)
+                    assert "ppc64le from submitting host with architecture x86_64" in str(valerr.value)
+                else:
+                    with pytest.raises(ValueError) as valerr:
+                        setup_func(partition="8GBXSx86", interactive=False)
                     assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
 
             # Over-allocation of memory should default to partition max
