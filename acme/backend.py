@@ -35,9 +35,9 @@ from numpy.typing import ArrayLike
 
 # Local imports
 from . import __path__
-from .dask_helpers import (esi_cluster_setup, local_cluster_setup,
+from .dask_helpers import (esi_cluster_setup, bic_cluster_setup, local_cluster_setup,
                            slurm_cluster_setup, cluster_cleanup, count_online_workers)
-from .shared import user_yesno, is_esi_node, is_slurm_node
+from .shared import user_yesno, is_esi_node, is_slurm_node, is_bic_node
 from .logger import prepare_log
 isSpyModule = False
 if "syncopy" in sys.modules:            # pragma: no cover
@@ -278,10 +278,10 @@ class ACMEdaemon(object):
             self.stacking_dim = result_shape.index(None)                # type: ignore
             rShape[self.stacking_dim] = self.n_calls                    # type: ignore
 
-            if not write_worker_results and any(np.isinf(spec) for spec in rShape):
+            if not write_worker_results and any(np.isinf(spec) for spec in rShape): # type: ignore
                 msg = "%s using `np.inf` in `result_shape` is only valid if `write_worker_results` is `True`"
                 raise ValueError(msg%self.objName)
-            if rShape.count(np.inf) > 1:
+            if rShape.count(np.inf) > 1:                                        # type: ignore
                 msg = "%s cannot use more than one `np.inf` in `result_shape`"
                 raise ValueError(msg%self.objName)
             if not all(isinstance(spec, numbers.Number) for spec in rShape):
@@ -291,7 +291,7 @@ class ACMEdaemon(object):
                 msg = "%s `result_shape` must only contain non-negative integers"
                 raise ValueError(msg%self.objName)
 
-            self.result_shape = tuple(rShape)
+            self.result_shape = tuple(rShape)                                   # type: ignore
             msg = "Found `result_shape = %s`. Set stacking dimension to %d"
             log.debug(msg, str(result_shape), self.stacking_dim)
 
@@ -351,7 +351,7 @@ class ACMEdaemon(object):
                 else:
                     logfile = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
                 logfile = os.path.join(
-                    logfile,
+                    logfile,                                                    # type: ignore
                     f"ACME_{self.func.__name__}_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log")   # type: ignore
             else:
                 logfile = None
@@ -390,8 +390,8 @@ class ACMEdaemon(object):
 
         else:
             # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
-            if self.has_slurm:
-                outDir = f"/cs/home/{getpass.getuser()}/"
+            if is_esi_node() or is_bic_node():
+                outDir = f"/mnt/hpc/home/{getpass.getuser()}/"
             else:                                                       # pragma: no cover
                 outDir = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
             outDir = os.path.join(outDir, f"ACME_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}")
@@ -448,11 +448,11 @@ class ACMEdaemon(object):
                         h5f.create_group(f"comp_{i}")
                         log.debug(msg, i)
             else:
-                if np.inf in self.result_shape:
-                    actShape = tuple(spec if spec is not np.inf else 1 for spec in self.result_shape)
-                    maxShape = tuple(spec if spec is not np.inf else None for spec in self.result_shape)
+                if np.inf in self.result_shape:                                 # type: ignore
+                    actShape = tuple(spec if spec is not np.inf else 1 for spec in self.result_shape)    # type: ignore
+                    maxShape = tuple(spec if spec is not np.inf else None for spec in self.result_shape) # type: ignore
                 else:
-                    actShape = self.result_shape
+                    actShape = self.result_shape                                # type: ignore
                     maxShape = None
                 msg = "Created unique dataset 'result_0' with shape %s " +\
                     "in single shared results container"
@@ -482,27 +482,27 @@ class ACMEdaemon(object):
                             log.debug(msg, i, relPath)
                 else:
 
-                    VSourceShape = [spec if spec is not np.inf else None for spec in self.result_shape]
-                    VSourceShape.pop(self.stacking_dim)
+                    VSourceShape = [spec if spec is not np.inf else None for spec in self.result_shape] # type: ignore
+                    VSourceShape.pop(self.stacking_dim)                         # type: ignore
                     VSourceShape = tuple(VSourceShape)
 
                     # Account for resizable datasets
                     if None in VSourceShape:
-                        resActShape = tuple(spec if spec is not np.inf else 1 for spec in self.result_shape)
-                        resMaxShape = tuple(spec if spec is not np.inf else None for spec in self.result_shape)
+                        resActShape = tuple(spec if spec is not np.inf else 1 for spec in self.result_shape)    # type: ignore
+                        resMaxShape = tuple(spec if spec is not np.inf else None for spec in self.result_shape) # type: ignore
                         vsActShape = tuple(spec if spec is not None else 1 for spec in VSourceShape)
                         vsMaxShape = VSourceShape
                     else:
-                        resActShape = self.result_shape
+                        resActShape = self.result_shape                         # type: ignore
                         resMaxShape = None
                         vsActShape = VSourceShape
                         vsMaxShape = None
                     layout = h5py.VirtualLayout(shape=resActShape,
                                                 dtype=self.result_dtype,
                                                 maxshape=resMaxShape)   # type: ignore
-                    idx = [slice(None) if spec is not np.inf else slice(h5py.h5s.UNLIMITED) for spec in self.result_shape]
+                    idx = [slice(None) if spec is not np.inf else slice(h5py.h5s.UNLIMITED) for spec in self.result_shape] # type: ignore
                     jdx = list(idx)
-                    jdx.pop(self.stacking_dim)
+                    jdx.pop(self.stacking_dim)                                  # type: ignore
 
                     msg = "Created virtual dataset result_0' with shape " +\
                         "%s in results container"
@@ -665,7 +665,7 @@ class ACMEdaemon(object):
                 if self.has_slurm:
                     n_workers = self.n_calls
                 else:
-                    n_workers = None
+                    n_workers = None                                            # type: ignore
                 log.debug("Changing `n_workers` from `'auto'` to %s", str(n_workers))
             log.debug("Using provided `n_workers = %d` to start client", n_workers)
 
@@ -685,13 +685,13 @@ class ACMEdaemon(object):
                 msg = "%s `partition` has to be 'auto' or a valid SLURM partition name, not %s"
                 raise TypeError(msg%(self.objName, str(type(partition))))
             if partition == "auto":
-                if is_esi_node():
+                if is_esi_node() or is_bic_node():
                     msg = "Automatic SLURM partition selection is experimental"
                     log.warning(msg)
                     mem_per_worker = self.estimate_memuse()
                 else:                                                   # pragma: no cover
                     err = "Automatic SLURM partition selection currently only available " +\
-                        "on the ESI HPC cluster. "
+                        "on ESI/CoBIC HPC clusters "
                     log.error(err)
 
             # All set, remaining input processing is done by respective `*_cluster_setup` routines
@@ -699,6 +699,14 @@ class ACMEdaemon(object):
                 msg = "Running on ESI compute node, Calling `esi_cluster_setup`"
                 log.debug(msg)
                 self.client = esi_cluster_setup(partition=partition, n_workers=n_workers,               # type: ignore
+                                                mem_per_worker=mem_per_worker, timeout=setup_timeout,
+                                                interactive=setup_interactive, start_client=True)
+
+            # All set, remaining input processing is done by respective `*_cluster_setup` routines
+            elif is_bic_node():
+                msg = "Running on CoBIC compute node, Calling `bic_cluster_setup`"
+                log.debug(msg)
+                self.client = bic_cluster_setup(partition=partition, n_workers=n_workers,               # type: ignore
                                                 mem_per_worker=mem_per_worker, timeout=setup_timeout,
                                                 interactive=setup_interactive, start_client=True)
 
@@ -779,7 +787,7 @@ class ACMEdaemon(object):
             # Run user-func for max. `runTime` seconds (or worker finishes),
             # get memory footprint every second
             proc.start()
-            with tqdm.tqdm(desc=f"Launching worker #{idx}",
+            with tqdm.tqdm(desc=f"Launching worker #{idx}",                     # type: ignore
                            total=runTime,
                            bar_format=self.tqdmFormat,
                            position=0) as pbar:
@@ -1217,8 +1225,8 @@ class ACMEdaemon(object):
                                         lenDim = lenDim[0]
                                     actShape = tuple(spec if spec is not None else lenDim for spec in dset.maxshape)
                                 else:
-                                    actShape = list(result[0].shape)
-                                    actShape[stackingDim] = dset.maxshape[stackingDim]
+                                    actShape = list(result[0].shape)                    # type: ignore
+                                    actShape[stackingDim] = dset.maxshape[stackingDim]  # type: ignore
                                     actShape = tuple(actShape)
                                 dset.resize(actShape)
                             dset[tuple(idx)] = result[0]

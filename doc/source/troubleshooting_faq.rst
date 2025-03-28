@@ -104,14 +104,15 @@ You can simply use the client's ``.close()`` class method (e.g., ``myclient.clos
 or use the ACME convenience function :func:`~acme.cluster_cleanup`.
 
 
-ESI-HPC Cluster Specifics
-^^^^^^^^^^^^^^^^^^^^^^^^^
-To make optimal use of the ESI HPC infrastructure, please make sure to first
+ESI- and CoBIC-HPC Cluster Specifics
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+To make optimal use of the ESI/CoBIC HPC infrastructure, please make sure to first
 pick the right SLURM partition for your task (ACME's default falls back to
-our "smallest" partition `8GBXS`).
+the respective "smallest" partitions: `8GBS` at ESI, `8GBSppc` at CoBIC).
 
 Instead of letting ACME automatically spawn and kill SLURM jobs, you can use
-the helper function :func:`~acme.esi_cluster_setup` to start a parallel computing client
+the helper functions :func:`~acme.esi_cluster_setup` and
+:func:`~acme.bic_cluster_setup` to start a parallel computing client
 using a set number of SLURM jobs (=workers). This client can be re-used across
 several invocations of :class:`~acme.ParallelMap`. Specifically, if you plan to call :class:`~acme.ParallelMap`
 multiple times in your analysis script, overall runtime performance can be greatly improved
@@ -127,6 +128,8 @@ you don't have to tell it beforehand):
 
     if __name__ == "__main__":
         myclient = esi_cluster_setup(partition="16GBXL", n_workers=10)
+        # or
+        myclient = bic_cluster_setup(partition="16GBLppc", n_workers=10)
 
         ...
         with ParallelMap(...) as pmap:

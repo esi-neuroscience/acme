@@ -8,6 +8,66 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [2025.3]
+Included new convenience function `bic_cluster_setup` for the HPC cluster at
+CoBIC Frankfurt. Analogous to the similarly named helper function built for 
+the ESI HPC cluster, `bic_cluster_setup` simplifies creating a Dask parallel 
+computing client. For instance, the following command transparently launches 10 
+SLURM workers in the `8GBSppc` partition:
+
+```python
+client = bic_cluster_setup(n_workers=10, partition="8GBSppc")
+```
+
+Additionally, ACME's automatic partition selection has been extended to also support 
+workloads running on the CoBIC HPC cluster. Similarly, all customization settings 
+supported by `esi_cluster_setup` are also available in `bic_cluster_setup`, e.g., 
+`cores_per_worker` can be used together with `mem_per_worker`
+and `job_extra` to create specialized computing clients custom-tailored
+to specific workload requirements, e.g.,
+
+```python
+client = bic_cluster_setup(n_workers=10,
+                           cores_per_worker=3,
+                           mem_per_worker="12GB",
+                           job_extra=["--job-name='myjob'"],
+                           partition="32GBSppc")
+```
+
+More information can be found in ACME's [online documentation](https://esi-acme.readthedocs.io/en/latest/)
+
+### NEW
+- New convenience function `bic_cluster_setup` to streamline managing Dask 
+  parallel computing clients on the CoBIC HPC cluster. 
+- Added two new (optional) keywords to `slurm_cluster_setup`: `worker_extra_args` 
+  can be used to pass additional options for configuring Dask workers. Similarly, 
+  `scheduler_options` propagates custom settings to the Dask scheduler. 
+- New helper function `is_bic_node` determines if ACME is running on the CoBIC
+  HPC cluster
+- New helper function `get_interface` finds the name of the network interface 
+  associated to a given IP address
+- New helper function `get_free_port` finds the lowest open port in a given range 
+
+### CHANGED
+- Changed default partition-type from "XS" to "S" on the ESI HPC cluster when 
+  letting ACME automatically choose a partition 
+- Updated testing setup (use centralized [pytest.ini](./acme/tests/pytest.ini) 
+  configuration to not pollute tests with duplicate `PYTEST_ADDOPTS` exports
+- Modernized the convenience script [run_tests.sh](./acme/tests/run_tests.sh): 
+  the script can now process arbitrary pytest options (run single tests, drop 
+  to PDB on error etc.)
+
+### REMOVED
+- Support for the deprecated keywords `n_jobs`, `mem_per_job`, `n_jobs_startup` 
+  and `workers_per_job` has been removed. Code that still uses these keywords 
+  has to be modified to replace them with their corrresponding counterparts
+  `n_workers`, `mem_per_worker`, `n_workers_startup` and `processes_per_worker`, 
+  respectively. 
+
+### FIXED
+- Adapted helper script `run_tests.sh` to use SLURM defaults when running on 
+  unknown HPC clusters
+  
 ## [2025.1]
 Implementation of user's feature request: ACME can now allocate result datasets 
 with arbitrary dimensions via the `result_shape` keyword. In case it is not clear 

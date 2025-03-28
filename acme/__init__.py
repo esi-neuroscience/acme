@@ -34,13 +34,6 @@ except PackageNotFoundError:
             out = "-999"
     __version__ = out.rstrip("\n")
 
-# Central collection of deprecated keywords/canonical warning message
-__deprecated__ = ["n_jobs", "mem_per_job", "n_jobs_startup" "workers_per_job"]
-__deprecation_wrng__ = \
-    "The keywords `n_jobs`, `mem_per_job`, `n_jobs_startup` and " +\
-    "`workers_per_job` are DEPRECATED. Please use `n_workers`, `mem_per_worker`, " +\
-    "`n_workers_startup` and `processes_per_worker`, respectively."
-
 # Remove dask-jobqueue's FutureWarnings about tmpfile (which we don't use)
 warnings.simplefilter(action='ignore', category=FutureWarning)
 

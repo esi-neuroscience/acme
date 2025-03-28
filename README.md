@@ -13,6 +13,7 @@ SPDX-License-Identifier: CC-BY-NC-SA-1.0
 [![license](https://img.shields.io/github/license/esi-neuroscience/acme)](https://github.com/esi-neuroscience/acme/blob/main/LICENSE)
 [![Open in Visual Studio Code](https://img.shields.io/badge/-Open_in_VS_Code-007ACC?logo=visual%20studio%20code&logoColor=ffffff)](https://github.dev/esi-neuroscience/acme)
 [![OpenSSF Best Practices](https://bestpractices.coreinfrastructure.org/projects/7144/badge)](https://bestpractices.coreinfrastructure.org/projects/7144)
+[![REUSE status](https://api.reuse.software/badge/github.com/esi-neuroscience/acme)](https://api.reuse.software/info/github.com/esi-neuroscience/acme)
 
 main: [![tests](https://github.com/esi-neuroscience/acme/actions/workflows/tests_workflow.yml/badge.svg?branch=main)](https://github.com/esi-neuroscience/acme/actions/workflows/tests_workflow.yml)
 [![codecov](https://codecov.io/gh/esi-neuroscience/acme/branch/main/graph/badge.svg?token=LCB2RPBQJG)](https://codecov.io/gh/esi-neuroscience/acme)

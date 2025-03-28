@@ -14,7 +14,7 @@ import logging
 from typing import Any, Callable, Optional, Union, List
 
 # Local imports
-from acme import __deprecated__, __deprecation_wrng__, __version__
+from acme import __version__
 from .backend import ACMEdaemon
 from .logger import prepare_log
 from .shared import _scalar_parser, sizeOf
@@ -64,7 +64,7 @@ class ParallelMap(object):
         ----------
         func : callable
             User-defined function to be executed concurrently. Input arguments
-            and return values should be "simple" (i.e., regular Python objects or
+            and return values should be "simple" (i.e., Python lists or
             NumPy arrays). See Examples and [1]_ for more information.
         args : arguments
             Positional arguments of `func`. Should be regular Python objects
@@ -80,7 +80,7 @@ class ParallelMap(object):
             `"auto"` (default) this quantity is inferred from provided `args` and
             `kwargs`. This estimation may fail due to ambiguous input arguments
             (e.g., `args` and/or `kwargs` contain lists of differing lengths)
-            triggering a `ValueError`. Only then is it required to set `n_input`
+            triggering a `ValueError`. Only then is it required to set `n_inputs`
             manually. See Examples and [1]_ for more information.
         write_worker_results : bool
             If `True`, the return value(s) of `func` is/are saved on disk.
@@ -101,7 +101,11 @@ class ParallelMap(object):
             dimension. For instance, ``result_shape = (None, 100)`` implies
             that `func` returns a 100-element array which is to be stacked
             along the first dimension for each concurrent call of `func`
-            resulting in a ``(n_inputs, 100)`` dataset or array. See Notes
+            resulting in a ``(n_inputs, 100)`` dataset or array. Additionally, if
+            `result_shape` contains an `np.inf` entry, the corresponding dimension
+            is assumed to be "unlimited" (up to the HDF5 per-axis limit of 2**64).
+            For instance, ``result_shape = (None, np.inf)`` stacks results along
+            the first dimension leaving the second dimension arbitrary. See Notes
             and Examples for details. See Examples as well as [1]_ and [2]_
             for more information.
         result_dtype : str
@@ -128,11 +132,11 @@ class ParallelMap(object):
             of `func` is estimated using dry-run stubs based on randomly sampling
             provided `args` and `kwargs`. Estimated memory usage dictates queue
             auto-selection under the assumption of short run-times (**currently only
-            supported on the ESI HPC cluster**). For instance, on a predicted memory
-            footprint of 6 GB causes the `"8GBXS"` partition to be selected (minimal
-            but sufficient memory and shortest runtime).
-            To override auto-selection, provide name of SLURM queue explicitly. See, e.g.,
-            :func:`~acme.esi_cluster_setup` for details.
+            supported on the ESI and CoBIC HPC clusters**). For instance, a predicted memory
+            footprint of 6 GB causes the `"8GBS"` partitions of ESI/CoBIC to be
+            selected (minimal but sufficient memory and short runtime).
+            To override auto-selection, provide name of SLURM queue explicitly. See
+            :func:`~acme.esi_cluster_setup` or :func:`~acme.bic_cluster_setup` for details.
         n_workers : int or "auto"
             Number of SLURM workers (=jobs) to spawn. If `"auto"` (default), then
             ``n_workers = n_inputs``, i.e., every SLURM worker performs a single
@@ -188,9 +192,9 @@ class ParallelMap(object):
         Returns
         -------
         results : list
-            If `write_worker_results` is `True`, `results` is a list of HDF5 file-names
-            containing computed results. If `write_worker_results` is `False`,
-            results is a list comprising the actual return values of `func`.
+            If `write_worker_results` is `True`, `results` is a list of HDF5/Pickle
+            file-names containing computed results. If `write_worker_results` is
+            `False`, results is a list comprising the actual return values of `func`.
 
         Examples
         --------
@@ -229,6 +233,7 @@ class ParallelMap(object):
         See also
         --------
         esi_cluster_setup : spawn custom SLURM worker clients on the ESI HPC cluster
+        bic_cluster_setup : spawn custom SLURM worker clients on the CoBIC HPC cluster
         local_cluster_setup : start a local Dask multi-processing cluster on the host machine
         ACMEdaemon : Manager class performing the actual concurrent processing
 
@@ -241,14 +246,6 @@ class ParallelMap(object):
         # First and foremost, set up logging system - logfile is processed later
         prepare_log(logname="ACME", verbose=verbose)
         log.announce("This is ACME v. %s", __version__)                 # type: ignore
-
-        # Backwards compatibility: legacy keywords are converted to new nomenclature
-        if any(kw in kwargs for kw in __deprecated__):
-            log.warning(__deprecation_wrng__)
-            n_workers = kwargs.pop("n_jobs", n_workers)                 # type: ignore
-            mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)  # type: ignore
-            log.debug("Set `n_workers = n_jobs` and \
-                       mem_per_worker = mem_per_job`")
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`

@@ -14,8 +14,8 @@ import numpy as np
 import dask.distributed as dd
 
 # Import main actors here
-from acme import cluster_cleanup, esi_cluster_setup, slurm_cluster_setup, local_cluster_setup
-from conftest import useSLURM, onESI, onx86, defaultQ
+from acme import cluster_cleanup, slurm_cluster_setup, local_cluster_setup
+from conftest import useSLURM, onESI, onBIC, onx86, defaultQ, setup_func        # type: ignore
 
 
 def test_cluster_setup():
@@ -107,61 +107,74 @@ def test_cluster_setup():
         cluster_cleanup(client)
 
         # Tests specific to the ESI HPC cluster
-        if onESI:
+        if onESI or onBIC:
+
+            # Attempted architecture change on ESI/BIC node should trigger an exception
+            if onESI:
+                if onx86:
+                    with pytest.raises(ValueError) as valerr:
+                        setup_func(partition="E880", interactive=False)
+                    assert "ppc64le from submitting host with architecture x86_64" in str(valerr.value)
+                else:
+                    with pytest.raises(ValueError) as valerr:
+                        setup_func(partition="8GBXS", interactive=False)
+                    assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
+            else:
+                if onx86:
+                    with pytest.raises(ValueError) as valerr:
+                        setup_func(partition="8GBSppc", interactive=False)
+                    assert "ppc64le from submitting host with architecture x86_64" in str(valerr.value)
+                else:
+                    with pytest.raises(ValueError) as valerr:
+                        setup_func(partition="8GBSx86", interactive=False)
+                    assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
 
             # Over-allocation of memory should default to partition max
             # (this should work on all clusters but we don't know partition
             # names, QoS rules etc.)
-            if onx86:
-                client = esi_cluster_setup(partition=defaultQ,
-                                           timeout=120,
-                                           n_workers=1,
-                                           mem_per_worker="9000MB",
-                                           interactive=False)
-                memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
-                assert memory.size == 1
-                assert np.ceil(memory / 1000**3)[0] == 8
+            client = setup_func(partition=defaultQ,
+                                timeout=120,
+                                n_workers=1,
+                                mem_per_worker="9000MB",
+                                interactive=False)
+            memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+            assert memory.size == 1
+            assert np.ceil(memory / 1000**3)[0] == 8
 
-                # Invoking `esi_cluster_setup` with existing client must not start a new one
-                clnt = esi_cluster_setup(partition="16GBXS", n_workers=2, interactive=False)
-                assert clnt == client
-                cluster_cleanup(client)
+            # Invoking `setup_func` with existing client must not start a new one
+            clnt = setup_func(partition=defaultQ, n_workers=2, interactive=False)
+            assert clnt == client
+            cluster_cleanup(client)
 
-                # Attempt to start a client on ppc64le
-                with pytest.raises(ValueError) as valerr:
-                    esi_cluster_setup(partition="E880")
-                assert "ppc64le from submitting host with architecture x86_64" in str(valerr.value)
-
-                # Define queue for testing CPU allocations below
-                tmpQ = "24GBXS"
-
+            # Define queue for testing CPU allocations below
+            if onESI:
+                if onx86:
+                    tmpQ = "24GBS"
+                else:
+                    tmpQ = defaultQ
             else:
-
-                # Attempt to start a client on x86
-                with pytest.raises(ValueError) as valerr:
-                    esi_cluster_setup(partition="8GBXS")
-                assert "x86_64 from submitting host with architecture ppc64le" in str(valerr.value)
-
-                # Define queue for testing CPU allocations below
-                tmpQ = defaultQ
+                if onx86:
+                    tmpQ = "32GBSx86"
+                else:
+                    tmpQ = "32GBSppc"
 
             # Specify CPU count manually
             n_cores = 3
-            client = esi_cluster_setup(partition=tmpQ,
-                                       timeout=120,
-                                       n_workers=1,
-                                       cores_per_worker=n_cores,
-                                       interactive=False)
+            client = setup_func(partition=tmpQ,
+                                timeout=120,
+                                n_workers=1,
+                                cores_per_worker=n_cores,
+                                interactive=False)
             assert f"--cpus-per-task={n_cores}" in client.cluster.job_script()
 
             # Kill worker in client to trigger cleanup and startup of new
             # cluster when re-invoking setup routine
             client.retire_workers(list(client.scheduler_info()['workers']), close_workers=True)
-            cluster = esi_cluster_setup(defaultQ,
-                                        n_workers=1,
-                                        mem_per_worker="1GB",
-                                        start_client=False,
-                                        interactive=False)
+            cluster = setup_func(defaultQ,
+                                 n_workers=1,
+                                 mem_per_worker="1GB",
+                                 start_client=False,
+                                 interactive=False)
             memory = np.unique([w["memory_limit"] for w in cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
             assert np.round(memory / 1000**3)[0] == 1
@@ -181,7 +194,7 @@ def test_cluster_setup():
 
             # Ensure job-list parsing works
             with pytest.raises(TypeError) as tperr:
-                esi_cluster_setup(partition=defaultQ, job_extra="invalid")
+                setup_func(partition=defaultQ, job_extra="invalid")
             assert "`job_extra` has to be a list, not <class 'str'>" in str(tperr.value)
 
     else:
@@ -216,30 +229,3 @@ def test_local_setup():
     with pytest.raises(TypeError):
         local_cluster_setup(interactive="invalid")
     cluster_cleanup()
-
-
-def test_backcompat_cluster():
-
-    if useSLURM:
-        if onESI:
-            client = esi_cluster_setup(partition=defaultQ,
-                                       timeout=120,
-                                       n_jobs=1,
-                                       workers_per_job=1,
-                                       mem_per_job="1GB",
-                                       n_jobs_startup=1,
-                                       interactive=False)
-        else:
-            client = slurm_cluster_setup(partition=defaultQ,
-                                         timeout=120,
-                                         n_jobs=1,
-                                         workers_per_job=1,
-                                         mem_per_job="1GB",
-                                         n_jobs_startup=1,
-                                         interactive=False)
-        assert len(client.cluster.workers) == 1
-        memory = [w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()]
-        assert round(memory[0] / 1000**3) == 1
-        threads = [w["nthreads"] for w in client.cluster.scheduler_info["workers"].values()]
-        assert threads[0] == 1
-        cluster_cleanup(client)

@@ -17,19 +17,19 @@ import getpass
 import time
 import inspect
 import textwrap
+import psutil
 import numpy as np
 from tqdm import tqdm
 from dask_jobqueue import SLURMCluster
 from dask.distributed import Client, get_client, LocalCluster
 from datetime import datetime, timedelta
-from typing import List, Optional, Any, Union
+from typing import List, Optional, Any, Union, Tuple, Dict
 
 # Local imports
-from acme import __deprecated__, __deprecation_wrng__
-from .shared import user_input, user_yesno, is_jupyter
+from .shared import user_input, user_yesno, is_jupyter, get_interface, get_free_port
 from .spy_interface import scalar_parser, log
 
-__all__: List["str"] = ["esi_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm_cluster_setup"]
+__all__: List["str"] = ["esi_cluster_setup", "bic_cluster_setup", "local_cluster_setup", "cluster_cleanup", "slurm_cluster_setup"]
 
 
 # Setup SLURM workers on the ESI HPC cluster
@@ -44,7 +44,7 @@ def esi_cluster_setup(
         interactive_wait: int = 120,
         start_client: bool = True,
         job_extra: List = [],
-        **kwargs: Optional[Any]) -> Union[Client, SLURMCluster, LocalCluster]:
+        **kwargs: Optional[Any]) -> Union[None, Client, SLURMCluster, LocalCluster]:
     """
     Start a Dask distributed SLURM worker cluster on the ESI HPC infrastructure
     (or local multi-processing)
@@ -141,57 +141,15 @@ def esi_cluster_setup(
     # For later reference: dynamically fetch name of current function
     funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
-    # Backwards compatibility: legacy keywords are converted to new nomenclature
-    if any(kw in kwargs for kw in __deprecated__):
-        log.warning(__deprecation_wrng__)
-        n_workers = kwargs.pop("n_jobs", n_workers)                             # type: ignore
-        mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
-        n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)     # type: ignore
-        log.debug("Set `n_workers = n_jobs`, `mem_per_worker = mem_per_job`\
-                  and `n_workers_startup = n_jobs_startup`")
-
     # Don't start a new cluster on top of an existing one
-    try:
-        client = get_client()
-        log.debug("Found existing client")
-        if count_online_workers(client.cluster) == 0:
-            log.debug("No active workers detected in %s", str(client))
-            cluster_cleanup(client)
-        else:
-            log.info("Found existing parallel computing client %s. \
-                     Not starting new cluster.", str(client))
-            if start_client:
-                return client
-            return client.cluster
-    except ValueError:
-        log.debug("No existing clients detected")
+    active_client = _probe_existing_client(start_client)
+    if active_client:
+        return active_client
 
     # Check if SLURM's `sinfo` can be accessed
-    log.debug("Test if `sinfo` is available")
-    proc = subprocess.Popen("sinfo",
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            text=True, shell=True)
-    _, err = proc.communicate()
-
-    # Any non-zero return-code means SLURM is not ready to use
-    if proc.returncode != 0:
-
-        # SLURM is not installed: either allocate `LocalCluster` or just leave
-        if proc.returncode > 0:
-            if interactive:
-                msg = f"{funcName} SLURM does not seem to be installed on this machine " +\
-                    f"({socket.gethostname()}). Do you want to start a local multi-processing " +\
-                    "computing client instead? "
-                startLocal = user_yesno(msg, default="no")
-            else:
-                startLocal = True
-            if startLocal:
-                return local_cluster_setup(interactive=interactive)
-
-        # SLURM is installed, but something's wrong
-        msg = "Cannot access SLURM queuing system from node %s: %s "
-        log.error(msg, socket.gethostname(), err)
-        raise IOError("%s %s"%(funcName, msg%(socket.gethostname(), err)))
+    start_local = _probe_sinfo_or_start_local(interactive)
+    if start_local:                                                             # pragma: no cover
+        return local_cluster_setup(interactive=interactive)
 
     # Use default by-worker process count or extract it from anonymous keyword args (if provided)
     processes_per_worker = kwargs.pop("processes_per_worker", 1)
@@ -200,92 +158,62 @@ def esi_cluster_setup(
     # Get micro-architecture of submitting host
     mArch = platform.machine()
 
-    # If partition is "auto" use `mem_per_worker` to pick pseudo-optimal partition
-    # Note: the `np.where` gymnastic below is necessary since `argmin` refuses
-    # to return multiple matches; if `mem_per_worker` is 12, then ``memDiff = [4, 4, ...]``,
-    # however, 8GB won't fit a 12GB worker, so we have to pick the second match 16GB
-    if isinstance(partition, str):
-        if partition == "auto":
-            if not isinstance(mem_per_worker, str) or mem_per_worker.find("estimate_memuse:") < 0:
-                msg = "Cannot auto-select partition without first invoking memory estimation in `ParallelMap`. "
-                log.error(msg)
-                raise IOError("%s %s"%(funcName, msg))
-            memEstimate = int(mem_per_worker.replace("estimate_memuse:", ""))
-            mem_per_worker = "auto"
-            log.info("Automatically selecting SLURM partition...")
-            availPartitions = _get_slurm_partitions()
-            if mArch == "x86_64":
-                gbQueues = np.unique([int(queue.split("GB")[0]) for queue in availPartitions if queue[0].isdigit()])
-                memDiff = np.abs(gbQueues - memEstimate)
-                queueIdx = np.where(memDiff == memDiff.min())[0][-1]
-                partition = f"{gbQueues[queueIdx]}GBXS"
-            else:
-                partition = "E880"
-                mem_per_worker = f"{memEstimate} GB"
-            msg = "Picked partition %s based on estimated memory consumption of %d GB"
-            log.info(msg, partition, memEstimate)
-        else:
-            if (partition == "E880" and mArch == "x86_64") or \
-               (mArch == "ppc64le" and partition != "E880"):
-                otherArch = list(set(["x86_64", "ppc64le"]).difference([mArch]))[0]
-                msg = "Cannot start SLURM workers in partition %s with " +\
-                    "architecture %s from submitting host with architecture %s. " +\
-                    "Start x86_64 workers from esi-svhpc{1,2,3} and POWER workers from the hub."
-                raise ValueError(msg%(partition, otherArch, mArch))
+    # Fetch available and define invalid partitions and probe for auto-selection
+    avail_partitions = _get_slurm_partitions()
+    invalid_partitions = ["PREPO", "ESI"]
+    auto_partition, auto_memory = _probe_auto_partition(partition, avail_partitions, invalid_partitions, mem_per_worker)
+    if auto_partition is not None:
+        if mArch == "x86_64":
+            partition = auto_partition
+            mem_per_worker = None                                               # type: ignore
+        else:                                                                   # pragma: no cover
+            partition = "E880"
+            mem_per_worker = auto_memory                                        # type: ignore
+        msg = "Picked partition %s based on estimated memory consumption of %s GB"
+        log.info(msg, partition, auto_memory)
+    if (partition == "E880" and mArch == "x86_64") or \
+       (mArch == "ppc64le" and partition != "E880"):
+        otherArch = list(set(["x86_64", "ppc64le"]).difference([mArch]))[0]
+        msg = "Cannot start SLURM workers in partition %s with " +\
+            "architecture %s from submitting host with architecture %s. " +\
+            "Start x86_64 workers from esi-svhpc{1,2,3} and POWER workers from the hub."
+        raise ValueError(msg%(partition, otherArch, mArch))
 
-    # Convert "auto" memory selection query to `None` for easier handling below`
-    if isinstance(mem_per_worker, str) and mem_per_worker == "auto":
-        mem_per_worker = None                                       # type: ignore
-        log.debug("Using auto-memory selection")
+    # Convert memory selections to MB, "auto" is converted to `None`
+    mem_per_worker = _probe_mem_spec(mem_per_worker)
+
+    # If either core-count or mem-spec is undefined, go and ask partition for `DefMeMPerCPU`
+    if cores_per_worker is None or mem_per_worker is None:
+        defMem = _probe_scontrol(partition)
 
     # If not explicitly provided, extract by-worker CPU core count from
-    # partition via `DefMeMPerCPU` and `mem_per_worker`
+    # partition via `DefMeMPerCPU` and `mem_per_worker` (if defined)
     if cores_per_worker is None:
-        try:
-            log.debug("Using `scontrol` to get partition info")
-            pc = subprocess.run(f"scontrol -o show partition {partition}",
-                                capture_output=True, check=True, shell=True, text=True)
-            defMem = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
-            log.debug("Found DefMemPerCPU=%d", defMem)
-        except Exception as exc:
-            msg = "Cannot fetch available memory per CPU in SLURM: %s"
-            log.error(msg, str(exc))
-            raise IOError("%s %s"%(funcName, msg%(str(exc))))
 
         # Use ESI-specific x86_64 partition layout (8GB(S/X/L), 16GB(S/X/L), ... )
         # to infer memory and core count; use "sane" (fat quotes) defaults on IBM POWER
         # (if nothing was provided, use 4 cores/16 GB per worker)
+        if mem_per_worker is not None:
+            defMem = int(mem_per_worker.replace("MB", ""))
         if mArch == "x86_64":
             memPerCore = 8000
-        else:
-            if mem_per_worker is not None:
-                try:
-                    memVal = float(mem_per_worker.replace("MB", "").replace("GB", ""))
-                except:
-                    raise ValueError("Invalid value of `mem_per_worker`: %s"%mem_per_worker)
-                if memVal <= 0:
-                    raise ValueError("Value of `mem_per_worker` has to be > 0!")
-                if "MB" in mem_per_worker:
-                    defMem = int(memVal)
-                else:
-                    defMem = int(round(memVal * 1000))
-                log.debug("Found `mem_per_worker` set to %d MB", defMem)
-            else:
+        else:                                                                   # pragma: no cover
+            if mem_per_worker is None:
                 defMem = 16000                  # default to 4 cores per worker if no mem req was specified
-                mem_per_worker = f"{defMem} MB"
-                log.debug("No `mem_per_worker` specified, using default of %d MB", defMem)
             memPerCore = 4000
 
         # Set core-count per worker (applies to both x86_64 and ppc64le)
         cores_per_worker = max(1, int(defMem / memPerCore))
         log.debug("Derived core-count from partition: `cores_per_worker=%d`", cores_per_worker)
 
+    # If `mem_per_worker` is still unassigned, use exactred `DefMemPerCPU` value
+    if mem_per_worker is None:
+        mem_per_worker = f"{defMem}MB"
+        log.debug("No `mem_per_worker` specified, using default of %s", mem_per_worker)
+
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
     # but we may need to append to it, so ensure that's possible)
-    if not isinstance(job_extra, list):
-        msg = "`job_extra` has to be a list, not %s"
-        log.error(msg, str(type(job_extra)))
-        raise TypeError("%s %s"%(funcName, msg%(str(type(job_extra)))))
+    _probe_job_extra(job_extra)
 
     # If '--output' was not provided, append default output folder to `job_extra`
     if not any(option.startswith("--output") or option.startswith("-o") for option in job_extra):
@@ -300,10 +228,234 @@ def esi_cluster_setup(
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
     return slurm_cluster_setup(partition, cores_per_worker, n_workers,
-                               processes_per_worker, mem_per_worker,
+                               processes_per_worker, mem_per_worker,            # type: ignore
                                n_workers_startup, timeout, interactive,
                                interactive_wait, start_client, job_extra,
-                               invalid_partitions=["DEV", "ESI"], **kwargs)
+                               avail_partitions=avail_partitions,
+                               invalid_partitions=invalid_partitions, **kwargs)
+
+
+# Setup SLURM workers on the CoBIC HPC cluster
+def bic_cluster_setup(                                                          # pragma: no cover
+        partition: str,
+        n_workers: int = 2,
+        mem_per_worker: str = "auto",
+        cores_per_worker: Optional[int] = None,
+        n_workers_startup: int = 1,
+        timeout: int = 60,
+        interactive: bool = True,
+        interactive_wait: int = 120,
+        start_client: bool = True,
+        job_extra: List = [],
+        **kwargs: Optional[Any]) -> Union[None, Client, SLURMCluster, LocalCluster]:
+    """
+    Start a Dask distributed SLURM worker cluster on the CoBIC HPC infrastructure
+
+    Parameters
+    ----------
+    partition : str
+        Name of SLURM partition/queue to start workers in. Use the command `sinfo`
+        in the terminal to see a list of available SLURM partitions on the CoBIC HPC
+        cluster.
+    n_workers : int
+        Number of SLURM workers (=jobs) to spawn
+    mem_per_worker : str
+        Memory booking for each worker. Can be specified either in megabytes
+        (e.g., ``mem_per_worker = 1500MB``) or gigabytes (e.g., ``mem_per_worker = "2GB"``).
+        If `mem_per_worker` is `"auto"` it is attempted to infer a sane default value
+        from the chosen partition, e.g., for ``partition = "8GBSppc"`` `mem_per_worker` is
+        automatically set to the allowed maximum of `'8GB'`.
+        Note, even in partitions with guaranteed memory bookings, it is possible to allocate less
+        memory than the allowed maximum per worker to spawn numerous low-memory
+        workers. See Examples for details.
+    cores_per_worker : None or int
+        Number of CPU cores allocated for each worker. If `None`, core-count
+        is set based on partition settings (`DefMemPerCPU`).
+    n_workers_startup : int
+        Number of spawned workers to wait for. If `n_workers_startup` is `1` (default),
+        the code does not proceed until either 1 SLURM job is running or the
+        `timeout` interval has been exceeded.
+    timeout : int
+        Number of seconds to wait for requested workers to start (see `n_workers_startup`).
+    interactive : bool
+        If `True`, user input is queried in case not enough workers (set by `n_workers_startup`)
+        could be started in the provided waiting period (determined by `timeout`).
+        The code waits `interactive_wait` seconds for a user choice - if none is
+        provided, it continues with the current number of running workers (if greater
+        than zero). If `interactive` is `False` and no worker could not be started
+        within `timeout` seconds, a `TimeoutError` is raised.
+    interactive_wait : int
+        Countdown interval (seconds) to wait for a user response in case fewer than
+        `n_workers_startup` workers could be started. If no choice is provided within
+        the given time, the code automatically proceeds with the current number of
+        active dask workers.
+    start_client : bool
+        If `True`, a distributed computing client is launched and attached to
+        the dask worker cluster. If `start_client` is `False`, only a distributed
+        computing cluster is started to which compute-clients can connect.
+    job_extra : list
+        Extra sbatch parameters to pass to SLURMCluster.
+    **kwargs : dict
+        Additional keyword arguments can be used to control job-submission details.
+
+    Returns
+    -------
+    proc : object
+        A distributed computing client (if ``start_client = True``) or
+        a distributed computing cluster (otherwise).
+
+    Examples
+    --------
+    The following command launches 10 SLURM workers with 2 gigabytes memory each
+    in the `8GBSppc` partition
+
+    >>> client = bic_cluster_setup(n_workers=10, partition="8GBSppc", mem_per_worker="2GB")
+
+    Use default settings to start 2 SLURM workers in the 16GBSppc partition
+    (allocating 2 cores and 16 GB memory per worker)
+
+    >>> client = bic_cluster_setup(partition="16GBSppc")
+
+    The underlying distributed computing cluster can be accessed using
+
+    >>> client.cluster
+
+    Notes
+    -----
+    The employed parallel computing engine relies on the concurrent processing library
+    `Dask <https://docs.dask.org/en/latest/>`_. Thus, the distributed computing
+    clients generated here are in fact instances of :class:`distributed.Client`.
+    This function specifically acts  as a wrapper for :class:`dask_jobqueue.SLURMCluster`.
+    Users familiar with Dask in general and its distributed scheduler and cluster
+    objects in particular, may leverage Dask's entire API to fine-tune parallel
+    processing jobs to their liking (if wanted).
+
+    See also
+    --------
+    dask_jobqueue.SLURMCluster : launch a dask cluster of SLURM workers
+    slurm_cluster_setup : start a distributed Dask cluster of parallel processing workers using SLURM
+    local_cluster_setup : start a local Dask multi-processing cluster on the host machine
+    cluster_cleanup : remove dangling parallel processing worker-clusters
+    """
+
+    # For later reference: dynamically fetch name of current function
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
+
+    # Don't start a new cluster on top of an existing one
+    active_client = _probe_existing_client(start_client)
+    if active_client:
+        return active_client
+
+    # Check if SLURM's `sinfo` can be accessed
+    start_local = _probe_sinfo_or_start_local(interactive)
+    if start_local:
+        return local_cluster_setup(interactive=interactive)
+
+    # Use default by-worker process count or extract it from anonymous keyword args (if provided)
+    processes_per_worker = kwargs.pop("processes_per_worker", 1)
+    log.debug("Found `sinfo`, set `processes_per_worker` to %d", processes_per_worker)
+
+    # Get micro-architecture of submitting host
+    mArch = platform.machine()
+
+    # Fetch available and define invalid partitions and probe for auto-selection
+    avail_partitions = _get_slurm_partitions()
+    invalid_partitions = ["VISppc", "VISx86"]
+    auto_partition, auto_memory = _probe_auto_partition(partition, avail_partitions, invalid_partitions, mem_per_worker)
+    if auto_partition is not None:
+        if mArch == "x86_64":
+            partition = f"{auto_partition}x86"
+        else:
+            partition = f"{auto_partition}ppc"
+        mem_per_worker = None                                                   # type: ignore
+        msg = "Picked partition %s based on estimated memory consumption of %s GB"
+        log.info(msg, partition, auto_memory)
+
+    # Prevent cross-architecture client startups
+    if (mArch == "ppc64le" and "x86" in partition) or \
+       (mArch == "x86" and "ppc64le" in partition):
+        otherArch = list(set(["x86_64", "ppc64le"]).difference([mArch]))[0]
+        msg = "Cannot start SLURM workers in partition %s with " +\
+              "architecture %s from submitting host with architecture %s. " +\
+              "Please start x86_64 workers from bic-svhpcx86[01-06] and POWER workers from the hub(s)."
+        raise ValueError(msg%(partition, otherArch, mArch))
+
+    # Convert memory selections to MB, "auto" is converted to `None`
+    mem_per_worker = _probe_mem_spec(mem_per_worker)
+
+    # If either core-count or mem-spec is undefined, go and ask partition for `DefMeMPerCPU`
+    if cores_per_worker is None or mem_per_worker is None:
+        defMem = _probe_scontrol(partition)
+
+    # If not explicitly provided, extract by-worker CPU core count from
+    # partition via `DefMeMPerCPU` and `mem_per_worker` (if defined)
+    if cores_per_worker is None:
+        memPerCore = 8000
+        if mem_per_worker is not None:
+            defMem = int(mem_per_worker.replace("MB", ""))
+        cores_per_worker = max(1, round(defMem / memPerCore))
+        log.debug("Derived core-count from partition: `cores_per_worker=%d`", cores_per_worker)
+
+    # If `mem_per_worker` is still unassigned, use exactred `DefMemPerCPU` value
+    if mem_per_worker is None:
+        mem_per_worker = f"{defMem}MB"
+        log.debug("No `mem_per_worker` specified, using default of %s", mem_per_worker)
+
+    # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
+    # but we may need to append to it, so ensure that's possible)
+    _probe_job_extra(job_extra)
+
+    # If '--output' was not provided, append default output folder to `job_extra`
+    if not any(option.startswith("--output") or option.startswith("-o") for option in job_extra):
+        log.debug("Auto-populating `--output` setting for sbatch")
+        usr = getpass.getuser()
+        slurm_wdir = f"/mnt/hpc/home/{usr}/slurm/{usr}_{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        os.makedirs(slurm_wdir, exist_ok=True)
+        log.debug("Using %s for slurm logs", slurm_wdir)
+        out_files = os.path.join(slurm_wdir, "slurm-%j.out")
+        job_extra.append(f"--output={out_files}")
+        log.debug("Setting `--output=%s`", out_files)
+
+    # CoBIC-specific: only specific ports are available on the hubs
+    ishub = socket.gethostname().startswith("bic-svhub0")
+    if ishub and os.path.isfile("/usr/local/bin/squeue_summary"):
+        ifname = get_interface("172.18.90")
+        schedPort = get_free_port(60001, 63000)
+        scheduler_options = {"port": schedPort, "interface" : ifname}
+    else:
+        scheduler_options = None
+
+    # Let the SLURM-specific setup function do the rest (returns client or cluster)
+    daskobj =  slurm_cluster_setup(partition, cores_per_worker, n_workers,
+                                   processes_per_worker, mem_per_worker,        # type: ignore
+                                   n_workers_startup, timeout, interactive,
+                                   interactive_wait, start_client, job_extra,
+                                   scheduler_options=scheduler_options,
+                                   avail_partitions=avail_partitions,
+                                   invalid_partitions=invalid_partitions, **kwargs)
+
+    # Emit short explainer how to connect to Dashboard
+    if isinstance(daskobj, Client):
+        dblink = daskobj.cluster.dashboard_link
+    elif isinstance(daskobj, SLURMCluster):
+        dblink = daskobj.dashboard_link
+    else:
+        return None
+    ip, port = dblink[dblink.find("http://") + len("http://"):dblink.rfind("/status")].split(":")
+    username = getpass.getuser()
+    if ishub:
+        ifname = get_interface("192.168.161")
+        hubip = psutil.net_if_addrs()[ifname][0].address
+        sshcmd = f"ssh -L {port}:localhost:{port}"
+    else:
+        hubip = "192.168.161.221"
+        sshcmd = f"ssh -L {port}:{ip}:{port}"
+    msg = "Connect to dashboard by starting a new ssh tunnel via %s %s@%s"
+    log.info(msg, sshcmd, username, hubip)
+    msg = "Open your browser and go to http://localhost:%s"
+    log.info(msg, port)
+
+    return daskobj
 
 
 # Setup SLURM cluster
@@ -319,13 +471,16 @@ def slurm_cluster_setup(
         interactive_wait: int = 10,
         start_client: bool = True,
         job_extra: List = [],
+        worker_extra_args: Optional[List[str]] = None,
+        scheduler_options: Optional[Dict] = None,
+        avail_partitions: List = [],
         invalid_partitions: List = [],
         **kwargs: Optional[Any]) -> Union[Client, SLURMCluster, None]:
     """
     Start a distributed Dask cluster of parallel processing workers using SLURM
 
-    **NOTE** If you are working on the ESI HPC cluster, please use
-    :func:`~acme.esi_cluster_setup` instead!
+    **NOTE** If you are working on the ESI or CoBIC HPC cluster, please use
+    :func:`~acme.esi_cluster_setup` or :func:`~acme.bic_cluster_setup` instead!
 
     Parameters
     ----------
@@ -352,7 +507,7 @@ def slurm_cluster_setup(
         could be started in the provided waiting period (determined by `timeout`).
         The code waits `interactive_wait` seconds for a user choice - if none is
         provided, it continues with the current number of running workers (if greater
-        than zero). If `interactive` is `False` and no worker could not be started
+        than zero). If `interactive` is `False` and no worker could be started
         within `timeout` seconds, a `TimeoutError` is raised.
     interactive_wait : int
         Countdown interval (seconds) to wait for a user response in case fewer than
@@ -365,6 +520,13 @@ def slurm_cluster_setup(
         computing cluster is started to which compute-clients can connect.
     job_extra : list
         Extra sbatch parameters to pass to SLURMCluster.
+    worker_extra_args : list or None
+        Additional arguments to be passed to :class:`distributed.Worker`
+    scheduler_options : dict or None
+        Additional arguments to be passed to :class:`distributed.Scheduler`
+    avail_partition : list
+        List of valid partition names (strings) that are available for launching
+        dask workers. If not provided, partitions are fetched at runtime using `sinfo`
     invalid_partition : list
         List of partition names (strings) that are not available for launching
         dask workers.
@@ -381,6 +543,7 @@ def slurm_cluster_setup(
     --------
     dask_jobqueue.SLURMCluster : launch a dask cluster of SLURM workers
     esi_cluster_setup : start a SLURM worker cluster on the ESI HPC infrastructure
+    bic_cluster_setup : start a SLURM worker cluster on the CoBIC HPC infrastructure
     local_cluster_setup : start a local Dask multi-processing cluster on the host machine
     cluster_cleanup : remove dangling parallel processing worker-clusters
     """
@@ -388,28 +551,12 @@ def slurm_cluster_setup(
     # For later reference: dynamically fetch name of current function
     funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
 
-    # Backwards compatibility: legacy keywords are converted to new nomenclature
-    if any(kw in kwargs for kw in __deprecated__):
-        log.warning(__deprecation_wrng__)
-        n_workers = kwargs.pop("n_jobs", n_workers)                                 # type: ignore
-        processes_per_worker = kwargs.pop("workers_per_job", processes_per_worker)  # type: ignore
-        mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)                  # type: ignore
-        n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)         # type: ignore
-        log.debug("Set `n_workers = n_jobs`, `processes_per_worker = workers_per_job`, \
-                  `mem_per_worker = mem_per_job` \
-                  and `n_workers_startup = n_jobs_startup`")
-
-    # Retrieve all partitions currently available in SLURM
-    availPartitions = _get_slurm_partitions()
+    # If not provided, retrieve all partitions currently available in SLURM
+    if len(avail_partitions) == 0:
+        avail_partitions = _get_slurm_partitions()
 
     # Make sure we're in a valid partition
-    if partition not in availPartitions:
-        valid = list(set(availPartitions).difference(invalid_partitions))
-        lgl = "'" + "or '".join(opt + "' " for opt in valid)
-        msg = "Invalid partition selection %s, available SLURM partitions are %s"
-        log.error(msg, str(partition), lgl)
-        raise ValueError("%s %s"%(funcName, msg%(str(partition), lgl)))
-    log.debug("Found `partition = %s`", partition)
+    _parse_partition(partition, avail_partitions, invalid_partitions)
 
     # Parse worker count
     try:
@@ -419,29 +566,8 @@ def slurm_cluster_setup(
         raise exc
     log.debug("Using `n_workers = %d`", n_workers)
 
-    # Get requested memory per worker
-    if isinstance(mem_per_worker, str):
-        if mem_per_worker == "auto":
-            mem_per_worker = None                                       # type: ignore
-            log.debug("Using auto-memory selection")
-    if mem_per_worker is not None:
-        msg = "`mem_per_worker` has to be a valid memory specifier (e.g., '8GB', '12000MB'), not %s"
-        if not isinstance(mem_per_worker, str):
-            log.error(msg, str(type(mem_per_worker)))
-            raise TypeError("%s %s"%(funcName, msg%(str(type(mem_per_worker)))))
-        if not any(szstr in mem_per_worker for szstr in ["MB", "GB"]):
-            log.error(msg, mem_per_worker)
-            raise ValueError("%s %s"%(funcName, msg%(mem_per_worker)))
-        memNumeric = mem_per_worker.replace("MB", "").replace("GB", "")
-        log.debug("Found `mem_per_worker = %s` in input args", mem_per_worker)
-        try:
-            memVal = float(memNumeric)
-        except:
-            log.error(msg, mem_per_worker)
-            raise ValueError("%s %s"%(funcName, msg%(mem_per_worker)))
-        if memVal <= 0:
-            log.error(msg, mem_per_worker)
-            raise ValueError("%s %s"%(funcName, msg%(mem_per_worker)))
+    # Convert memory selections to MB, "auto" is converted to `None`
+    mem_per_worker = _probe_mem_spec(mem_per_worker)
 
     # Parse worker-waiter count
     try:
@@ -451,13 +577,13 @@ def slurm_cluster_setup(
         raise exc
     log.debug("Using `n_workers_startup = %d`", n_workers_startup)
 
-    # Get memory limit (*in MB*) of chosen partition (guaranteed to exist, cf. above)
+    # Get memory limit (*in MB*) of chosen partition
     log.debug("Use `scontrol` to fetch partition's memory limit")
     pc = subprocess.run(f"scontrol -o show partition {partition}",
                         capture_output=True, check=True, shell=True, text=True)
     try:
         mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0]) - 500
-    except IndexError:
+    except IndexError:                                              # pragma: no cover
         mem_lim = np.inf                                            # type: ignore
     log.debug("Found a limit of  %s MB", str(mem_lim))
 
@@ -472,11 +598,7 @@ def slurm_cluster_setup(
             mem_per_worker = str(mem_lim) + "MB"
         log.debug("Using partition limit of %s MB", str(mem_lim))
     else:
-        if "MB" in mem_per_worker:
-            mem_req = int(memVal)
-        else:
-            mem_req = int(round(memVal * 1000))
-        if mem_req > mem_lim:
+        if int(mem_per_worker.replace("MB", "")) > mem_lim:
             msg = "`mem_per_worker` exceeds limit of %d MB for partition %s. " +\
                 "Capping memory at partition limit. "
             log.warning(msg, mem_lim, partition)
@@ -513,11 +635,8 @@ def slurm_cluster_setup(
         raise TypeError("%s %s"%(funcName, msg%(str(type(start_client)))))
     log.debug("Using `start_client = %s`", str(start_client))
 
-    # Determine if job_extra is a list
-    if not isinstance(job_extra, list):
-        msg = "`job_extra` has to be List, not %s"
-        log.error(msg, str(type(job_extra)))
-        raise TypeError("%s %s"%(funcName, msg%(str(type(job_extra)))))
+    # Determine if `job_extra` is a list
+    _probe_job_extra(job_extra)
 
     # Determine if job_extra options are valid
     for option in job_extra:
@@ -567,6 +686,13 @@ def slurm_cluster_setup(
         slurm_wdir = None
     log.debug("Using `local_directory = %s`", slurm_wdir)
 
+    # Pick up any additional scheduler/worker args to be passed to SLURMCluster
+    extra_args = {}
+    if worker_extra_args:                                                       # pragma: no cover
+        extra_args["worker_extra_args"] = worker_extra_args
+    if scheduler_options:                                                       # pragma: no cover
+        extra_args["scheduler_options"] = scheduler_options                     # type: ignore
+
     # Create `SLURMCluster` object using provided parameters
     log.debug("Instantiating `SLURMCluster` object")
     cluster = SLURMCluster(cores=n_cores,
@@ -577,7 +703,8 @@ def slurm_cluster_setup(
                            queue=partition,
                            python=sys.executable,
                            job_directives_skip=["-t 00:30:00"],
-                           job_extra_directives=job_extra)
+                           job_extra_directives=job_extra,
+                           **extra_args)                                        # type: ignore
 
     # Compute total no. of workers and up-scale cluster accordingly
     if n_workers_startup < n_workers:
@@ -587,7 +714,7 @@ def slurm_cluster_setup(
     cluster.scale(n_workers)
 
     # Fire up waiting routine to avoid returning an undercooked cluster
-    if _cluster_waiter(cluster, funcName, n_workers, timeout, interactive, interactive_wait):
+    if _cluster_waiter(cluster, funcName, n_workers, timeout, interactive, interactive_wait): # pragma: no cover
         return None
 
     # Kill a zombie cluster in non-interactive mode
@@ -624,10 +751,13 @@ def _get_slurm_partitions() -> List:
     out, err = proc.communicate()
 
     # Any non-zero return-code means SLURM is not ready to use
-    if proc.returncode != 0:
+    if proc.returncode != 0:                                                    # pragma: no cover
         msg = "Error fetching SLURM partition setup from node %s: %s"
         log.error(msg, socket.gethostname(), err)
         raise IOError("%s %s"%(funcName, msg%(socket.gethostname(), err)))
+
+    # Remove asterisk appended to any default partitions
+    out = out.replace("*", "")
 
     # Return formatted subprocess shell output
     log.debug("Found partitions: %s", out)
@@ -759,7 +889,8 @@ def local_cluster_setup(
     See also
     --------
     distributed.LocalCluster : create local worker cluster
-    esi_cluster_setup : Start a distributed Dask cluster using SLURM
+    esi_cluster_setup : start a SLURM worker cluster on the ESI HPC infrastructure
+    bic_cluster_setup : start a SLURM worker cluster on the CoBIC HPC infrastructure
     cluster_cleanup : remove dangling parallel processing worker-clusters
     """
 
@@ -828,6 +959,7 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
     See also
     --------
     esi_cluster_setup : Launch SLURM workers on the ESI compute cluster
+    bic_cluster_setup : Launch SLURM workers on the CoBIC compute cluster
     slurm_cluster_setup : start a distributed Dask cluster of parallel processing workers using SLURM
     local_cluster_setup : start a local Dask multi-processing cluster on the host machine
     """
@@ -867,7 +999,7 @@ def cluster_cleanup(client: Optional[Client] = None) -> None:
     client.close()
     try:
         client.cluster.close()
-    except Exception as exc:
+    except Exception as exc:                                                    # pragma: no cover
         log.warning("Could not gracefully shut down cluster: %s", str(exc))
 
     # Communicate what just happened and get outta here
@@ -882,3 +1014,171 @@ def count_online_workers(cluster: SLURMCluster) -> int:
     Local replacement for the late `._count_active_workers` class method
     """
     return len([w["memory_limit"] for w in cluster.scheduler_info["workers"].values()])
+
+
+def _probe_existing_client(start_client : bool) -> Union[Client, SLURMCluster, LocalCluster, None]:
+    """
+    Don't start a new cluster on top of an existing one
+    """
+    try:
+        client = get_client()
+        log.debug("Found existing client")
+        if count_online_workers(client.cluster) == 0:
+            log.debug("No active workers detected in %s", str(client))
+            cluster_cleanup(client)
+        else:
+            log.info("Found existing parallel computing client %s. \
+                     Not starting new cluster.", str(client))
+            if start_client:
+                return client
+            return client.cluster
+    except ValueError:
+        log.debug("No existing clients detected")
+    return None
+
+
+def _probe_sinfo_or_start_local(interactive : bool) -> bool:
+    """
+    Check if SLURM's `sinfo` can be accessed
+    """
+    log.debug("Test if `sinfo` is available")
+    proc = subprocess.Popen("sinfo",
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, shell=True)
+    _, err = proc.communicate()
+
+    # Any non-zero return-code means SLURM is not ready to use
+    startLocal = False
+    if proc.returncode != 0:
+
+        # SLURM is not installed: either allocate `LocalCluster` or just leave
+        if proc.returncode > 0:                                                 # pragma: no cover
+            if interactive:
+                msg = f"SLURM does not seem to be installed on this machine " +\
+                    f"({socket.gethostname()}). Do you want to start a local multi-processing " +\
+                    "computing client instead? "
+                startLocal = user_yesno(msg, default="no")
+            else:
+                startLocal = True
+
+        if not startLocal:
+            msg = "Cannot access SLURM queuing system from node %s: %s "
+            log.error(msg, socket.gethostname(), err)
+            raise IOError("%s"%(msg%(socket.gethostname(), err)))
+
+    return startLocal
+
+
+def _probe_auto_partition(
+        partition : str,
+        avail_partitions : List,
+        invalid_partitions : List,
+        mem_per_worker: str) -> Tuple[Union[str, None], Union[str, None]]:
+    """
+    If partition is "auto" use `mem_per_worker` to pick pseudo-optimal partition
+    """
+
+    # Note: the `np.where` gymnastic below is necessary since `argmin` refuses
+    # to return multiple matches; if `mem_per_worker` is 12, then ``memDiff = [4, 4, ...]``,
+    # however, 8GB won't fit a 12GB worker, so we have to pick the second match 16GB
+    if partition == "auto":
+        if not isinstance(mem_per_worker, str) or mem_per_worker.find("estimate_memuse:") < 0:
+            msg = "Cannot auto-select partition without first invoking memory estimation in `ParallelMap`. "
+            log.error(msg)
+            raise IOError(msg)
+        memEstimate = int(mem_per_worker.replace("estimate_memuse:", ""))
+        mem_per_worker = "auto"
+        log.info("Automatically selecting SLURM partition...")
+        gbQueues = np.unique([int(queue.split("GB")[0]) for queue in avail_partitions if queue[0].isdigit()])
+        memDiff = np.abs(gbQueues - memEstimate)
+        queueIdx = np.where(memDiff == memDiff.min())[0][-1]
+        auto_partition = f"{gbQueues[queueIdx]}GBS"
+        auto_memory = f"{memEstimate} GB"
+    else:
+        _parse_partition(partition, avail_partitions, invalid_partitions)
+        auto_partition = auto_memory = None                                     # type: ignore
+
+    return auto_partition, auto_memory
+
+
+def _parse_partition(
+        partition : str,
+        avail_partitions : List,
+        invalid_partitions: List = []) -> None:
+    """
+    Ensure validity of partition
+    """
+    if partition not in avail_partitions:
+        valid = list(set(avail_partitions).difference(invalid_partitions))
+        lgl = "'" + "or '".join(opt + "' " for opt in valid)
+        msg = "Invalid partition selection %s, available SLURM partitions are %s"
+        log.error(msg, str(partition), lgl)
+        raise ValueError(msg%(str(partition), lgl))
+    log.debug("Found `partition = %s`", partition)
+
+    return
+
+def _probe_mem_spec(mem_per_worker : str | None) -> Union[str, None]:
+    """
+    Returned `mem_per_worker` is either in MB or None
+    """
+    if isinstance(mem_per_worker, str):
+        if mem_per_worker == "auto":
+            mem_per_worker = None                                       # type: ignore
+            log.debug("Using auto-memory selection")
+    if mem_per_worker is not None:
+        msg = "`mem_per_worker` has to be a valid memory specifier (e.g., '8GB', '12000MB'), not %s"
+        if not isinstance(mem_per_worker, str):
+            log.error(msg, str(type(mem_per_worker)))
+            raise TypeError(msg%(str(type(mem_per_worker))))
+        if not any(szstr in mem_per_worker for szstr in ["MB", "GB"]):
+            log.error(msg, mem_per_worker)
+            raise ValueError(msg%(mem_per_worker))
+        memNumeric = mem_per_worker.replace("MB", "").replace("GB", "")
+        log.debug("Found `mem_per_worker = %s` in input args", mem_per_worker)
+        try:
+            memVal = float(memNumeric)
+        except:
+            log.error(msg, mem_per_worker)
+            raise ValueError(msg%(mem_per_worker))
+        if memVal <= 0:
+            log.error(msg, mem_per_worker)
+            raise ValueError(msg%(mem_per_worker))
+        if "MB" in mem_per_worker:
+            mbMem = int(memVal)
+        else:
+            mbMem = int(round(memVal * 1000))
+        mem_per_worker = f"{mbMem}MB"
+        log.debug("Using `mem_per_worker` = %d MB", mbMem)
+
+    return mem_per_worker
+
+
+def _probe_job_extra(job_extra : List) -> None:
+    """
+    Ensure job_extra is a list
+    """
+    if not isinstance(job_extra, list):
+        msg = "`job_extra` has to be a list, not %s"
+        log.error(msg, str(type(job_extra)))
+        raise TypeError(msg%(str(type(job_extra))))
+
+    return
+
+
+def _probe_scontrol(partition : str) -> int:
+    """
+    (Attempt to) Infer default mem-to-cpu setting from partition
+    """
+    try:
+        log.debug("Using `scontrol` to get partition info")
+        pc = subprocess.run(f"scontrol -o show partition {partition}",
+                            capture_output=True, check=True, shell=True, text=True)
+        defMem = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
+        log.debug("Found DefMemPerCPU=%d", defMem)
+    except Exception as exc:                                                    # pragma: no cover
+        msg = "Cannot fetch available memory per CPU in SLURM: %s"
+        log.error(msg, str(exc))
+        raise IOError(msg%(str(exc)))
+
+    return max(1000, defMem - 500)

@@ -16,6 +16,7 @@ import select
 import subprocess
 import inspect
 import logging
+import psutil
 import traceback
 import numpy as np
 import dask.distributed as dd
@@ -107,6 +108,17 @@ def is_esi_node() -> bool:
     return socket.gethostname().startswith("esi-sv") and os.path.isdir("/cs")
 
 
+def is_bic_node() -> bool:
+    """
+    Returns `True` if code is running on a CoBIC cluster node, `False` otherwise
+    """
+
+    # Fetch ACME logger and write debug message
+    log = logging.getLogger("ACME")
+    log.debug("Test if hostname matches the pattern 'bic-sv*'")
+    return socket.gethostname().startswith("bic-sv") and os.path.isdir("/mnt/hpc")
+
+
 def is_x86_node() -> bool:
     """
     Returns `True` if code is running on an x86_64 node, `False` otherwise
@@ -116,6 +128,46 @@ def is_x86_node() -> bool:
     log = logging.getLogger("ACME")
     log.debug("Test if host is x86_64 micro-architecture")
     return platform.machine() == "x86_64"
+
+
+def get_interface(ipaddress : str) -> str:                                      # pragma: no cover
+    """
+    Returns the name of the first network interface associated to `ipaddress`
+    """
+
+    log = logging.getLogger("ACME")
+    log.debug("Scanning for NIC associated to %s", ipaddress)
+    for iface, iflist in psutil.net_if_addrs().items():
+        for psobj in iflist:
+            if ipaddress in psobj.address:
+                return iface
+    err = "IP address %s not associated to any NIC"
+    log.error(err, ipaddress)
+    raise ValueError(err%(ipaddress))
+
+
+def get_free_port(                                                              # pragma: no cover
+        lo : int,
+        hi: int) -> int:
+    """
+    Returns lowest open port in the given range `lo` to `hi`
+    """
+
+    log = logging.getLogger("ACME")
+    log.debug("Looking for open ports in the range %d to %d", lo, hi)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    port = lo
+    while port <= hi:
+        try:
+            sock.bind(("", port))
+            sock.close()
+            return port
+        except OSError:
+            port += 1
+    err = "Could not find open port in the range %d-%d"
+    log.error(err, lo, hi)
+    raise IOError(err%(lo,hi))
+
 
 def _scalar_parser(
         var: Any,
@@ -237,7 +289,7 @@ def is_jupyter() -> bool:
         return False
 
 
-def ctrlc_catcher(
+def ctrlc_catcher(                                                              # pragma: no cover
         *excargs: Any,
         **exckwargs: Optional[Any]) -> None:
     """
