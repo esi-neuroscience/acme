@@ -96,7 +96,7 @@ in the order shown here!
 1. Prepare release notes in [CHANGELOG.md](./CHANGELOG.md)
 1. Force-update environment file [acme.yml](./acme.yml) as well as citation
    resource [CITATION.cff](./CITATION.cff):
-   <!--  -->
+
    ```bash
    python setup.py --version
    ```
