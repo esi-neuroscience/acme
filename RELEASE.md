@@ -14,10 +14,10 @@ detailed guide on how to contribute to ACME, please see our
 ## Prerequisites
 
 1. On your development machine, set up a new conda environment with the
-   most recent Python version intended to be supported
+   most recent Python version intended to be supported, e.g.,
 
    ```bash
-   conda create -n acme-py11 python=3.11
+   conda create -n acme-py13 python=3.13
    ```
 
 1. Update dependencies: open [setup.cfg](./setup.cfg) and install the
@@ -52,11 +52,11 @@ detailed guide on how to contribute to ACME, please see our
 1. Export your environment and re-recreate it on an x86 ESI HPC cluster node:
 
    ```bash
-   conda env export --from-history > acmepy11.yml
-   scp acmepy11.yml esi-svhpc2:~/
+   conda env export --from-history > acmepy13.yml
+   scp acmepy13.yml esi-svhpc2:~/
    ssh esi-svhpc2
    module load conda
-   conda env create --file acmepy11.yml
+   conda env create --file acmepy13.yml
    ```
 
    Create an identical environment (append "-ppc" to its name) on a ppc64le
@@ -65,7 +65,7 @@ detailed guide on how to contribute to ACME, please see our
    ```bash
    ssh hub
    module load conda
-   conda env create --file acmepy11.yml
+   conda env create --file acmepy13.yml
    ```
 
 1. Run ACME's test-suite on both architectures
@@ -73,7 +73,7 @@ detailed guide on how to contribute to ACME, please see our
    ```bash
    ssh {hub,esi-svhpc2}
    module load conda
-   conda activate acme-py11{-ppc}
+   conda activate acme-py13{-ppc}
    cd /path/to/acme-repo/acme/tests
    ./run_tests.sh pytest
    ```
@@ -101,8 +101,7 @@ in the order shown here!
    python setup.py --version
    ```
 
-1. Check proper licensing of all files (errors in [setup.py](./setup.py)
-   and [CITATION.cff](./CITATION.cff) can be ignored)
+1. Check proper licensing of all files using the [REUSE tool](https://github.com/fsfe/reuse-tool):
 
    ```bash
    reuse lint
