@@ -1865,64 +1865,6 @@ class TestParallelMap():
             shutil.rmtree(folder, ignore_errors=True)
         time.sleep(0.1)
 
-    # test if deprecated keywords are mapped onto new names correctly
-    def test_backcompat(self):
-
-        # Prepare data containers
-        _, sigName = self._prep_data("acme_tmp")
-
-        # Collect auto-generated output directories in list for later cleanup
-        outDirs = []
-
-        # Invoke `ParallelMap` w/deprecated `n_jobs` kw
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         partition=defaultQ,
-                         n_jobs=2,
-                         logfile=True,
-                         setup_interactive=False) as pmap:
-            pmap.compute()
-        outDirs.append(pmap.out_dir)
-
-        # Ensure a deprecation warning was issued
-        log = logging.getLogger("ACME")
-        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
-        assert len(logFileList) == 1
-        with open(logFileList[0], "r", encoding="utf8") as fl:
-            logTxt = fl.read()
-        assert "DEPRECATED" in logTxt
-
-        if useSLURM:
-
-            # Use the deprecated `n_jobs` and `mem_per_job` keywords
-            n_workers = 2
-            mem_per_worker = "2GB"
-            with ParallelMap(lowpass_simple,
-                            sigName,
-                            range(self.nChannels),
-                            partition=defaultQ,
-                            n_jobs=n_workers,
-                            mem_per_job=mem_per_worker,
-                            stop_client=False,
-                            setup_interactive=False) as pmap:
-                pmap.compute()
-            outDirs.append(pmap.out_dir)
-
-            # Ensure the provided input was interpreted correctly
-            client = dd.get_client()
-            assert pmap.n_workers == n_workers
-            assert len(client.cluster.workers) == pmap.n_workers
-            memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
-            assert memory.size == 1
-            assert round(memory[0] / 1000**3) == int(mem_per_worker.replace("GB", ""))
-
-        # Clean up
-        for folder in outDirs:
-            shutil.rmtree(folder, ignore_errors=True)
-        time.sleep(0.1)
-        cluster_cleanup()
-
     # test esi-cluster-setup called separately before pmap
     def test_existing_cluster(self):
 
@@ -1948,8 +1890,7 @@ class TestParallelMap():
         # Re-run tests with pre-allocated client (except for those in `skipTests`); ensure
         # client "survives" multiple independent test runs and is not accidentally closed
         skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun",
-                     "test_memest", "test_backcompat", "test_github_examples",
-                     "_prep_data"]
+                     "test_memest", "test_github_examples", "_prep_data"]
         all_tests = [attr for attr in self.__dir__()
                      if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
         for test in all_tests:

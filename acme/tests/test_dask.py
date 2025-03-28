@@ -229,21 +229,3 @@ def test_local_setup():
     with pytest.raises(TypeError):
         local_cluster_setup(interactive="invalid")
     cluster_cleanup()
-
-
-def test_backcompat_cluster():
-
-    if useSLURM and (onESI or onBIC):
-        client = setup_func(partition=defaultQ,
-                            timeout=120,
-                            n_jobs=1,
-                            workers_per_job=1,
-                            mem_per_job="1GB",
-                            n_jobs_startup=1,
-                            interactive=False)
-        assert len(client.cluster.workers) == 1
-        memory = [w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()]
-        assert round(memory[0] / 1000**3) == 1
-        threads = [w["nthreads"] for w in client.cluster.scheduler_info["workers"].values()]
-        assert threads[0] == 1
-        cluster_cleanup(client)

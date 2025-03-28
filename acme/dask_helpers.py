@@ -26,7 +26,6 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Any, Union, Tuple, Dict
 
 # Local imports
-from acme import __deprecated__, __deprecation_wrng__
 from .shared import user_input, user_yesno, is_jupyter, get_interface, get_free_port
 from .spy_interface import scalar_parser, log
 
@@ -141,15 +140,6 @@ def esi_cluster_setup(
 
     # For later reference: dynamically fetch name of current function
     funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
-
-    # Backwards compatibility: legacy keywords are converted to new nomenclature
-    if any(kw in kwargs for kw in __deprecated__):
-        log.warning(__deprecation_wrng__)
-        n_workers = kwargs.pop("n_jobs", n_workers)                             # type: ignore
-        mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)
-        n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)     # type: ignore
-        log.debug("Set `n_workers = n_jobs`, `mem_per_worker = mem_per_job`\
-                  and `n_workers_startup = n_jobs_startup`")
 
     # Don't start a new cluster on top of an existing one
     active_client = _probe_existing_client(start_client)
@@ -558,17 +548,6 @@ def slurm_cluster_setup(
 
     # For later reference: dynamically fetch name of current function
     funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
-
-    # Backwards compatibility: legacy keywords are converted to new nomenclature
-    if any(kw in kwargs for kw in __deprecated__):                                  # pragma: no cover
-        log.warning(__deprecation_wrng__)
-        n_workers = kwargs.pop("n_jobs", n_workers)                                 # type: ignore
-        processes_per_worker = kwargs.pop("workers_per_job", processes_per_worker)  # type: ignore
-        mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)                  # type: ignore
-        n_workers_startup = kwargs.pop("n_jobs_startup", n_workers_startup)         # type: ignore
-        log.debug("Set `n_workers = n_jobs`, `processes_per_worker = workers_per_job`, \
-                  `mem_per_worker = mem_per_job` \
-                  and `n_workers_startup = n_jobs_startup`")
 
     # If not provided, retrieve all partitions currently available in SLURM
     if len(avail_partitions) == 0:

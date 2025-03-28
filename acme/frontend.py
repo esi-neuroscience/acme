@@ -14,7 +14,7 @@ import logging
 from typing import Any, Callable, Optional, Union, List
 
 # Local imports
-from acme import __deprecated__, __deprecation_wrng__, __version__
+from acme import __version__
 from .backend import ACMEdaemon
 from .logger import prepare_log
 from .shared import _scalar_parser, sizeOf
@@ -246,14 +246,6 @@ class ParallelMap(object):
         # First and foremost, set up logging system - logfile is processed later
         prepare_log(logname="ACME", verbose=verbose)
         log.announce("This is ACME v. %s", __version__)                 # type: ignore
-
-        # Backwards compatibility: legacy keywords are converted to new nomenclature
-        if any(kw in kwargs for kw in __deprecated__):
-            log.warning(__deprecation_wrng__)
-            n_workers = kwargs.pop("n_jobs", n_workers)                 # type: ignore
-            mem_per_worker = kwargs.pop("mem_per_job", mem_per_worker)  # type: ignore
-            log.debug("Set `n_workers = n_jobs` and \
-                       mem_per_worker = mem_per_job`")
 
         # Either guess `n_inputs` or use provided value to duplicate input args
         # and set class attributes `n_inputs`, `argv` and `kwargv`

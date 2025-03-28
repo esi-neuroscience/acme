@@ -8,7 +8,7 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [Unreleased]
+## [2025.3]
 Included new convenience function `bic_cluster_setup` for the HPC cluster at
 CoBIC Frankfurt. Analogous to the similarly named helper function built for 
 the ESI HPC cluster, `bic_cluster_setup` simplifies creating a Dask parallel 
@@ -58,7 +58,12 @@ More information can be found in ACME's [online documentation](https://esi-acme.
   to PDB on error etc.)
 
 ### REMOVED
-### DEPRECATED
+- Support for the deprecated keywords `n_jobs`, `mem_per_job`, `n_jobs_startup` 
+  and `workers_per_job` has been removed. Code that still uses these keywords 
+  has to be modified to replace them with their corrresponding counterparts
+  `n_workers`, `mem_per_worker`, `n_workers_startup` and `processes_per_worker`, 
+  respectively. 
+
 ### FIXED
 - Adapted helper script `run_tests.sh` to use SLURM defaults when running on 
   unknown HPC clusters
