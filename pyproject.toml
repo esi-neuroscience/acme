@@ -19,3 +19,7 @@ module = [
     "frontend",
 ]
 ignore_missing_imports = true
+
+[tool.mypy]
+exclude = "(^|/)local_acme\\.py$"
+allow_redefinition = true

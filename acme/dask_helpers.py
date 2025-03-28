@@ -44,7 +44,7 @@ def esi_cluster_setup(
         interactive_wait: int = 120,
         start_client: bool = True,
         job_extra: List = [],
-        **kwargs: Optional[Any]) -> Union[Client, SLURMCluster, LocalCluster]:
+        **kwargs: Optional[Any]) -> Union[None, Client, SLURMCluster, LocalCluster]:
     """
     Start a Dask distributed SLURM worker cluster on the ESI HPC infrastructure
     (or local multi-processing)
@@ -165,10 +165,10 @@ def esi_cluster_setup(
     if auto_partition is not None:
         if mArch == "x86_64":
             partition = auto_partition
-            mem_per_worker = None
+            mem_per_worker = None                                               # type: ignore
         else:                                                                   # pragma: no cover
             partition = "E880"
-            mem_per_worker = auto_memory
+            mem_per_worker = auto_memory                                        # type: ignore
         msg = "Picked partition %s based on estimated memory consumption of %s GB"
         log.info(msg, partition, auto_memory)
     if (partition == "E880" and mArch == "x86_64") or \
@@ -228,7 +228,7 @@ def esi_cluster_setup(
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
     return slurm_cluster_setup(partition, cores_per_worker, n_workers,
-                               processes_per_worker, mem_per_worker,
+                               processes_per_worker, mem_per_worker,            # type: ignore
                                n_workers_startup, timeout, interactive,
                                interactive_wait, start_client, job_extra,
                                avail_partitions=avail_partitions,
@@ -247,7 +247,7 @@ def bic_cluster_setup(                                                          
         interactive_wait: int = 120,
         start_client: bool = True,
         job_extra: List = [],
-        **kwargs: Optional[Any]) -> Union[Client, SLURMCluster, LocalCluster]:
+        **kwargs: Optional[Any]) -> Union[None, Client, SLURMCluster, LocalCluster]:
     """
     Start a Dask distributed SLURM worker cluster on the CoBIC HPC infrastructure
 
@@ -367,7 +367,7 @@ def bic_cluster_setup(                                                          
             partition = f"{auto_partition}x86"
         else:
             partition = f"{auto_partition}ppc"
-        mem_per_worker = None
+        mem_per_worker = None                                                   # type: ignore
         msg = "Picked partition %s based on estimated memory consumption of %s GB"
         log.info(msg, partition, auto_memory)
 
@@ -427,7 +427,7 @@ def bic_cluster_setup(                                                          
 
     # Let the SLURM-specific setup function do the rest (returns client or cluster)
     daskobj =  slurm_cluster_setup(partition, cores_per_worker, n_workers,
-                                   processes_per_worker, mem_per_worker,
+                                   processes_per_worker, mem_per_worker,        # type: ignore
                                    n_workers_startup, timeout, interactive,
                                    interactive_wait, start_client, job_extra,
                                    scheduler_options=scheduler_options,
@@ -437,8 +437,10 @@ def bic_cluster_setup(                                                          
     # Emit short explainer how to connect to Dashboard
     if isinstance(daskobj, Client):
         dblink = daskobj.cluster.dashboard_link
-    else:
+    elif isinstance(daskobj, SLURMCluster):
         dblink = daskobj.dashboard_link
+    else:
+        return None
     ip, port = dblink[dblink.find("http://") + len("http://"):dblink.rfind("/status")].split(":")
     username = getpass.getuser()
     if ishub:
@@ -689,7 +691,7 @@ def slurm_cluster_setup(
     if worker_extra_args:                                                       # pragma: no cover
         extra_args["worker_extra_args"] = worker_extra_args
     if scheduler_options:                                                       # pragma: no cover
-        extra_args["scheduler_options"] = scheduler_options
+        extra_args["scheduler_options"] = scheduler_options                     # type: ignore
 
     # Create `SLURMCluster` object using provided parameters
     log.debug("Instantiating `SLURMCluster` object")
@@ -702,7 +704,7 @@ def slurm_cluster_setup(
                            python=sys.executable,
                            job_directives_skip=["-t 00:30:00"],
                            job_extra_directives=job_extra,
-                           **extra_args)
+                           **extra_args)                                        # type: ignore
 
     # Compute total no. of workers and up-scale cluster accordingly
     if n_workers_startup < n_workers:
@@ -1032,7 +1034,7 @@ def _probe_existing_client(start_client : bool) -> Union[Client, SLURMCluster, L
             return client.cluster
     except ValueError:
         log.debug("No existing clients detected")
-    return
+    return None
 
 
 def _probe_sinfo_or_start_local(interactive : bool) -> bool:
@@ -1094,7 +1096,7 @@ def _probe_auto_partition(
         auto_memory = f"{memEstimate} GB"
     else:
         _parse_partition(partition, avail_partitions, invalid_partitions)
-        auto_partition = auto_memory = None
+        auto_partition = auto_memory = None                                     # type: ignore
 
     return auto_partition, auto_memory
 
@@ -1116,7 +1118,7 @@ def _parse_partition(
 
     return
 
-def _probe_mem_spec(mem_per_worker : str) -> Union[str, None]:
+def _probe_mem_spec(mem_per_worker : str | None) -> Union[str, None]:
     """
     Returned `mem_per_worker` is either in MB or None
     """

@@ -278,10 +278,10 @@ class ACMEdaemon(object):
             self.stacking_dim = result_shape.index(None)                # type: ignore
             rShape[self.stacking_dim] = self.n_calls                    # type: ignore
 
-            if not write_worker_results and any(np.isinf(spec) for spec in rShape):
+            if not write_worker_results and any(np.isinf(spec) for spec in rShape): # type: ignore
                 msg = "%s using `np.inf` in `result_shape` is only valid if `write_worker_results` is `True`"
                 raise ValueError(msg%self.objName)
-            if rShape.count(np.inf) > 1:
+            if rShape.count(np.inf) > 1:                                        # type: ignore
                 msg = "%s cannot use more than one `np.inf` in `result_shape`"
                 raise ValueError(msg%self.objName)
             if not all(isinstance(spec, numbers.Number) for spec in rShape):
@@ -291,7 +291,7 @@ class ACMEdaemon(object):
                 msg = "%s `result_shape` must only contain non-negative integers"
                 raise ValueError(msg%self.objName)
 
-            self.result_shape = tuple(rShape)
+            self.result_shape = tuple(rShape)                                   # type: ignore
             msg = "Found `result_shape = %s`. Set stacking dimension to %d"
             log.debug(msg, str(result_shape), self.stacking_dim)
 
@@ -351,7 +351,7 @@ class ACMEdaemon(object):
                 else:
                     logfile = os.path.dirname(os.path.abspath(inspect.getfile(self.func)))
                 logfile = os.path.join(
-                    logfile,
+                    logfile,                                                    # type: ignore
                     f"ACME_{self.func.__name__}_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}.log")   # type: ignore
             else:
                 logfile = None
@@ -448,11 +448,11 @@ class ACMEdaemon(object):
                         h5f.create_group(f"comp_{i}")
                         log.debug(msg, i)
             else:
-                if np.inf in self.result_shape:
-                    actShape = tuple(spec if spec is not np.inf else 1 for spec in self.result_shape)
-                    maxShape = tuple(spec if spec is not np.inf else None for spec in self.result_shape)
+                if np.inf in self.result_shape:                                 # type: ignore
+                    actShape = tuple(spec if spec is not np.inf else 1 for spec in self.result_shape)    # type: ignore
+                    maxShape = tuple(spec if spec is not np.inf else None for spec in self.result_shape) # type: ignore
                 else:
-                    actShape = self.result_shape
+                    actShape = self.result_shape                                # type: ignore
                     maxShape = None
                 msg = "Created unique dataset 'result_0' with shape %s " +\
                     "in single shared results container"
@@ -482,27 +482,27 @@ class ACMEdaemon(object):
                             log.debug(msg, i, relPath)
                 else:
 
-                    VSourceShape = [spec if spec is not np.inf else None for spec in self.result_shape]
-                    VSourceShape.pop(self.stacking_dim)
+                    VSourceShape = [spec if spec is not np.inf else None for spec in self.result_shape] # type: ignore
+                    VSourceShape.pop(self.stacking_dim)                         # type: ignore
                     VSourceShape = tuple(VSourceShape)
 
                     # Account for resizable datasets
                     if None in VSourceShape:
-                        resActShape = tuple(spec if spec is not np.inf else 1 for spec in self.result_shape)
-                        resMaxShape = tuple(spec if spec is not np.inf else None for spec in self.result_shape)
+                        resActShape = tuple(spec if spec is not np.inf else 1 for spec in self.result_shape)    # type: ignore
+                        resMaxShape = tuple(spec if spec is not np.inf else None for spec in self.result_shape) # type: ignore
                         vsActShape = tuple(spec if spec is not None else 1 for spec in VSourceShape)
                         vsMaxShape = VSourceShape
                     else:
-                        resActShape = self.result_shape
+                        resActShape = self.result_shape                         # type: ignore
                         resMaxShape = None
                         vsActShape = VSourceShape
                         vsMaxShape = None
                     layout = h5py.VirtualLayout(shape=resActShape,
                                                 dtype=self.result_dtype,
                                                 maxshape=resMaxShape)   # type: ignore
-                    idx = [slice(None) if spec is not np.inf else slice(h5py.h5s.UNLIMITED) for spec in self.result_shape]
+                    idx = [slice(None) if spec is not np.inf else slice(h5py.h5s.UNLIMITED) for spec in self.result_shape] # type: ignore
                     jdx = list(idx)
-                    jdx.pop(self.stacking_dim)
+                    jdx.pop(self.stacking_dim)                                  # type: ignore
 
                     msg = "Created virtual dataset result_0' with shape " +\
                         "%s in results container"
@@ -665,7 +665,7 @@ class ACMEdaemon(object):
                 if self.has_slurm:
                     n_workers = self.n_calls
                 else:
-                    n_workers = None
+                    n_workers = None                                            # type: ignore
                 log.debug("Changing `n_workers` from `'auto'` to %s", str(n_workers))
             log.debug("Using provided `n_workers = %d` to start client", n_workers)
 
@@ -787,7 +787,7 @@ class ACMEdaemon(object):
             # Run user-func for max. `runTime` seconds (or worker finishes),
             # get memory footprint every second
             proc.start()
-            with tqdm.tqdm(desc=f"Launching worker #{idx}",
+            with tqdm.tqdm(desc=f"Launching worker #{idx}",                     # type: ignore
                            total=runTime,
                            bar_format=self.tqdmFormat,
                            position=0) as pbar:
@@ -1225,8 +1225,8 @@ class ACMEdaemon(object):
                                         lenDim = lenDim[0]
                                     actShape = tuple(spec if spec is not None else lenDim for spec in dset.maxshape)
                                 else:
-                                    actShape = list(result[0].shape)
-                                    actShape[stackingDim] = dset.maxshape[stackingDim]
+                                    actShape = list(result[0].shape)                    # type: ignore
+                                    actShape[stackingDim] = dset.maxshape[stackingDim]  # type: ignore
                                     actShape = tuple(actShape)
                                 dset.resize(actShape)
                             dset[tuple(idx)] = result[0]

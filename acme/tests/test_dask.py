@@ -15,7 +15,7 @@ import dask.distributed as dd
 
 # Import main actors here
 from acme import cluster_cleanup, slurm_cluster_setup, local_cluster_setup
-from conftest import useSLURM, onESI, onBIC, onx86, defaultQ, setup_func
+from conftest import useSLURM, onESI, onBIC, onx86, defaultQ, setup_func        # type: ignore
 
 
 def test_cluster_setup():

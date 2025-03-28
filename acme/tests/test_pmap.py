@@ -33,7 +33,7 @@ from typing import Any, Optional, Union, Dict
 
 # Import main actors here
 from acme import ParallelMap, ACMEdaemon, cluster_cleanup, local_cluster_setup, esi_cluster_setup
-from conftest import skip_if_not_linux, useSLURM, onESI, onBIC, onx86, defaultQ, setup_func
+from conftest import skip_if_not_linux, useSLURM, onESI, onBIC, onx86, defaultQ, setup_func # type: ignore
 
 # Define custom types
 realArrayLike = Union[float, NDArray[np.float64]]
@@ -61,7 +61,7 @@ def hard_func(
         z: realArrayLike = 3,
         w: realArray = np.zeros((3, 1)),
         **kwargs: Optional[Any]) -> tuple[realArrayLike, realArray]:
-    return sum(x) + y,  z * w
+    return sum(x) + y,  z * w                                                   # type: ignore
 
 def lowpass_simple(
         h5name: str,

@@ -46,7 +46,7 @@ detailed guide on how to contribute to ACME, please see our
 
    ```bash
    cd /path/to/acme-repo
-   mypy acme --allow-redefinition
+   mypy acme
    ```
 
 1. Export your environment and re-recreate it on an x86 ESI HPC cluster node:
@@ -96,7 +96,7 @@ in the order shown here!
 1. Prepare release notes in [CHANGELOG.md](./CHANGELOG.md)
 1. Force-update environment file [acme.yml](./acme.yml) as well as citation
    resource [CITATION.cff](./CITATION.cff):
-
+   <!--  -->
    ```bash
    python setup.py --version
    ```

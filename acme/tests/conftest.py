@@ -45,4 +45,4 @@ elif onBIC:
     setup_func = bic_cluster_setup
 else:
     defaultQ = "auto"
-    setup_func = slurm_cluster_setup
+    setup_func = slurm_cluster_setup                                            # type: ignore
