@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### REMOVED
 ### DEPRECATED
 ### FIXED
+- Made type-hint of `_probe_mem_spec` Python 3.9-compliant (cf. #64)
 
 ## [2025.3]
 Included new convenience function `bic_cluster_setup` for the HPC cluster at
