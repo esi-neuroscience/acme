@@ -69,7 +69,7 @@ def esi_cluster_setup(
         workers. See Examples for details.
     cores_per_worker : None or int
         Number of CPU cores allocated for each worker. If `None`, core-count
-        is set based on partition settings (`DefMemPerCPU`) with respect to
+        is set based on partition settings (`DefMemPerCPU` and QoS) with respect to
         CPU architecture (minimum 1 on x86_64, and 4 on IBM POWER).
     n_workers_startup : int
         Number of spawned workers to wait for. If `n_workers_startup` is `1` (default),
@@ -182,9 +182,9 @@ def esi_cluster_setup(
     # Convert memory selections to MB, "auto" is converted to `None`
     mem_per_worker = _probe_mem_spec(mem_per_worker)
 
-    # If either core-count or mem-spec is undefined, go and ask partition for `DefMeMPerCPU`
+    # If either core-count or mem-spec is undefined, go and ask partition for mem specs
     if cores_per_worker is None or mem_per_worker is None:
-        defMem = _probe_scontrol(partition)
+        defMem, partMem = _probe_scontrol(partition)
 
     # If not explicitly provided, extract by-worker CPU core count from
     # partition via `DefMeMPerCPU` and `mem_per_worker` (if defined)
@@ -193,22 +193,18 @@ def esi_cluster_setup(
         # Use ESI-specific x86_64 partition layout (8GB(S/X/L), 16GB(S/X/L), ... )
         # to infer memory and core count; use "sane" (fat quotes) defaults on IBM POWER
         # (if nothing was provided, use 4 cores/16 GB per worker)
+        if mArch == "ppc64le":
+            partMem = 16000
         if mem_per_worker is not None:
-            defMem = int(mem_per_worker.replace("MB", ""))
-        if mArch == "x86_64":
-            memPerCore = 8000
-        else:                                                                   # pragma: no cover
-            if mem_per_worker is None:
-                defMem = 16000                  # default to 4 cores per worker if no mem req was specified
-            memPerCore = 4000
+            partMem = int(mem_per_worker.replace("MB", ""))
 
         # Set core-count per worker (applies to both x86_64 and ppc64le)
-        cores_per_worker = max(1, int(defMem / memPerCore))
+        cores_per_worker = max(1, int(partMem / defMem))
         log.debug("Derived core-count from partition: `cores_per_worker=%d`", cores_per_worker)
 
     # If `mem_per_worker` is still unassigned, use exactred `DefMemPerCPU` value
     if mem_per_worker is None:
-        mem_per_worker = f"{defMem}MB"
+        mem_per_worker = f"{partMem}MB"
         log.debug("No `mem_per_worker` specified, using default of %s", mem_per_worker)
 
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
@@ -1176,9 +1172,29 @@ def _probe_scontrol(partition : str) -> int:
                             capture_output=True, check=True, shell=True, text=True)
         defMem = int(pc.stdout.strip().partition("DefMemPerCPU=")[-1].split()[0])
         log.debug("Found DefMemPerCPU=%d", defMem)
+        qos = pc.stdout.strip().partition("QoS=")[-1].split()[0]
+        log.debug("Found QoS=%s", qos)
+        pc = subprocess.run(f"sacctmgr show qos name={qos} format=MaxTRES -P",
+                            capture_output=True, check=True, shell=True, text=True)
+        partMem = pc.stdout.strip().partition("mem=")[-1]
+        log.debug("Found MaxTRES memory limit=%s", partMem)
     except Exception as exc:                                                    # pragma: no cover
         msg = "Cannot fetch available memory per CPU in SLURM: %s"
         log.error(msg, str(exc))
         raise IOError(msg%(str(exc)))
 
-    return max(1000, defMem - 500)
+    # Convert `partMem` to MB
+    if len(partMem) == 0:
+        partMem = -1
+    elif partMem.endswith("M"):
+        partMem = int(partMem.replace("M", ""))
+    elif partMem.endswith("G"):
+        partMem = int(float(partMem.replace("G", "")) * 1024)
+    elif partMem.endswith("T"):
+        partMem = int(float(partMem.replace("G", "")) * 1048576)
+    else:
+        msg = "Unrecognized QoS memory specification %s"
+        log.error(msg, partMem)
+        raise ValueError(msg%(partMem))
+
+    return max(1000, defMem), partMem

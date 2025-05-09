@@ -139,7 +139,7 @@ def test_cluster_setup():
                                 interactive=False)
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
-            assert np.ceil(memory / 1000**3)[0] == 8
+            assert np.round(memory / 1024**3)[0] == 8
 
             # Invoking `setup_func` with existing client must not start a new one
             clnt = setup_func(partition=defaultQ, n_workers=2, interactive=False)
