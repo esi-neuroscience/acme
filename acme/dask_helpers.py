@@ -1118,7 +1118,7 @@ def _parse_partition(
 
     return
 
-def _probe_mem_spec(mem_per_worker : str | None) -> Union[str, None]:
+def _probe_mem_spec(mem_per_worker : Union[str, None]) -> Union[str, None]:
     """
     Returned `mem_per_worker` is either in MB or None
     """
