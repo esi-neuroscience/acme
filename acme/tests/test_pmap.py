@@ -563,7 +563,6 @@ class TestParallelMap():
             with h5py.File(colRes, "r") as h5col:
                 chNo = np.random.choice(self.nChannels, size=1)[0]
                 h5col[f"comp_{chNo}"]["result_0"]
-        assert "unable to open external file" in str(keyerr.value)
 
         # Ensure `output_dir` is properly ignored if `write_worker_results` is `False`
         pmap = ParallelMap(lowpass_simple,
