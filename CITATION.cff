@@ -1,16 +1,13 @@
 authors:
-- affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
-    \ Max Planck Society"
+- affiliation: "Ernst Strüngmann Institute for Neuroscience in Cooperation with Max Planck Society"
   family-names: Fuertinger
   given-names: Stefan
   orcid: https://orcid.org/0000-0002-8118-036X
-- affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
-    \ Max Planck Society"
+- affiliation: "Ernst Strüngmann Institute for Neuroscience in Cooperation with Max Planck Society"
   family-names: Shapcott
   given-names: Katharine
   orcid: https://orcid.org/0000-0001-8618-5779
-- affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
-    \ Max Planck Society"
+- affiliation: "Ernst Strüngmann Institute for Neuroscience in Cooperation with Max Planck Society"
   family-names: Schmiedt
   given-names: Joscha Tapani
   orcid: https://orcid.org/0000-0001-6233-1866
@@ -21,8 +18,8 @@ keywords:
 - parallel computing
 license: BSD-3-Clause
 message: If you use this software, please cite it based on metadata found in this
-  file. ACME provides functionality to execute Python functions concurrently and is
-  itself used as the parallelization engine of SyNCoPy.
+  file. ACME provides functionality to execute Python functions concurrently on
+  HPC clusters.
 repository-code: https://github.com/esi-neuroscience/acme
 title: 'ACME: Asynchronous Computing Made ESI'
 version: '2025.3'
