@@ -9,14 +9,14 @@ channels:
 - conda-forge
 dependencies:
 - cloudpickle > 2.2
-- dask >= 2022.12.1, <= 2024.12.1
+- dask >= 2022.12.1, <= 2025.5.1
 - dask-jobqueue >= 0.8, < 1.0
 - h5py >= 3, < 4
 - numpy >= 1.0, < 3.0
 - toolz >= 0.12
 - tqdm >= 4.31
 - ipdb
-- ipython < 9.0
+- ipython < 10.0
 - scipy >= 1.5, < 2.0
 - mypy
 - numpydoc
@@ -34,4 +34,4 @@ dependencies:
 - pip
 - pip:
   - sphinx_automodapi
-name: acme
+name: acme-ppc
