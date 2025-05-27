@@ -412,7 +412,7 @@ def bic_cluster_setup(                                                          
         log.debug("Setting `--output=%s`", out_files)
 
     # CoBIC-specific: only specific ports are available on the hubs
-    if ishub and os.path.isfile("/usr/local/bin/squeue_summary"):
+    if os.path.isfile("/usr/local/bin/squeue_summary"):
         ifname = get_interface("172.18.90")
         schedPort = get_free_port(60001, 63000)
         scheduler_options = {"port": schedPort, "interface" : ifname}
