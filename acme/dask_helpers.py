@@ -412,7 +412,6 @@ def bic_cluster_setup(                                                          
         log.debug("Setting `--output=%s`", out_files)
 
     # CoBIC-specific: only specific ports are available on the hubs
-    ishub = socket.gethostname().startswith("bic-svhub0")
     if ishub and os.path.isfile("/usr/local/bin/squeue_summary"):
         ifname = get_interface("172.18.90")
         schedPort = get_free_port(60001, 63000)
@@ -438,7 +437,7 @@ def bic_cluster_setup(                                                          
         return None
     ip, port = dblink[dblink.find("http://") + len("http://"):dblink.rfind("/status")].split(":")
     username = getpass.getuser()
-    if ishub:
+    if socket.gethostname().startswith("bic-svhub0"):
         ifname = get_interface("192.168.161")
         hubip = psutil.net_if_addrs()[ifname][0].address
         sshcmd = f"ssh -L {port}:localhost:{port}"
