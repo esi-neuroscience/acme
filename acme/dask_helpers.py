@@ -381,15 +381,14 @@ def bic_cluster_setup(                                                          
 
     # If either core-count or mem-spec is undefined, go and ask partition for `DefMeMPerCPU`
     if cores_per_worker is None or mem_per_worker is None:
-        defMem = _probe_scontrol(partition)
+        defMem, partMem = _probe_scontrol(partition)
 
     # If not explicitly provided, extract by-worker CPU core count from
     # partition via `DefMeMPerCPU` and `mem_per_worker` (if defined)
     if cores_per_worker is None:
-        memPerCore = 8000
         if mem_per_worker is not None:
-            defMem = int(mem_per_worker.replace("MB", ""))
-        cores_per_worker = max(1, round(defMem / memPerCore))
+            partMem = int(mem_per_worker.replace("MB", ""))
+        cores_per_worker = max(1, round(partMem / defMem))
         log.debug("Derived core-count from partition: `cores_per_worker=%d`", cores_per_worker)
 
     # If `mem_per_worker` is still unassigned, use exactred `DefMemPerCPU` value
