@@ -44,6 +44,7 @@ def esi_cluster_setup(
         interactive_wait: int = 120,
         start_client: bool = True,
         job_extra: List = [],
+        mem_cushion : int = 100,
         **kwargs: Optional[Any]) -> Union[None, Client, SLURMCluster, LocalCluster]:
     """
     Start a Dask distributed SLURM worker cluster on the ESI HPC infrastructure
@@ -202,9 +203,9 @@ def esi_cluster_setup(
         cores_per_worker = max(1, int(partMem / defMem))
         log.debug("Derived core-count from partition: `cores_per_worker=%d`", cores_per_worker)
 
-    # If `mem_per_worker` is still unassigned, use exactred `DefMemPerCPU` value
+    # If `mem_per_worker` is still unassigned, use extracted partition limit
     if mem_per_worker is None:
-        mem_per_worker = f"{partMem}MB"
+        mem_per_worker = f"{partMem - mem_cushion}MB"
         log.debug("No `mem_per_worker` specified, using default of %s", mem_per_worker)
 
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
@@ -243,6 +244,7 @@ def bic_cluster_setup(                                                          
         interactive_wait: int = 120,
         start_client: bool = True,
         job_extra: List = [],
+        mem_cushion : int = 100,
         **kwargs: Optional[Any]) -> Union[None, Client, SLURMCluster, LocalCluster]:
     """
     Start a Dask distributed SLURM worker cluster on the CoBIC HPC infrastructure
@@ -391,9 +393,9 @@ def bic_cluster_setup(                                                          
         cores_per_worker = max(1, round(partMem / defMem))
         log.debug("Derived core-count from partition: `cores_per_worker=%d`", cores_per_worker)
 
-    # If `mem_per_worker` is still unassigned, use exactred `DefMemPerCPU` value
+    # If `mem_per_worker` is still unassigned, use partition limit
     if mem_per_worker is None:
-        mem_per_worker = f"{defMem}MB"
+        mem_per_worker = f"{partMem - mem_cushion}MB"
         log.debug("No `mem_per_worker` specified, using default of %s", mem_per_worker)
 
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
@@ -416,7 +418,7 @@ def bic_cluster_setup(                                                          
         ifname = get_interface("172.18.90")
         schedPort = get_free_port(60001, 63000)
         scheduler_options = {"port": schedPort, "interface" : ifname}
-        worker_extra_args = ["--port", "60001:63000"]
+        worker_extra_args = ["--worker-port=60001:63000", "--nanny-port=60001:63000"]
     else:
         scheduler_options = None
 
@@ -426,8 +428,10 @@ def bic_cluster_setup(                                                          
                                    n_workers_startup, timeout, interactive,
                                    interactive_wait, start_client, job_extra,
                                    scheduler_options=scheduler_options,
+                                   worker_extra_args=worker_extra_args,
                                    avail_partitions=avail_partitions,
-                                   invalid_partitions=invalid_partitions, **kwargs)
+                                   invalid_partitions=invalid_partitions,
+                                   mem_cushion=mem_cushion, **kwargs)
 
     # Emit short explainer how to connect to Dashboard
     if isinstance(daskobj, Client):
@@ -470,6 +474,7 @@ def slurm_cluster_setup(
         scheduler_options: Optional[Dict] = None,
         avail_partitions: List = [],
         invalid_partitions: List = [],
+        mem_cushion: int = 100,
         **kwargs: Optional[Any]) -> Union[Client, SLURMCluster, None]:
     """
     Start a distributed Dask cluster of parallel processing workers using SLURM
@@ -564,6 +569,15 @@ def slurm_cluster_setup(
     # Convert memory selections to MB, "auto" is converted to `None`
     mem_per_worker = _probe_mem_spec(mem_per_worker)
 
+    # Check for sanity of requested core count
+    try:
+        scalar_parser(n_cores, varname="n_cores",
+                      ntype="int_like", lims=[1, np.inf])
+    except Exception as exc:
+        log.error("Error parsing `n_cores`")
+        raise exc
+    log.debug("Using `n_cores = %d`", n_cores)
+
     # Parse worker-waiter count
     try:
         scalar_parser(n_workers_startup, varname="n_workers_startup", ntype="int_like", lims=[0, np.inf])
@@ -572,23 +586,30 @@ def slurm_cluster_setup(
         raise exc
     log.debug("Using `n_workers_startup = %d`", n_workers_startup)
 
-    # Get memory limit (*in MB*) of chosen partition
-    log.debug("Use `scontrol` to fetch partition's memory limit")
-    pc = subprocess.run(f"scontrol -o show partition {partition}",
-                        capture_output=True, check=True, shell=True, text=True)
-    try:
-        mem_lim = int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0]) - 500
-    except IndexError:                                              # pragma: no cover
-        mem_lim = np.inf                                            # type: ignore
-    log.debug("Found a limit of  %s MB", str(mem_lim))
+    # Try to infer memory limit (*in MB*) of chosen partition from QoS
+    defMem, partMem = _probe_scontrol(partition)
+
+    # If that didn't work, try to infer memory limit from `MaxMemPerCPU`
+    if partMem < 0:
+        log.debug("Use `scontrol` to fetch MaxMemPerCPU")
+        pc = subprocess.run(f"scontrol -o show partition {partition}",
+                            capture_output=True, check=True, shell=True, text=True)
+        try:
+            mem_lim = n_cores * (int(pc.stdout.strip().partition("MaxMemPerCPU=")[-1].split()[0]))
+        except IndexError:                                              # pragma: no cover
+            mem_lim = np.inf                                            # type: ignore
+        log.debug("Found a limit of  %s MB", str(mem_lim))
+    else:
+        mem_lim = partMem
+
+    # Lower upper bound on worker-memory to not accidentally trigger TRES/QoS violations
+    if not np.isinf(mem_lim):
+        mem_lim -= mem_cushion
 
     # Consolidate requested memory with chosen partition (or assign default memory)
     if mem_per_worker is None:
         if np.isinf(mem_lim):
-            try:
-                mem_per_worker = f"{int(pc.stdout.strip().partition('DefMemPerCPU=')[-1].split()[0]) - 500}MB"
-            except IndexError:
-                raise ValueError("Cannot infer any default memory setting from partition %s"%partition)
+            mem_per_worker = f"{(n_cores * defMem) - mem_cushion}MB"
         else:
             mem_per_worker = str(mem_lim) + "MB"
         log.debug("Using partition limit of %s MB", str(mem_lim))
@@ -653,15 +674,6 @@ def slurm_cluster_setup(
         log.error("Error parsing `processes_per_worker`")
         raise exc
     log.debug("Using `processes_per_worker = %d`", processes_per_worker)
-
-    # Check for sanity of requested core count
-    try:
-        scalar_parser(n_cores, varname="n_cores",
-                      ntype="int_like", lims=[1, np.inf])
-    except Exception as exc:
-        log.error("Error parsing `n_cores`")
-        raise exc
-    log.debug("Using `n_cores = %d`", n_cores)
 
     # Check validity of '--output' option if provided
     userOutSpec = [option.startswith("--output") or option.startswith("-o") for option in job_extra]
