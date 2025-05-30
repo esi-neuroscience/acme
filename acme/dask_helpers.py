@@ -244,7 +244,7 @@ def bic_cluster_setup(                                                          
         interactive_wait: int = 120,
         start_client: bool = True,
         job_extra: List = [],
-        mem_cushion : int = 100,
+        mem_cushion : int = 500,
         **kwargs: Optional[Any]) -> Union[None, Client, SLURMCluster, LocalCluster]:
     """
     Start a Dask distributed SLURM worker cluster on the CoBIC HPC infrastructure
