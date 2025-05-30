@@ -1877,6 +1877,7 @@ class TestParallelMap():
                 slurmOut = f"/mnt/hpc/home/{getpass.getuser()}/acme_out"
                 client = setup_func(partition=defaultQ,
                                     n_workers=10,
+                                    timeout=240,
                                     job_extra=[f"--output={slurmOut}"],
                                     interactive=False)
             else:
