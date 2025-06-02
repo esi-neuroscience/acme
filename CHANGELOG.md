@@ -10,7 +10,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 ### NEW
+- New (optional) keyword `mem_cushion` in `slurm_cluster_setup` controls how 
+  much memory to take off `mem_per_worker` to stay clear of memory limits defined 
+  by QoS rules or partition definitions. The helper functions `esi_cluster_setup` 
+  and `bic_cluster_setup` have been modified to use default values propagated to 
+  `slurm_cluster_setup` tested on the respective clusters. 
+
 ### CHANGED
+- Modified heuristics to allocate CPUs given a worker's memory demands to optimize 
+  multi-threading performance on both ESI and CoBIC clusters. 
+
 ### REMOVED
 ### DEPRECATED
 ### FIXED

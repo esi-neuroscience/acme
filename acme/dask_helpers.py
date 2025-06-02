@@ -96,6 +96,9 @@ def esi_cluster_setup(
         computing cluster is started to which compute-clients can connect.
     job_extra : list
         Extra sbatch parameters to pass to SLURMCluster.
+    mem_cushion : int
+        Amount of memory to "withhold" from `mem_per_worker` to stay clear of
+        partition limits (either imposed via QoS or `MaxMemPerCPU`)
     **kwargs : dict
         Additional keyword arguments can be used to control job-submission details.
 
@@ -293,6 +296,9 @@ def bic_cluster_setup(                                                          
         computing cluster is started to which compute-clients can connect.
     job_extra : list
         Extra sbatch parameters to pass to SLURMCluster.
+    mem_cushion : int
+        Amount of memory to "withhold" from `mem_per_worker` to stay clear of
+        partition limits (either imposed via QoS or `MaxMemPerCPU`)
     **kwargs : dict
         Additional keyword arguments can be used to control job-submission details.
 
@@ -530,6 +536,9 @@ def slurm_cluster_setup(
     invalid_partition : list
         List of partition names (strings) that are not available for launching
         dask workers.
+    mem_cushion : int
+        Amount of memory to "withhold" from `mem_per_worker` to stay clear of
+        partition limits (either imposed via QoS or `MaxMemPerCPU`)
 
     Returns
     -------
