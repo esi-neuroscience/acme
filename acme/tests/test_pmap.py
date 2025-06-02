@@ -1364,6 +1364,7 @@ class TestParallelMap():
                          sabotage_hdf5=False,
                          n_inputs=self.nChannels,
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             hdfResults = pmap.compute()
         colRes = str(pmap.results_container)
