@@ -872,6 +872,7 @@ class TestParallelMap():
                          sigName,
                          range(self.nChannels),
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
              pmap.compute()
         outDirs.append(pmap.out_dir)
