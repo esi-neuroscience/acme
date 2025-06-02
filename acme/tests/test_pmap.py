@@ -697,7 +697,8 @@ class TestParallelMap():
                          write_worker_results=False,
                          n_workers=1,
                          partition=defaultQ,
-                         setup_interactive=False) as pmap:
+                         setup_timeout=120,
+                        setup_interactive=False) as pmap:
             pmap.compute()
         assert pmap.out_dir is None
         log = logging.getLogger("ACME")
