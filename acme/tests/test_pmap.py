@@ -925,6 +925,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          write_worker_results=False,
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             resInMem = pmap.compute()
 
