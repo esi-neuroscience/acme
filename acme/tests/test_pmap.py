@@ -1464,15 +1464,16 @@ class TestParallelMap():
         # Ensure emergency pickling and single file does not work
         with pytest.raises(RuntimeError):
             with ParallelMap(pickle_func,
-                            self.sig,
-                            self.b,
-                            self.a,
-                            range(self.nChannels),
-                            sabotage_hdf5=True,
-                            n_inputs=self.nChannels,
-                            single_file=True,
-                            partition=defaultQ,
-                            setup_interactive=False) as pmap:
+                             self.sig,
+                             self.b,
+                             self.a,
+                             range(self.nChannels),
+                             sabotage_hdf5=True,
+                             n_inputs=self.nChannels,
+                             single_file=True,
+                             partition=defaultQ,
+                             setup_timeout=120,
+                             setup_interactive=False) as pmap:
                 pmap.compute()
 
 
