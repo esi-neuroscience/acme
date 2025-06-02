@@ -240,7 +240,7 @@ def bic_cluster_setup(                                                          
         mem_per_worker: str = "auto",
         cores_per_worker: Optional[int] = None,
         n_workers_startup: int = 1,
-        timeout: int = 60,
+        timeout: int = 120,
         interactive: bool = True,
         interactive_wait: int = 120,
         start_client: bool = True,
