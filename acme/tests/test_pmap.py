@@ -1784,7 +1784,8 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked (again)
         if useSLURM and (onESI or onBIC):
-            assert "Picked partition 8GBS" in logTxt
+            if mArch == "x86_64":
+                assert "Picked partition 8GBS" in logTxt
             assert "based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling should not have generated any output
@@ -1858,7 +1859,8 @@ class TestParallelMap():
                 with open(customLog3, "r", encoding="utf8") as f:
                     logTxt = f.read()
                 assert "Estimated memory consumption across 5 runs" in logTxt
-                assert "Picked partition 8GBS" in logTxt
+                if mArch == "x86_64":
+                    assert "Picked partition 8GBS" in logTxt
                 outDirs.append(pmap.out_dir)
 
         # Clean up
