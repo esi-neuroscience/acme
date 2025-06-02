@@ -788,6 +788,7 @@ class TestParallelMap():
                          n_workers=n_workers,
                          mem_per_worker=mem_per_worker,
                          stop_client=False,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
