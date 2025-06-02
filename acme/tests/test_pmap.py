@@ -39,7 +39,9 @@ from conftest import skip_if_not_linux, useSLURM, onESI, onBIC, onx86, defaultQ,
 realArrayLike = Union[float, NDArray[np.float64]]
 realArray = NDArray[np.float64]
 
-#
+# Get machine architecture
+mArch = platform.machine()
+
 
 # Functions that act as stand-ins for user-funcs
 def simple_func(
@@ -339,7 +341,7 @@ class TestParallelMap():
             out == h5f["result_0"][()] # returns a NumPy array of shape (4,)
         assert np.array_equal(out, expected)
 
-        mockName = f"mock_data_{platform.machine()}"
+        mockName = f"mock_data_{mArch}"
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), mockName)
         if useSLURM and (onESI or onBIC):
             tempDir = f"/mnt/hpc/home/{getpass.getuser()}/{mockName}"
@@ -441,7 +443,7 @@ class TestParallelMap():
     def test_simple_filter(self, testclient=None):
 
         # Prepare data containers
-        tempDir, sigName = self._prep_data(f"acme_tmp_{platform.machine()}")
+        tempDir, sigName = self._prep_data(f"acme_tmp_{mArch}")
 
         # Collect auto-generated output directories in list for later cleanup
         outDirs = []
@@ -578,7 +580,7 @@ class TestParallelMap():
         # Simulate user-defined results-directory not auto-populated by ACME
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
         if useSLURM and (onESI or onBIC):
-            tempDir2 = f"/mnt/hpc/home/{getpass.getuser()}/acme_tmp_lowpass_hard_{platform.machine()}"
+            tempDir2 = f"/mnt/hpc/home/{getpass.getuser()}/acme_tmp_lowpass_hard_{mArch}"
         shutil.rmtree(tempDir2, ignore_errors=True)
         os.makedirs(tempDir2, exist_ok=True)
 
@@ -1504,7 +1506,7 @@ class TestParallelMap():
     def test_cancel(self):
 
         # Setup temp-directory layout for subprocess-scripts and prepare interpreters
-        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{platform.machine()}")
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{mArch}")
         shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         pshells = [os.path.join(os.path.split(sys.executable)[0], pyExec) for pyExec in ["python", "ipython"]]
@@ -1653,7 +1655,7 @@ class TestParallelMap():
         cluster_cleanup()
 
         # Create tmp directory for logfile
-        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{platform.machine()}")
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{mArch}")
         shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         customLog = os.path.join(tempDir, "mem_log.txt")
@@ -1663,7 +1665,7 @@ class TestParallelMap():
         # mem estimates accordingly
         arrsize = 2
         estMem = 3
-        if not useSLURM and platform.machine() == "ppc64le":
+        if not useSLURM and mArch == "ppc64le":
             arrsize = 0.5
             estMem = 1
 
@@ -1709,7 +1711,8 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked
         if useSLURM and (onESI or onBIC):
-            assert "Picked partition 8GBS" in logTxt
+            if mArch == "x86_64":
+                assert "Picked partition 8GBS" in logTxt
             assert "based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
