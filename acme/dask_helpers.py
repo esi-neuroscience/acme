@@ -186,23 +186,21 @@ def esi_cluster_setup(
     # Convert memory selections to MB, "auto" is converted to `None`
     mem_per_worker = _probe_mem_spec(mem_per_worker)
 
-    # If either core-count or mem-spec is undefined, go and ask partition for mem specs
+    # If either core-count or mem-spec is undefined, go and ask partition for
+    # mem specs; set "sane" (fat quotes) defaults on IBM POWER (if nothing was
+    # provided, run with 4 cores/16 GB per worker -> set `partMem` accordingly)
     if cores_per_worker is None or mem_per_worker is None:
         defMem, partMem = _probe_scontrol(partition)
+    if mArch == "ppc64le":
+        partMem = 16000
 
     # If not explicitly provided, extract by-worker CPU core count from
     # partition via `DefMeMPerCPU` and `mem_per_worker` (if defined)
     if cores_per_worker is None:
 
-        # Use ESI-specific x86_64 partition layout (8GB(S/X/L), 16GB(S/X/L), ... )
-        # to infer memory and core count; use "sane" (fat quotes) defaults on IBM POWER
-        # (if nothing was provided, use 4 cores/16 GB per worker)
-        if mArch == "ppc64le":
-            partMem = 16000
+        # Set core-count per worker (applies to both x86_64 and ppc64le)
         if mem_per_worker is not None:
             partMem = int(mem_per_worker.replace("MB", ""))
-
-        # Set core-count per worker (applies to both x86_64 and ppc64le)
         cores_per_worker = max(1, int(partMem / defMem))
         log.debug("Derived core-count from partition: `cores_per_worker=%d`", cores_per_worker)
 
