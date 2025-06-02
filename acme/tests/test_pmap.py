@@ -624,6 +624,7 @@ class TestParallelMap():
                          logfile=True,
                          stop_client=False,
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -641,15 +642,19 @@ class TestParallelMap():
         # Ensure client has not been killed; perform post-hoc check of default SLURM settings
         assert dd.get_client()
         client = dd.get_client()
-        if useSLURM is True and testclient is None:
+        if useSLURM and testclient is None:
             assert pmap.n_calls == pmap.n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             partition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
-            if onx86:
+            if onx86 and (onESI or onBIC):
                 assert "8GB" in partition
                 memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
                 assert memory.size == 1
-                assert math.ceil(memory[0] / (2*1024**3)) == [int(s) for s in partition if s.isdigit()][0]
+                if onESI:
+                    mfactor = 2
+                else:
+                    mfactor = 1
+                assert math.ceil(memory[0] / (mfactor*1024**3)) == [int(s) for s in partition if s.isdigit()][0]
 
         # Wait a sec (literally) for dask to collect its bearings (after the
         # `get_client` above) before proceeding
