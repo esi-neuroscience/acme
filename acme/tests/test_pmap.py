@@ -651,10 +651,10 @@ class TestParallelMap():
                 memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
                 assert memory.size == 1
                 if onESI:
-                    mfactor = 2
+                    denom = 2*1024**3
                 else:
-                    mfactor = 1
-                assert math.ceil(memory[0] / (mfactor*1024**3)) == [int(s) for s in partition if s.isdigit()][0]
+                    denom = 1000**3
+                assert math.ceil(memory[0] / denom) == [int(s) for s in partition if s.isdigit()][0]
 
         # Wait a sec (literally) for dask to collect its bearings (after the
         # `get_client` above) before proceeding
