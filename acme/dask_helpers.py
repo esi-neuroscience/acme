@@ -375,7 +375,7 @@ def bic_cluster_setup(                                                          
 
     # Prevent cross-architecture client startups
     if (mArch == "ppc64le" and "x86" in partition) or \
-       (mArch == "x86" and "ppc64le" in partition):
+       (mArch == "x86" and "ppc" in partition):
         otherArch = list(set(["x86_64", "ppc64le"]).difference([mArch]))[0]
         msg = "Cannot start SLURM workers in partition %s with " +\
               "architecture %s from submitting host with architecture %s. " +\
