@@ -1379,6 +1379,7 @@ class TestParallelMap():
                          n_inputs=self.nChannels,
                          write_pickle=True,
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             pklResults = pmap.compute()
         outDirs.append(pmap.out_dir)
