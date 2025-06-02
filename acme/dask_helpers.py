@@ -206,7 +206,7 @@ def esi_cluster_setup(
 
     # If `mem_per_worker` is still unassigned, use extracted partition limit
     if mem_per_worker is None:
-        mem_per_worker = f"{partMem - mem_cushion}MB"
+        mem_per_worker = f"{partMem}MB"
         log.debug("No `mem_per_worker` specified, using default of %s", mem_per_worker)
 
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
@@ -230,7 +230,8 @@ def esi_cluster_setup(
                                n_workers_startup, timeout, interactive,
                                interactive_wait, start_client, job_extra,
                                avail_partitions=avail_partitions,
-                               invalid_partitions=invalid_partitions, **kwargs)
+                               invalid_partitions=invalid_partitions,
+                               mem_cushion=mem_cushion, **kwargs)
 
 
 # Setup SLURM workers on the CoBIC HPC cluster
@@ -399,7 +400,7 @@ def bic_cluster_setup(                                                          
 
     # If `mem_per_worker` is still unassigned, use partition limit
     if mem_per_worker is None:
-        mem_per_worker = f"{partMem - mem_cushion}MB"
+        mem_per_worker = f"{partMem}MB"
         log.debug("No `mem_per_worker` specified, using default of %s", mem_per_worker)
 
     # Determine if `job_extra`` is a list (this is also checked in `slurm_cluster_setup`,
@@ -592,6 +593,14 @@ def slurm_cluster_setup(
         log.error("Error parsing `n_workers_startup`")
         raise exc
     log.debug("Using `n_workers_startup = %d`", n_workers_startup)
+
+    # Parse memory cushion to withhold from max
+    try:
+        scalar_parser(mem_cushion, varname="mem_cushion", ntype="int_like", lims=[0, np.inf])
+    except Exception as exc:
+        log.error("Error parsing `mem_cushion`")
+        raise exc
+    log.debug("Using `mem_cushion = %d`", mem_cushion)
 
     # Try to infer memory limit (*in MB*) of chosen partition from QoS
     defMem, partMem = _probe_scontrol(partition)
