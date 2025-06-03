@@ -12,14 +12,14 @@ authors:
   given-names: Joscha Tapani
   orcid: https://orcid.org/0000-0001-6233-1866
 cff-version: 1.1.0
-date-released: '2025-03-28'
+date-released: '2025-06-03'
 keywords:
 - high-performance computing
 - parallel computing
 license: BSD-3-Clause
 message: If you use this software, please cite it based on metadata found in this
-  file. ACME provides functionality to execute Python functions concurrently on
-  HPC clusters.
+  file. ACME provides functionality to execute Python functions concurrently on HPC
+  clusters.
 repository-code: https://github.com/esi-neuroscience/acme
 title: 'ACME: Asynchronous Computing Made ESI'
-version: '2025.3'
+version: '2025.6'
