@@ -1395,15 +1395,16 @@ class TestParallelMap():
         # Ensure single_file and pickling does not work
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(pickle_func,
-                            self.sig,
-                            self.b,
-                            self.a,
-                            range(self.nChannels),
-                            n_inputs=self.nChannels,
-                            write_pickle=True,
-                            single_file=True,
-                            partition=defaultQ,
-                            setup_interactive=False) as pmap:
+                             self.sig,
+                             self.b,
+                             self.a,
+                             range(self.nChannels),
+                             n_inputs=self.nChannels,
+                             write_pickle=True,
+                             single_file=True,
+                             partition=defaultQ,
+                             setup_timeout=120,
+                             setup_interactive=False) as pmap:
                 pmap.compute()
         assert "Pickling of results does not support single output file creation" in str(valerr.value)
 
@@ -1416,6 +1417,7 @@ class TestParallelMap():
                          sabotage_hdf5=True,
                          n_inputs=self.nChannels,
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             mixedResults = pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -1429,6 +1431,7 @@ class TestParallelMap():
                          write_pickle=True,
                          logfile=True,
                          n_workers=1,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
                 results = pmap.compute()
         assert pmap.out_dir is None
@@ -1486,6 +1489,7 @@ class TestParallelMap():
                            sabotage_hdf5=True,
                            n_inputs=self.nChannels,
                            partition=defaultQ,
+                           setup_timeout=120,
                            setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
@@ -1501,6 +1505,7 @@ class TestParallelMap():
                            n_inputs=self.nChannels,
                            write_pickle=True,
                            partition=defaultQ,
+                           setup_timeout=120,
                            setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
@@ -1658,6 +1663,7 @@ class TestParallelMap():
                          [2, 4, 6, 8],
                          4,
                          setup_interactive=True,
+                         setup_timeout=120,
                          dryrun=True) as pmap:
             pmap.compute()
         shutil.rmtree(pmap.out_dir, ignore_errors=True)
@@ -1692,6 +1698,7 @@ class TestParallelMap():
                            sleeper=2,
                            arrsize=arrsize,
                            logfile=customLog,
+                           setup_timeout=120,
                            setup_interactive=False)
 
         # If executed locally, the above call did not invoke `estimate_memuse` since
