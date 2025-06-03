@@ -10,6 +10,7 @@
 # Builtin/3rd party package imports
 import pytest
 import getpass
+import time
 import numpy as np
 import dask.distributed as dd
 
@@ -96,6 +97,7 @@ def test_cluster_setup():
         with pytest.raises(ValueError):
             slurm_cluster_setup(partition=defaultQ, job_extra=["--output=invalid=path"])
         cluster_cleanup()
+        time.sleep(2.0)
         slurmOut = f"/tmp/{getpass.getuser()}"
         client = slurm_cluster_setup(partition=defaultQ,
                                      n_workers=1,
@@ -139,7 +141,7 @@ def test_cluster_setup():
                                 interactive=False)
             memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
             assert memory.size == 1
-            assert np.ceil(memory / 1000**3)[0] == 8
+            assert 7 <= np.round(memory / 1024**3)[0] <= 8
 
             # Invoking `setup_func` with existing client must not start a new one
             clnt = setup_func(partition=defaultQ, n_workers=2, interactive=False)

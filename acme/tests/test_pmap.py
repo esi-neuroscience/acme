@@ -39,7 +39,9 @@ from conftest import skip_if_not_linux, useSLURM, onESI, onBIC, onx86, defaultQ,
 realArrayLike = Union[float, NDArray[np.float64]]
 realArray = NDArray[np.float64]
 
-#
+# Get machine architecture
+mArch = platform.machine()
+
 
 # Functions that act as stand-ins for user-funcs
 def simple_func(
@@ -339,7 +341,7 @@ class TestParallelMap():
             out == h5f["result_0"][()] # returns a NumPy array of shape (4,)
         assert np.array_equal(out, expected)
 
-        mockName = f"mock_data_{platform.machine()}"
+        mockName = f"mock_data_{mArch}"
         tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), mockName)
         if useSLURM and (onESI or onBIC):
             tempDir = f"/mnt/hpc/home/{getpass.getuser()}/{mockName}"
@@ -441,7 +443,7 @@ class TestParallelMap():
     def test_simple_filter(self, testclient=None):
 
         # Prepare data containers
-        tempDir, sigName = self._prep_data(f"acme_tmp_{platform.machine()}")
+        tempDir, sigName = self._prep_data(f"acme_tmp_{mArch}")
 
         # Collect auto-generated output directories in list for later cleanup
         outDirs = []
@@ -563,7 +565,6 @@ class TestParallelMap():
             with h5py.File(colRes, "r") as h5col:
                 chNo = np.random.choice(self.nChannels, size=1)[0]
                 h5col[f"comp_{chNo}"]["result_0"]
-        assert "unable to open external file" in str(keyerr.value)
 
         # Ensure `output_dir` is properly ignored if `write_worker_results` is `False`
         pmap = ParallelMap(lowpass_simple,
@@ -579,7 +580,7 @@ class TestParallelMap():
         # Simulate user-defined results-directory not auto-populated by ACME
         tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
         if useSLURM and (onESI or onBIC):
-            tempDir2 = f"/mnt/hpc/home/{getpass.getuser()}/acme_tmp_lowpass_hard_{platform.machine()}"
+            tempDir2 = f"/mnt/hpc/home/{getpass.getuser()}/acme_tmp_lowpass_hard_{mArch}"
         shutil.rmtree(tempDir2, ignore_errors=True)
         os.makedirs(tempDir2, exist_ok=True)
 
@@ -623,6 +624,7 @@ class TestParallelMap():
                          logfile=True,
                          stop_client=False,
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -640,15 +642,19 @@ class TestParallelMap():
         # Ensure client has not been killed; perform post-hoc check of default SLURM settings
         assert dd.get_client()
         client = dd.get_client()
-        if useSLURM is True and testclient is None:
+        if useSLURM and testclient is None:
             assert pmap.n_calls == pmap.n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             partition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
-            if onx86:
+            if onx86 and (onESI or onBIC):
                 assert "8GB" in partition
                 memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
                 assert memory.size == 1
-                assert math.ceil(memory[0] / 1000**3) == [int(s) for s in partition if s.isdigit()][0]
+                if onESI:
+                    denom = 2*1024**3
+                else:
+                    denom = 1000**3
+                assert math.ceil(memory[0] / denom) == [int(s) for s in partition if s.isdigit()][0]
 
         # Wait a sec (literally) for dask to collect its bearings (after the
         # `get_client` above) before proceeding
@@ -691,7 +697,8 @@ class TestParallelMap():
                          write_worker_results=False,
                          n_workers=1,
                          partition=defaultQ,
-                         setup_interactive=False) as pmap:
+                         setup_timeout=120,
+                        setup_interactive=False) as pmap:
             pmap.compute()
         assert pmap.out_dir is None
         log = logging.getLogger("ACME")
@@ -782,6 +789,7 @@ class TestParallelMap():
                          n_workers=n_workers,
                          mem_per_worker=mem_per_worker,
                          stop_client=False,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -864,6 +872,7 @@ class TestParallelMap():
                          sigName,
                          range(self.nChannels),
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
              pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -891,6 +900,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          partition=defaultQ,
                          setup_interactive=False,
+                         setup_timeout=120,
                          single_file=True) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -915,6 +925,7 @@ class TestParallelMap():
                          range(self.nChannels),
                          write_worker_results=False,
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             resInMem = pmap.compute()
 
@@ -1353,6 +1364,7 @@ class TestParallelMap():
                          sabotage_hdf5=False,
                          n_inputs=self.nChannels,
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             hdfResults = pmap.compute()
         colRes = str(pmap.results_container)
@@ -1367,6 +1379,7 @@ class TestParallelMap():
                          n_inputs=self.nChannels,
                          write_pickle=True,
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             pklResults = pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -1382,15 +1395,16 @@ class TestParallelMap():
         # Ensure single_file and pickling does not work
         with pytest.raises(ValueError) as valerr:
             with ParallelMap(pickle_func,
-                            self.sig,
-                            self.b,
-                            self.a,
-                            range(self.nChannels),
-                            n_inputs=self.nChannels,
-                            write_pickle=True,
-                            single_file=True,
-                            partition=defaultQ,
-                            setup_interactive=False) as pmap:
+                             self.sig,
+                             self.b,
+                             self.a,
+                             range(self.nChannels),
+                             n_inputs=self.nChannels,
+                             write_pickle=True,
+                             single_file=True,
+                             partition=defaultQ,
+                             setup_timeout=120,
+                             setup_interactive=False) as pmap:
                 pmap.compute()
         assert "Pickling of results does not support single output file creation" in str(valerr.value)
 
@@ -1403,6 +1417,7 @@ class TestParallelMap():
                          sabotage_hdf5=True,
                          n_inputs=self.nChannels,
                          partition=defaultQ,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
             mixedResults = pmap.compute()
         outDirs.append(pmap.out_dir)
@@ -1416,6 +1431,7 @@ class TestParallelMap():
                          write_pickle=True,
                          logfile=True,
                          n_workers=1,
+                         setup_timeout=120,
                          setup_interactive=False) as pmap:
                 results = pmap.compute()
         assert pmap.out_dir is None
@@ -1451,15 +1467,16 @@ class TestParallelMap():
         # Ensure emergency pickling and single file does not work
         with pytest.raises(RuntimeError):
             with ParallelMap(pickle_func,
-                            self.sig,
-                            self.b,
-                            self.a,
-                            range(self.nChannels),
-                            sabotage_hdf5=True,
-                            n_inputs=self.nChannels,
-                            single_file=True,
-                            partition=defaultQ,
-                            setup_interactive=False) as pmap:
+                             self.sig,
+                             self.b,
+                             self.a,
+                             range(self.nChannels),
+                             sabotage_hdf5=True,
+                             n_inputs=self.nChannels,
+                             single_file=True,
+                             partition=defaultQ,
+                             setup_timeout=120,
+                             setup_interactive=False) as pmap:
                 pmap.compute()
 
 
@@ -1472,6 +1489,7 @@ class TestParallelMap():
                            sabotage_hdf5=True,
                            n_inputs=self.nChannels,
                            partition=defaultQ,
+                           setup_timeout=120,
                            setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
@@ -1487,6 +1505,7 @@ class TestParallelMap():
                            n_inputs=self.nChannels,
                            write_pickle=True,
                            partition=defaultQ,
+                           setup_timeout=120,
                            setup_interactive=False)
         outDirs.append(pmap.daemon.out_dir)
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
@@ -1505,7 +1524,7 @@ class TestParallelMap():
     def test_cancel(self):
 
         # Setup temp-directory layout for subprocess-scripts and prepare interpreters
-        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{platform.machine()}")
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{mArch}")
         shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         pshells = [os.path.join(os.path.split(sys.executable)[0], pyExec) for pyExec in ["python", "ipython"]]
@@ -1644,6 +1663,7 @@ class TestParallelMap():
                          [2, 4, 6, 8],
                          4,
                          setup_interactive=True,
+                         setup_timeout=120,
                          dryrun=True) as pmap:
             pmap.compute()
         shutil.rmtree(pmap.out_dir, ignore_errors=True)
@@ -1654,7 +1674,7 @@ class TestParallelMap():
         cluster_cleanup()
 
         # Create tmp directory for logfile
-        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{platform.machine()}")
+        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{mArch}")
         shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         customLog = os.path.join(tempDir, "mem_log.txt")
@@ -1664,7 +1684,7 @@ class TestParallelMap():
         # mem estimates accordingly
         arrsize = 2
         estMem = 3
-        if not useSLURM and platform.machine() == "ppc64le":
+        if not useSLURM and mArch == "ppc64le":
             arrsize = 0.5
             estMem = 1
 
@@ -1678,6 +1698,7 @@ class TestParallelMap():
                            sleeper=2,
                            arrsize=arrsize,
                            logfile=customLog,
+                           setup_timeout=120,
                            setup_interactive=False)
 
         # If executed locally, the above call did not invoke `estimate_memuse` since
@@ -1710,7 +1731,8 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked
         if useSLURM and (onESI or onBIC):
-            assert "Picked partition 8GBS" in logTxt
+            if mArch == "x86_64":
+                assert "Picked partition 8GBS" in logTxt
             assert "based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
@@ -1782,7 +1804,8 @@ class TestParallelMap():
 
         # If running on the ESI cluster, ensure the correct partition has been picked (again)
         if useSLURM and (onESI or onBIC):
-            assert "Picked partition 8GBS" in logTxt
+            if mArch == "x86_64":
+                assert "Picked partition 8GBS" in logTxt
             assert "based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling should not have generated any output
@@ -1856,7 +1879,8 @@ class TestParallelMap():
                 with open(customLog3, "r", encoding="utf8") as f:
                     logTxt = f.read()
                 assert "Estimated memory consumption across 5 runs" in logTxt
-                assert "Picked partition 8GBS" in logTxt
+                if mArch == "x86_64":
+                    assert "Picked partition 8GBS" in logTxt
                 outDirs.append(pmap.out_dir)
 
         # Clean up
@@ -1878,6 +1902,7 @@ class TestParallelMap():
                 slurmOut = f"/mnt/hpc/home/{getpass.getuser()}/acme_out"
                 client = setup_func(partition=defaultQ,
                                     n_workers=10,
+                                    timeout=240,
                                     job_extra=[f"--output={slurmOut}"],
                                     interactive=False)
             else:

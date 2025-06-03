@@ -8,6 +8,26 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [2025.6]
+Performance improvements, bugfixes and dependency updates. 
+
+### NEW
+- New (optional) keyword `mem_cushion` in `slurm_cluster_setup` controls how 
+  much memory to take off `mem_per_worker` to stay clear of memory limits defined 
+  by QoS rules or partition definitions. The helper functions `esi_cluster_setup` 
+  and `bic_cluster_setup` have been modified to use default values propagated to 
+  `slurm_cluster_setup` tested on the respective clusters. 
+
+### CHANGED
+- Modified heuristics to allocate CPUs given a worker's memory demands to optimize 
+  multi-threading performance on both ESI and CoBIC clusters. 
+
+### FIXED
+- Made type-hint of `_probe_mem_spec` Python 3.9-compliant (cf. #64)
+- Repaired blocking of cross-architecture job submission on the CoBIC HPC cluster 
+- Updated tests to account for changes in SLURM setup on both ESI and CoBIC HPC 
+  clusters and fixed some lurking bugs 
+
 ## [2025.3]
 Included new convenience function `bic_cluster_setup` for the HPC cluster at
 CoBIC Frankfurt. Analogous to the similarly named helper function built for 
