@@ -125,6 +125,22 @@ def memtest_func(
     time.sleep(sleeper)
     return (x + y) * z * arr.max()
 
+def github_f(x, y, z=3):
+    return (x + y) * z
+
+def github_mock_processing(val, mock_file):
+    data = np.load(mock_file)
+    return val * data
+
+def github_f2(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+    return (sum(x) + y) * z * w.max()
+
+def github_f3(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+    return (sum(x) + y) * z * w.max()
+
+def github_g(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
+    return (max(x) + y) * z * w.sum()
+
 
 # Main testing class
 class TestParallelMap():
@@ -320,11 +336,9 @@ class TestParallelMap():
         # Collected auto-generated output directories in list for later cleanup
         outDirs = []
 
-        def f(x, y, z=3):
-            return (x + y) * z
-        expected = list(map(f, [2, 4, 6, 8], [4, 4, 4, 4]))
+        expected = list(map(github_f, [2, 4, 6, 8], [4, 4, 4, 4]))
 
-        with ParallelMap(f, [2, 4, 6, 8], 4) as pmap:
+        with ParallelMap(github_f, [2, 4, 6, 8], 4) as pmap:
             filenames = pmap.compute()
         outDirs.append(pmap.out_dir)
 
@@ -334,7 +348,7 @@ class TestParallelMap():
                 out[k] = h5f[key]["result_0"][()]
         assert np.array_equal(out, expected)
 
-        with ParallelMap(f, [2, 4, 6, 8], 4, result_shape=(None,)) as pmap:
+        with ParallelMap(github_f, [2, 4, 6, 8], 4, result_shape=(None,)) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
         with h5py.File(pmap.results_container, "r") as h5f:
@@ -356,11 +370,7 @@ class TestParallelMap():
         mock_file = os.path.join(tempDir, "mock_data.npy")
         np.save(mock_file, mock_data)
 
-        def mock_processing(val):
-            data = np.load(mock_file)
-            return val * data
-
-        with ParallelMap(mock_processing, [2, 4, 6, 8], result_shape=(None, nChannels, np.inf)) as pmap:
+        with ParallelMap(github_mock_processing, [2, 4, 6, 8], mock_file, result_shape=(None, nChannels, np.inf)) as pmap:
             pmap.compute()
         outDirs.append(pmap.out_dir)
 
@@ -369,18 +379,16 @@ class TestParallelMap():
         for k, val in enumerate([2, 4, 6, 8]):
             assert np.array_equal(mock_processed[k], val * mock_data)
 
-        with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
+        with ParallelMap(github_f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
             result = pmap.compute() # returns a 4-element list
         assert result == expected
-        with ParallelMap(f, [2, 4, 6, 8], 4, write_worker_results=False, result_shape=(None,)) as pmap:
+        with ParallelMap(github_f, [2, 4, 6, 8], 4, write_worker_results=False, result_shape=(None,)) as pmap:
             result = pmap.compute() # returns a NumPy array of shape (4,)
         assert np.array_equal(out, expected)
 
-        def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
-            return (sum(x) + y) * z * w.max()
-        expected = list(map(f, 2*[[2, 4, 6, 8]], [2, 2], np.array([1, 2]), 2*[np.ones((8, 1))]))
+        expected = list(map(github_f2, 2*[[2, 4, 6, 8]], [2, 2], np.array([1, 2]), 2*[np.ones((8, 1))]))
 
-        pmap = ParallelMap(f, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2)
+        pmap = ParallelMap(github_f2, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2)
         with pmap as p:
             p.compute()
         outDirs.append(pmap.daemon.out_dir)
@@ -391,12 +399,6 @@ class TestParallelMap():
         assert np.array_equal(out, expected)
 
         cluster_cleanup()
-
-        def f(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
-            return (sum(x) + y) * z * w.max()
-
-        def g(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
-            return (max(x) + y) * z * w.sum()
 
         n_workers = 2
         x = [2, 4, 6, 8]
@@ -410,8 +412,8 @@ class TestParallelMap():
         else:
             client = local_cluster_setup(interactive=False)
 
-        expected = list(map(f, n_workers*[x], y, list(z), n_workers*[w]))
-        pmap = ParallelMap(f, x, y, z=z, w=w, n_inputs=n_workers)
+        expected = list(map(github_f3, n_workers*[x], y, list(z), n_workers*[w]))
+        pmap = ParallelMap(github_f3, x, y, z=z, w=w, n_inputs=n_workers)
         with pmap as p:
             p.compute()
         outDirs.append(pmap.daemon.out_dir)
@@ -423,8 +425,8 @@ class TestParallelMap():
 
         time.sleep(2.0)
 
-        expected = list(map(g, n_workers*[x], y, list(z), n_workers*[w]))
-        pmap = ParallelMap(g, x, y, z=z, w=w, n_inputs=n_workers)
+        expected = list(map(github_g, n_workers*[x], y, list(z), n_workers*[w]))
+        pmap = ParallelMap(github_g, x, y, z=z, w=w, n_inputs=n_workers)
         with pmap as p:
             p.compute()
         outDirs.append(pmap.daemon.out_dir)
@@ -811,6 +813,7 @@ class TestParallelMap():
             cluster_cleanup(pmap.client)
             with pytest.raises(ValueError):
                 dd.get_client()
+        time.sleep(1)
 
         # Overbook SLURM (more workers than calls)
         n_workers = self.nChannels + 2
@@ -1253,6 +1256,7 @@ class TestParallelMap():
         assert len(mixedResults) == pmap.n_calls
 
         # Ensure deliberate pickling doesn't clash w/(erroneous) shape spec
+        time.sleep(1)
         with ParallelMap(pickle_func,
                          self.sig,
                          self.b,
@@ -1369,6 +1373,7 @@ class TestParallelMap():
             hdfResults = pmap.compute()
         colRes = str(pmap.results_container)
         outDirs.append(pmap.out_dir)
+        time.sleep(5)
 
         # Execute `pickle_func` w/pickling
         with ParallelMap(pickle_func,
@@ -1840,6 +1845,7 @@ class TestParallelMap():
                 # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_worker!
                 with pytest.raises(IOError):
                     setup_func(partition="auto", mem_per_worker="invalid", interactive=False)
+                time.sleep(10)
 
                 # Simulate `ParallelMap(partition="auto",...)` call by invoking
                 # `esi_cluster_setup`/`bic_cluster_setup` with `mem_per_worker='esstimate_memuse:XY'`
@@ -1847,6 +1853,7 @@ class TestParallelMap():
                 client = setup_func(partition="auto",
                                     mem_per_worker=memUse,
                                     n_workers=1,
+                                    timeout=180,
                                     interactive=False)
 
                 job_head = client.cluster.job_header.split("-p ")[1].split("\n")[0]
