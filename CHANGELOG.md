@@ -8,6 +8,15 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [2025.11]
+Dependency updates + support for Python 3.14. 
+
+### NEW
+- Updated dask and ensured compatibility with Python 3.14
+
+### FIXED
+- Modified tests to work with up-to date version of `multiprocessing`
+
 ## [2025.6]
 Performance improvements, bugfixes and dependency updates. 
 
