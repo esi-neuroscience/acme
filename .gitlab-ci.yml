@@ -100,7 +100,7 @@ pypi_test:
     variables:
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
-    - source $HOME/miniconda/etc/profile.d/conda.sh
+    - source /opt/conda/etc/profile.d/conda.sh
     - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
@@ -132,7 +132,7 @@ pypi_deploy:
     variables:
         GIT_FETCH_EXTRA_FLAGS: --tags
     script:
-    - source $HOME/miniconda/etc/profile.d/conda.sh
+    - source /opt/conda/etc/profile.d/conda.sh
     - conda activate acme
     - rm -rf dist/ build/ esi_acme.egg-info/
     - python setup.py sdist bdist_wheel
