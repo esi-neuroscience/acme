@@ -24,7 +24,7 @@ detailed guide on how to contribute to ACME, please see our
    most recent versions (not necessarily those stated) of all listed dependencies
 
    ```bash
-   conda install dask "dask-jobqueue>=0.8" h5py numpy "tqdm>=4.31" pytest-cov ipdb ipython mypy "scipy>= 1.5,<2.0" tox
+   conda install "cloudpickle>2.2" dask "dask-jobqueue>=0.8" h5py numpy "toolz>=0.12" "tqdm>=4.31" pytest-cov ipdb ipython mypy "scipy>= 1.5" tox
    ```
 
 1. Run the test-suite locally
