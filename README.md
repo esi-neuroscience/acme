@@ -172,7 +172,7 @@ out = np.zeros((4,))
 
 with h5py.File(pmap.results_container, "r") as h5f:
   for k, key in enumerate(h5f.keys()):
-    out[k] = h5f[key]["result_0"][()]
+    out[k] = np.squeeze(h5f[key]["result_0"][()])
 ```
 
 See also [Where Are My Results?](https://esi-acme.readthedocs.io/en/latest/userguide.html#where-are-my-results)
