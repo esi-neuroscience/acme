@@ -502,7 +502,7 @@ class TestParallelMap:
         out = np.zeros((4,))
         with h5py.File(pmap.results_container, "r") as h5f:
             for k, key in enumerate(h5f.keys()):
-                out[k] = h5f[key]["result_0"][()]
+                out[k] = np.squeeze(h5f[key]["result_0"][()])
         assert np.array_equal(out, expected)
 
         with ParallelMap(github_f, [2, 4, 6, 8], 4, result_shape=(None,)) as pmap:
