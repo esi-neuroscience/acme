@@ -9,7 +9,7 @@ channels:
 - conda-forge
 dependencies:
 - cloudpickle > 2.2
-- dask >= 2022.12.1, <= 2025.11.0
+- dask >= 2022.12.1, <= 2026.3.0
 - dask-jobqueue >= 0.8, < 1.0
 - h5py >= 3, < 4
 - numpy >= 1.0, < 3.0
@@ -24,7 +24,6 @@ dependencies:
 - reuse
 - sphinx
 - sphinx_bootstrap_theme < 0.8
-- sphinx-tabs
 - tox
 - pyyaml
 - setuptools
@@ -34,4 +33,5 @@ dependencies:
 - pip
 - pip:
   - sphinx_automodapi
+  - sphinx-tabs >= 3.5
 name: acme
