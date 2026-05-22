@@ -26,7 +26,6 @@ dependencies:
 - sphinx_bootstrap_theme < 0.8
 - tox
 - pyyaml
-- setuptools
 - toml
 - wheel
 - python <3.15,>=3.8
