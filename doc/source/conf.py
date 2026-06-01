@@ -18,13 +18,16 @@
 import os
 import sys
 import time
+
 sys.path.insert(0, os.path.abspath(".." + os.sep + ".." + os.sep))
 import sphinx_bootstrap_theme
 import acme
 
 # -- Project information -----------------------------------------------------
-project = ''
-author = 'Ernst Strüngmann Institute for Neuroscience in Cooperation with Max Planck Society'
+project = ""
+author = (
+    "Ernst Strüngmann Institute for Neuroscience in Cooperation with Max Planck Society"
+)
 copyright = f'2020-{time.strftime("%Y")}, {author}'
 
 # The short X.Y version
@@ -38,48 +41,50 @@ release = acme.__version__
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.doctest',
-    'sphinx.ext.intersphinx',
-    'sphinx.ext.todo',
-    'sphinx.ext.coverage',
-    'sphinx.ext.mathjax',
-    'sphinx.ext.napoleon',
-    'sphinx.ext.ifconfig',
-    'sphinx.ext.viewcode',
-    'sphinx.ext.inheritance_diagram',
-    'sphinx_automodapi.automodapi',
-    'sphinx_tabs.tabs',
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.doctest",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.todo",
+    "sphinx.ext.coverage",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.ifconfig",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.inheritance_diagram",
+    "sphinx_automodapi.automodapi",
+    "sphinx_tabs.tabs",
 ]
 
 autodoc_default_options = {
-    'member-order': 'bysource',
-    'special-members': '__init__',
-    'undoc-members': False,
-    'exclude-members': '__weakref__',
-    'ignore-module-all': False,
+    "member-order": "bysource",
+    "special-members": "__init__",
+    "undoc-members": False,
+    "exclude-members": "__weakref__",
+    "ignore-module-all": False,
 }
+
 
 def setup(app):
     app.add_css_file("esi-style.css")
+
 
 numpydoc_show_class_members = False
 autosectionlabel_maxdepth = 2
 autosectionlabel_prefix_document = True
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # Create stub pages for autosummary entries
 autosummary_generate = True
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
-source_suffix = ['.rst', '.md']
+source_suffix = [".rst", ".md"]
 
 # The master toctree document.
-master_doc = 'index'
+master_doc = "index"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -89,12 +94,12 @@ exclude_patterns = []
 # -- Options for HTML output -------------------------------------------------
 
 # Custom sidebar templates, maps document names to template names.
-html_sidebars = {"**" : ["localtoc.html"]}
+html_sidebars = {"**": ["localtoc.html"]}
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'bootstrap'
+html_theme = "bootstrap"
 
 # Do not display permalink symbol next to headers
 html_permalinks = False
@@ -118,9 +123,7 @@ html_theme_options = {
     "navbar_pagenav": False,
     # Tab name for the current pages TOC. (Default: "Page")
     "navbar_pagenav_name": None,
-
-    'globaltoc_includehidden': True,
-
+    "globaltoc_includehidden": True,
     # Global TOC depth for "site" navbar tab. (Default: 1)
     # Switching to -1 shows all levels.
     "globaltoc_depth": 1,
@@ -134,7 +137,7 @@ html_theme_options = {
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]
 
 # If true, links to the reST sources are added to the pages.
 html_show_sourcelink = False
@@ -149,9 +152,7 @@ html_show_copyright = True
 
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/3",
-               "https://docs.python.org/3/objects.inv"
-    ),
+    "python": ("https://docs.python.org/3", "https://docs.python.org/3/objects.inv"),
     "numpy": (
         "https://docs.scipy.org/doc/numpy/",
         "https://docs.scipy.org/doc/numpy/objects.inv",
@@ -159,7 +160,6 @@ intersphinx_mapping = {
     "dask": (
         "https://docs.dask.org/en/latest",
         "https://docs.dask.org/en/latest/objects.inv",
-
     ),
     "distributed": (
         "https://distributed.dask.org/en/stable/",
@@ -167,21 +167,26 @@ intersphinx_mapping = {
     ),
     "jobqueue": (
         "https://jobqueue.dask.org/en/stable/",
-        "https://jobqueue.dask.org/en/stable/objects.inv"
+        "https://jobqueue.dask.org/en/stable/objects.inv",
     ),
-    "scipy": ("https://docs.scipy.org/doc/scipy/reference",
-              "https://docs.scipy.org/doc/scipy/reference/objects.inv"
+    "scipy": (
+        "https://docs.scipy.org/doc/scipy/reference",
+        "https://docs.scipy.org/doc/scipy/reference/objects.inv",
     ),
-    "h5py": ("https://docs.h5py.org/en/latest/",
-             "https://docs.h5py.org/en/latest/objects.inv"
+    "h5py": (
+        "https://docs.h5py.org/en/latest/",
+        "https://docs.h5py.org/en/latest/objects.inv",
     ),
-    "sklearn": ("https://scikit-learn.org/stable/",
-                "https://scikit-learn.org/stable/objects.inv"
+    "sklearn": (
+        "https://scikit-learn.org/stable/",
+        "https://scikit-learn.org/stable/objects.inv",
     ),
-    "torch": ("https://pytorch.org/docs/stable/",
-              "https://pytorch.org/docs/stable/objects.inv"
+    "torch": (
+        "https://pytorch.org/docs/stable/",
+        "https://pytorch.org/docs/stable/objects.inv",
     ),
-    "nilearn": ("https://nilearn.github.io/stable/",
-                "https://nilearn.github.io/stable/objects.inv"
-    )
+    "nilearn": (
+        "https://nilearn.github.io/stable/",
+        "https://nilearn.github.io/stable/objects.inv",
+    ),
 }

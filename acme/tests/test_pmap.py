@@ -207,11 +207,11 @@ class TestParallelMap:
         pmap = ParallelMap(
             simple_func, [2, 4, 6, 8], 4, partition=defaultQ, setup_interactive=False
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap = ParallelMap(
             simple_func, [2, 4, 6, 8], y=4, partition=defaultQ, setup_interactive=False
         )  # pos arg referenced via kwarg, cfg #2
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap = ParallelMap(
             simple_func,
             0,
@@ -220,7 +220,7 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap = ParallelMap(
             simple_func,
             [2, 4, 6, 8],
@@ -229,7 +229,7 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
 
         # User func has `np.ndarray` as keyword
         pmap = ParallelMap(
@@ -240,7 +240,7 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap = ParallelMap(
             medium_func,
             None,
@@ -249,7 +249,7 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap = ParallelMap(
             medium_func,
             None,
@@ -258,7 +258,7 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap = ParallelMap(
             medium_func,
             None,
@@ -267,7 +267,7 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
 
         # Lots of ways for this to go wrong...
         pmap = ParallelMap(
@@ -278,7 +278,7 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap = ParallelMap(
             hard_func,
             [2, 4, 6, 8],
@@ -287,7 +287,7 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap = ParallelMap(
             hard_func,
             np.ones((3,)),
@@ -296,7 +296,7 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap = ParallelMap(
             hard_func,
             [2, 4, 6, 8],
@@ -307,7 +307,7 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap = ParallelMap(
             hard_func,
             [2, 4, 6, 8],
@@ -317,7 +317,7 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
 
         # Ensure erroneous/ambiguous setups trigger the appropriate errors:
         # not enough positional args
@@ -454,13 +454,13 @@ class TestParallelMap:
                 n_workers=1,
                 setup_interactive=False,
             )
-            outDirs.append(pmap.daemon.out_dir)
+            outDirs.append(pmap.daemon.config.output_dir)
 
             with pytest.raises(TypeError):
                 pmap.daemon.compute(debug="invalid")
 
             # Kill our single worker and ensure ACME takes note
-            client = pmap.daemon.client
+            client = pmap.daemon.config.client
             client.retire_workers(
                 list(client.scheduler_info()["workers"]), close_workers=True
             )
@@ -469,7 +469,7 @@ class TestParallelMap:
             assert "no active workers found" in str(rerr.value)
 
             # Annihilate client slot and ensure pmap does not do anything funky
-            pmap.daemon.client = None
+            pmap.daemon.config.client = None
             assert pmap.compute() is None
 
         # Finally, test ACMEdaemon only accepts `ParallelMap` objects
@@ -497,7 +497,7 @@ class TestParallelMap:
 
         with ParallelMap(github_f, [2, 4, 6, 8], 4) as pmap:
             filenames = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         out = np.zeros((4,))
         with h5py.File(pmap.results_container, "r") as h5f:
@@ -507,7 +507,7 @@ class TestParallelMap:
 
         with ParallelMap(github_f, [2, 4, 6, 8], 4, result_shape=(None,)) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
         with h5py.File(pmap.results_container, "r") as h5f:
             out == h5f["result_0"][()]  # returns a NumPy array of shape (4,)
         assert np.array_equal(out, expected)
@@ -534,7 +534,7 @@ class TestParallelMap:
             result_shape=(None, nChannels, np.inf),
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         with h5py.File(pmap.results_container, "r") as h5f:
             mock_processed = h5f["result_0"][
@@ -572,7 +572,7 @@ class TestParallelMap:
         )
         with pmap as p:
             p.compute()
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         out = []
         with h5py.File(pmap.daemon.results_container, "r") as h5f:
             for k, key in enumerate(h5f.keys()):
@@ -599,7 +599,7 @@ class TestParallelMap:
         pmap = ParallelMap(github_f3, x, y, z=z, w=w, n_inputs=n_workers)
         with pmap as p:
             p.compute()
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         out = []
         with h5py.File(pmap.daemon.results_container, "r") as h5f:
             for k, key in enumerate(h5f.keys()):
@@ -612,7 +612,7 @@ class TestParallelMap:
         pmap = ParallelMap(github_g, x, y, z=z, w=w, n_inputs=n_workers)
         with pmap as p:
             p.compute()
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         out = []
         with h5py.File(pmap.daemon.results_container, "r") as h5f:
             for k, key in enumerate(h5f.keys()):
@@ -646,18 +646,18 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             resOnDisk = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure each compute run generated a dedicated HDF5 file
-        assert len(pmap.kwargv["outFile"]) == pmap.n_calls
+        assert len(pmap.config.kwargv["outFile"]) == pmap.config.n_calls
 
         # Query auto-generated output directory
-        outDirContents = glob(os.path.join(pmap.out_dir, "*"))
+        outDirContents = glob(os.path.join(pmap.config.output_dir, "*"))
         payloadDir = pmap.results_container.replace(".h5", "_payload")
         assert pmap.results_container in outDirContents
         assert payloadDir in outDirContents
         resFiles = glob(os.path.join(payloadDir, "*.h5"))
-        assert len(resFiles) == pmap.n_calls
+        assert len(resFiles) == pmap.config.n_calls
         assert all(fle in resFiles for fle in resOnDisk)
         assert all(os.path.isfile(fle) for fle in resOnDisk)
         log = logging.getLogger("ACME")
@@ -698,11 +698,11 @@ class TestParallelMap:
             single_file=True,
         ) as pmap:
             singleResOnDisk = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure only one file was generated
         assert len(singleResOnDisk) == 1
-        outDirContents = glob(os.path.join(pmap.out_dir, "*.h5"))
+        outDirContents = glob(os.path.join(pmap.config.output_dir, "*.h5"))
         assert outDirContents == singleResOnDisk
         assert pmap.results_container in outDirContents[0]
         assert os.path.isfile(singleResOnDisk[0])
@@ -729,13 +729,13 @@ class TestParallelMap:
             resOnDisk = pmap.compute()
 
         # Query specified custom output directory
-        assert pmap.out_dir == outDir
-        outDirContents = glob(os.path.join(pmap.out_dir, "*"))
+        assert pmap.config.output_dir == outDir
+        outDirContents = glob(os.path.join(pmap.config.output_dir, "*"))
         payloadDir = pmap.results_container.replace(".h5", "_payload")
         assert pmap.results_container in outDirContents
         assert payloadDir in outDirContents
         resFiles = glob(os.path.join(payloadDir, "*.h5"))
-        assert len(resFiles) == pmap.n_calls
+        assert len(resFiles) == pmap.config.n_calls
         assert all(fle in resFiles for fle in resOnDisk)
         assert all(os.path.isfile(fle) for fle in resOnDisk)
 
@@ -782,8 +782,8 @@ class TestParallelMap:
             partition=defaultQ,
             setup_interactive=False,
         )
-        assert pmap.daemon.out_dir is None
-        assert pmap.daemon.collect_results is True
+        assert pmap.daemon.config.output_dir is None
+        assert pmap.daemon.config.collect_results is True
 
         # Simulate user-defined results-directory not auto-populated by ACME
         tempDir2 = os.path.join(
@@ -816,7 +816,7 @@ class TestParallelMap:
         ) as pmap:
             pmap.compute()
         resFiles = glob(os.path.join(tempDir2, res_base + "*"))
-        assert len(resFiles) == pmap.n_calls
+        assert len(resFiles) == pmap.config.n_calls
 
         # Compare computed single-channel results to expected low-freq signal
         for chNo in range(self.nChannels):
@@ -829,7 +829,7 @@ class TestParallelMap:
         # Ensure log-file generation produces a non-empty log-file at the expected location
         # Bonus: leave computing client alive and vet default SLURM settings
         if testclient is None:
-            cluster_cleanup(pmap.client)
+            cluster_cleanup(pmap.config.client)
         log = logging.getLogger("ACME")
         for handler in log.handlers:
             if isinstance(handler, logging.FileHandler):
@@ -845,7 +845,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
         logFileList = [
             handler.target.baseFilename
             for handler in log.handlers
@@ -865,7 +865,7 @@ class TestParallelMap:
         assert dd.get_client()
         client = dd.get_client()
         if useSLURM and testclient is None:
-            assert pmap.n_calls == pmap.n_workers
+            assert pmap.config.n_calls == pmap.n_workers
             assert len(client.cluster.workers) == pmap.n_workers
             partition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
             if onx86 and (onESI or onBIC):
@@ -903,7 +903,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
         assert os.path.isfile(customLog)
         with open(customLog, "r", encoding="utf8") as fl:
             assert len(fl.readlines()) > 1
@@ -938,7 +938,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        assert pmap.out_dir is None
+        assert pmap.config.output_dir is None
         log = logging.getLogger("ACME")
         logFileList = [
             handler.target.baseFilename
@@ -1014,7 +1014,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             resInMem2 = pmap.compute()
-        assert pmap.out_dir is None
+        assert pmap.config.output_dir is None
         assert np.all(resInMem2) == np.all(resInMem)
         log = logging.getLogger("ACME")
         logFileList = [
@@ -1032,7 +1032,7 @@ class TestParallelMap:
         os.unlink(logFileList[0])
 
         if testclient is None:
-            cluster_cleanup(pmap.client)
+            cluster_cleanup(pmap.config.client)
 
         # Underbook SLURM (more calls than workers)
         n_workers = int(self.nChannels / 2)
@@ -1049,11 +1049,11 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Post-hoc check of client to ensure custom settings were respected
-        client = pmap.client
-        assert pmap.n_calls == self.nChannels
+        client = pmap.config.client
+        assert pmap.config.n_calls == self.nChannels
         if useSLURM is True and testclient is None:
             assert pmap.n_workers == n_workers
             assert len(client.cluster.workers) == pmap.n_workers
@@ -1070,7 +1070,7 @@ class TestParallelMap:
 
         # Let `cluster_cleanup` murder the custom setup and ensure it did its job
         if testclient is None:
-            cluster_cleanup(pmap.client)
+            cluster_cleanup(pmap.config.client)
             with pytest.raises(ValueError):
                 dd.get_client()
         time.sleep(1)
@@ -1089,11 +1089,11 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Post-hoc check of client to ensure custom settings were respected
-        client = pmap.client
-        assert pmap.n_calls == self.nChannels
+        client = pmap.config.client
+        assert pmap.config.n_calls == self.nChannels
         if useSLURM and testclient is None:
             assert pmap.n_workers == n_workers
             assert len(client.cluster.workers) == pmap.n_workers
@@ -1110,7 +1110,7 @@ class TestParallelMap:
                 mem_per_worker.replace("MB", "")
             )
         if testclient is None:
-            cluster_cleanup(pmap.client)
+            cluster_cleanup(pmap.config.client)
 
         # Close any open HDF5 files to not trigger any `OSError`s, close running clusters
         # and clean up tmp dirs and created directories/log-files
@@ -1149,11 +1149,11 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure output container was created correctly
         payloadDir = pmap.results_container.replace(".h5", "_payload")
-        assert len(glob(os.path.join(payloadDir, "*.h5"))) == pmap.n_calls
+        assert len(glob(os.path.join(payloadDir, "*.h5"))) == pmap.config.n_calls
 
         # Compare computed results to expected values
         with h5py.File(pmap.results_container, "r") as h5col:
@@ -1184,10 +1184,12 @@ class TestParallelMap:
             single_file=True,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure only one (data) file was generated
-        assert glob(os.path.join(pmap.out_dir, "*.h5")) == [pmap.results_container]
+        assert glob(os.path.join(pmap.config.output_dir, "*.h5")) == [
+            pmap.results_container
+        ]
 
         # Compare single file to link collection computed above
         with h5py.File(colRes, "r") as h5col:
@@ -1278,7 +1280,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             resOnDisk = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Remember results for later use
         colRes = str(pmap.results_container)
@@ -1308,7 +1310,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         infRes = str(pmap.results_container)
 
@@ -1328,12 +1330,14 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         singleRes = str(pmap.results_container)
 
         # Ensure only one (data) file was generated
-        assert glob(os.path.join(pmap.out_dir, "*.h5")) == [pmap.results_container]
+        assert glob(os.path.join(pmap.config.output_dir, "*.h5")) == [
+            pmap.results_container
+        ]
 
         # Compare single file to virtual dataset
         with h5py.File(colRes, "r") as h5col:
@@ -1353,7 +1357,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         singleInfRes = str(pmap.results_container)
 
@@ -1374,7 +1378,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         tripleDim = str(pmap.results_container)
 
@@ -1387,7 +1391,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         tripleDimInf = str(pmap.results_container)
 
@@ -1407,7 +1411,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         tripleDimSingle = str(pmap.results_container)
 
@@ -1421,7 +1425,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         tripleDimSingleInf = str(pmap.results_container)
 
@@ -1462,7 +1466,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
         with h5py.File(pmap.results_container, "r") as h5f:
             assert h5f["result_0"].dtype.name == "float16"
 
@@ -1600,7 +1604,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             mixedResults = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure pickles and hdf5's live together happily
         resultsContainer = os.path.basename(mixedResults[0])
@@ -1613,7 +1617,7 @@ class TestParallelMap:
         assert not os.path.isfile(resultsContainer)
         assert not os.path.isdir(payloadDir)
         assert all(os.path.isfile(fle) for fle in mixedResults)
-        assert len(mixedResults) == pmap.n_calls
+        assert len(mixedResults) == pmap.config.n_calls
 
         # Ensure deliberate pickling doesn't clash w/(erroneous) shape spec
         time.sleep(1)
@@ -1631,9 +1635,9 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pickles = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
         assert all(os.path.isfile(fle) for fle in pickles)
-        assert len(pickles) == pmap.n_calls
+        assert len(pickles) == pmap.config.n_calls
 
         # Ensure multiple return values are handled correctly
         with ParallelMap(
@@ -1646,7 +1650,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Save results for later
         multiRet = str(pmap.results_container)
@@ -1654,10 +1658,10 @@ class TestParallelMap:
         # Compare computed results to stored "reference"
         with h5py.File(colRes, "r") as h5col:
             with h5py.File(pmap.results_container, "r") as h5f:
-                assert len(h5f.keys()) == pmap.n_calls + 1
+                assert len(h5f.keys()) == pmap.config.n_calls + 1
                 assert h5f["result_0"].is_virtual is True
                 assert np.array_equal(h5f["result_0"][()], h5col["result_0"][()])
-                for k in range(pmap.n_calls):
+                for k in range(pmap.config.n_calls):
                     assert len(h5f[f"comp_{k}"].keys()) == 3
                     assert h5f[f"comp_{k}/result_1"][()] == k
                     assert np.array_equal(h5f[f"comp_{k}/result_2"][()], self.b)
@@ -1674,13 +1678,13 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Compare results
         with h5py.File(multiRet, "r") as h5ref:
             with h5py.File(pmap.results_container, "r") as h5f:
-                assert len(h5f.keys()) == pmap.n_calls + 1
-                for k in range(pmap.n_calls):
+                assert len(h5f.keys()) == pmap.config.n_calls + 1
+                for k in range(pmap.config.n_calls):
                     for rk in range(1, 4):
                         dset = f"comp_{k}/result_{rk}"
                         assert np.array_equal(h5f[dset], h5ref[dset])
@@ -1699,7 +1703,7 @@ class TestParallelMap:
         with h5py.File(multiRet, "r") as h5ref:
             assert np.array_equal(h5ref["result_0"][()], resInMem[0])
             rCount = 1
-            for k in range(pmap.n_calls):
+            for k in range(pmap.config.n_calls):
                 assert h5ref[f"comp_{k}/result_1"][()] == resInMem[rCount]
                 rCount += 1
                 assert np.array_equal(h5ref[f"comp_{k}/result_2"][()], resInMem[rCount])
@@ -1742,7 +1746,7 @@ class TestParallelMap:
         ) as pmap:
             hdfResults = pmap.compute()
         colRes = str(pmap.results_container)
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
         time.sleep(5)
 
         # Execute `pickle_func` w/pickling
@@ -1759,7 +1763,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             pklResults = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure HDF5 and pickle match up
         with h5py.File(colRes, "r") as h5col:
@@ -1804,7 +1808,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             mixedResults = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure warning is issued if pickling is requested but result writing is turned off
         with ParallelMap(
@@ -1820,7 +1824,7 @@ class TestParallelMap:
             setup_interactive=False,
         ) as pmap:
             results = pmap.compute()
-        assert pmap.out_dir is None
+        assert pmap.config.output_dir is None
         assert results == list(map(simple_func, [2, 4, 6, 8], [4, 4, 4, 4]))
         log = logging.getLogger("ACME")
         logFileList = [
@@ -1891,11 +1895,11 @@ class TestParallelMap:
             setup_timeout=120,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
         with pytest.raises(RuntimeError) as runerr:
             pmap.compute()
-        assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
+        assert "Parallel computation failed" in str(runerr.value)
         pmap = ParallelMap(
             pickle_func,
             self.sig,
@@ -1909,11 +1913,11 @@ class TestParallelMap:
             setup_timeout=120,
             setup_interactive=False,
         )
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
         with pytest.raises(RuntimeError) as runerr:
             pmap.compute()
-        assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
+        assert "Parallel computation failed" in str(runerr.value)
 
         # Clean up testing folder
         for folder in outDirs:
@@ -2089,7 +2093,7 @@ class TestParallelMap:
         time.sleep(1.0)
 
         # Ensure auto-generated output dir has been successfully removed
-        outDir = pmap.daemon.out_dir
+        outDir = pmap.daemon.config.output_dir
         assert os.path.exists(outDir) is False
 
         # Now go through with the dry-run
@@ -2103,7 +2107,7 @@ class TestParallelMap:
             dryrun=True,
         ) as pmap:
             pmap.compute()
-        shutil.rmtree(pmap.out_dir, ignore_errors=True)
+        shutil.rmtree(pmap.config.output_dir, ignore_errors=True)
 
     def test_memest(self):
 
@@ -2178,7 +2182,7 @@ class TestParallelMap:
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
         # output HDF5 files were removed
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         assert len(os.listdir(os.path.dirname(pmap.kwargv["outFile"][0]))) == 0
 
         # Syncopy-related test: ensure memory profiling works also if ACME
@@ -2254,7 +2258,7 @@ class TestParallelMap:
             assert "based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling should not have generated any output
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         assert len(os.listdir(os.path.dirname(pmap.kwargv["outFile"][0]))) == 0
 
         # Prepare final "full" tests
@@ -2277,7 +2281,7 @@ class TestParallelMap:
             with open(customLog3, "r", encoding="utf8") as f:
                 logTxt = f.read()
             assert "Estimating memory consumption" not in logTxt
-            outDirs.append(pmap.out_dir)
+            outDirs.append(pmap.config.output_dir)
 
         else:
 
@@ -2343,7 +2347,7 @@ class TestParallelMap:
                 assert "Estimated memory consumption across 5 runs" in logTxt
                 if mArch == "x86_64":
                     assert "Picked partition 8GBS" in logTxt
-                outDirs.append(pmap.out_dir)
+                outDirs.append(pmap.config.output_dir)
 
         # Clean up
         shutil.rmtree(tempDir, ignore_errors=True)

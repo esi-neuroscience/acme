@@ -22,6 +22,12 @@ Single-package Python library for parallel computing via Dask and SLURM.
 
 ## Developer Commands
 
+**Python setup**
+```bash
+source /opt/conda/etc/profile.d/conda.sh
+conda activate acme
+```
+
 **Installation (editable mode):**
 ```bash
 pip install -e .[dev]

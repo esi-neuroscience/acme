@@ -5,34 +5,9 @@
 # SPDX-License-Identifier: CC0-1.0
 #
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+# Test leftovers
+**/ACME_20*/
+**/ACME_*.log
 
 # HTML documentation
 doc/build
