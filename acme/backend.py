@@ -416,16 +416,6 @@ class ACMEdaemon(object):
 
         return
 
-    def _dryrun_setup(
-        self, n_runs: Optional[int] = None
-    ) -> tuple[ArrayLike, List, List]:
-        """
-        Pick scheduled job(s) at random and extract corresponding (already prepared!) args + kwargs
-        """
-        return ArgumentProcessor.dryrun_setup(
-            self.config.argv, self.config.kwargv, self.config.n_calls, n_runs
-        )
-
     def prepare_client(self) -> None:
         """
         Setup or fetch dask distributed processing client. Depending on available
