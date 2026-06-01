@@ -66,10 +66,7 @@ log = logging.getLogger("ACME")
 class ACMEdaemon(object):
 
     # Restrict valid class attributes
-    __slots__ = (
-        "results_container",
-        "config",
-    )
+    __slots__ = ("results_container", "config", "processor", "profiler")
 
     def __init__(
         self,
@@ -193,9 +190,25 @@ class ACMEdaemon(object):
         # Set up output handler
         self.pre_process()
 
+        # Set up argument processing helper class
+        self.processor = ArgumentProcessor(
+            self.config.argv, self.config.kwargv, self.config.n_calls
+        )
+
+        # Set up memory profiling helper class
+        self.profiler = MemoryProfiler(
+            self.processor,
+            self.config.acme_func,
+            self.config.func.__name__,
+            self.config.tqdmFormat,
+        )
+
         # If requested, perform single-worker dry-run (and quit if desired)
         if dryrun:
-            goOn = self.perform_dryrun()
+            goOn = self.profiler.perform_dryrun(
+                output_dir=self.config.output_dir,
+                setup_interactive=self.config.setup_interactive,
+            )
             if not goOn:
                 log.debug("Quitting after dryrun")
                 return
@@ -403,66 +416,6 @@ class ACMEdaemon(object):
 
         return
 
-    def perform_dryrun(self) -> bool:
-        """
-        Execute user function with one prepared randomly picked args, kwargs combo
-        """
-
-        # Let helper randomly pick a single scheduled job and prepare corresponding args + kwargs
-        [dryRunIdx], [dryRunArgs], [dryRunKwargs] = self._dryrun_setup(n_runs=1)  # type: ignore
-
-        # Create log entry
-        msg = (
-            "Performing a single dry-run of %s simulating randomly "
-            + "picked worker #%d with automatically distributed arguments"
-        )
-        log.info(msg, self.config.func.__name__, dryRunIdx)
-
-        # Use resident memory size (in MB) to estimate job's memory footprint and measure elapsed time
-        mem0 = psutil.Process().memory_info().rss / 1024**2
-        log.debug("Initial memory consumption estimate: %3.f MB", mem0)
-        log.debug("Starting dryrun")
-        tic = time.perf_counter()
-        self.config.acme_func(*dryRunArgs, **dryRunKwargs)  # type: ignore
-        toc = time.perf_counter()
-        log.debug("Finished dryrun")
-        mem1 = psutil.Process().memory_info().rss / 1024**2
-        log.debug("Memory consumption estimate after dryrun: %3.f MB", mem1)
-
-        # Remove any generated output files
-        if self.config.output_dir is not None:
-            log.debug(
-                "Removing %s generated during dryrun",
-                self.config.kwargv["outFile"][dryRunIdx],
-            )
-            os.unlink(self.config.kwargv["outFile"][dryRunIdx])
-
-        # Compute elapsed time and memory usage
-        elapsedTime = toc - tic
-        memUsage = mem1 - mem0
-
-        # Prepare info message
-        memUnit = "MB"
-        if memUsage > 1000:
-            memUsage /= 1024
-            memUnit = "GB"
-        msg = (
-            "Dry-run completed. Elapsed time is %f seconds, "
-            + "estimated memory consumption was %3.2f %s."
-        )
-        log.info(msg, elapsedTime, memUsage, memUnit)
-
-        # If the worker setup is supposed to be interactive, ask for confirmation
-        # here as well; if execution is terminated, remove auto-generated output directory
-        goOn = True
-        if self.config.setup_interactive:
-            msg = f"Do you want to continue executing {self.config.func.__name__} with the provided arguments?"
-            if not user_yesno(msg, default="yes"):
-                if self.config.output_dir is not None:
-                    shutil.rmtree(self.config.output_dir, ignore_errors=True)
-                goOn = False
-        return goOn
-
     def _dryrun_setup(
         self, n_runs: Optional[int] = None
     ) -> tuple[ArrayLike, List, List]:
@@ -520,10 +473,10 @@ class ACMEdaemon(object):
 
         else:
 
-            # If `partition` is "auto", use `estimate_memuse` to heuristically determine
-            # average memory consumption of jobs
+            # If `partition` is "auto", attempt to heuristically determine average
+            # memory consumption of jobs
             if partition == "auto":
-                mem_per_worker = self.estimate_memuse()
+                mem_per_worker = self.profiler.estimate_memory(self.config.output_dir)
 
             # All set, remaining input processing is done by respective `*_cluster_setup` routines
             if is_esi_node():
@@ -598,14 +551,6 @@ class ACMEdaemon(object):
 
         return
 
-    def estimate_memuse(self) -> str:
-        """
-        A brute-force guessing approach to determine memory consumption of provided
-        workload
-        """
-        profiler = MemoryProfiler(self.config.func, self.config.tqdmFormat)
-        return profiler.estimate_memory(self._dryrun_setup, self.config.output_dir)
-
     def compute(self, debug: bool = False) -> Union[List, None]:
         """
         Perform the actual parallel execution of `func`
@@ -651,10 +596,10 @@ class ACMEdaemon(object):
         log.debug("Registered worker callback to forward `sys.path`")
 
         # Broadcast arguments and format keyword arguments
-        self.config.argv, self.config.kwargv = ArgumentProcessor.broadcast_arguments(
-            self.config.argv, self.config.kwargv, self.config.n_calls, self.config.client, log
+        self.config.argv, self.config.kwargv = self.processor.broadcast_arguments(
+            self.config.client
         )
-        kwargList = ArgumentProcessor.format_kwarg_list(self.config.kwargv, self.config.n_calls)
+        kwargList = self.processor.format_kwarg_list()
 
         # In case a debugging run is performed, use the single-threaded scheduler and return
         if debug:

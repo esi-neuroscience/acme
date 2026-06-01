@@ -8,27 +8,22 @@
 #
 
 # Builtin/3rd party package imports
+import os
+import shutil
 import time
 import multiprocessing
 import psutil
 import tqdm
 import numpy as np
 import logging
-from typing import Optional, List, Tuple, Any, Callable
-from numpy.typing import ArrayLike
+from typing import Optional, Callable
 
 # Local imports
-from .config import ACMEConfig
+from .argument_processor import ArgumentProcessor
+from .shared import user_yesno
 
 # Fetch logger
 log = logging.getLogger("ACME")
-
-
-class MemoryEstimationError(Exception):
-    """
-    Memory estimation failed
-    """
-    pass
 
 
 class MemoryProfiler:
@@ -36,7 +31,13 @@ class MemoryProfiler:
     Estimate memory consumption of user functions for SLURM resource allocation
     """
 
-    def __init__(self, func: Callable, tqdm_format: str = "{desc}: {percentage:3.0f}% |{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]"):
+    def __init__(
+        self,
+        argprocessor: ArgumentProcessor,
+        func: Callable,
+        func_name: str,
+        tqdm_format: str = "{desc}: {percentage:3.0f}% |{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]",
+    ):
         """
         Initialize memory profiler
 
@@ -47,14 +48,15 @@ class MemoryProfiler:
         tqdm_format : str
             Progress bar format string
         """
+        self.processor = argprocessor
         self.func = func
+        self.func_name = func_name
         self.tqdm_format = tqdm_format
 
     def estimate_memory(
         self,
-        dryrun_setup_func: Callable,
         output_dir: Optional[str] = None,
-        run_time: int = 30
+        run_time: int = 30,
     ) -> str:
         """
         Estimate memory consumption by running sample jobs
@@ -74,7 +76,7 @@ class MemoryProfiler:
             Formatted memory string for SLURM (e.g., "estimate_memuse:4")
         """
         # Let helper randomly pick some jobs and prepare corresponding args + kwargs
-        dry_run_idx, dry_run_args, dry_run_kwargs = dryrun_setup_func()
+        dry_run_idx, dry_run_args, dry_run_kwargs = self.processor.dryrun_setup()
 
         # Append new dummy keyword to return before any disk-writes happen
         # in case ACME handles results output
@@ -111,7 +113,9 @@ class MemoryProfiler:
                 position=0,
             ) as pbar:
                 for k in range(run_time):
-                    mem_per_sec[k] = psutil.Process(proc.pid).memory_info().rss / 1024**3
+                    mem_per_sec[k] = (
+                        psutil.Process(proc.pid).memory_info().rss / 1024**3
+                    )
                     time.sleep(1)
                     pbar.update(1)
                     if not proc.is_alive():
@@ -137,3 +141,65 @@ class MemoryProfiler:
             mem_per_worker,
         )
         return mem_per_worker
+
+    def perform_dryrun(
+        self, output_dir: Optional[str] = None, setup_interactive: bool = True
+    ) -> bool:
+        """
+        Execute user function with one prepared randomly picked args, kwargs combo
+        """
+
+        # Let helper randomly pick a single scheduled job and prepare corresponding args + kwargs
+        [dryRunIdx], [dryRunArgs], [dryRunKwargs] = self.processor.dryrun_setup(n_runs=1)  # type: ignore
+
+        # Create log entry
+        msg = (
+            "Performing a single dry-run of %s simulating randomly "
+            + "picked worker #%d with automatically distributed arguments"
+        )
+        log.info(msg, self.func_name, dryRunIdx)
+
+        # Use resident memory size (in MB) to estimate job's memory footprint and measure elapsed time
+        mem0 = psutil.Process().memory_info().rss / 1024**2
+        log.debug("Initial memory consumption estimate: %3.f MB", mem0)
+        log.debug("Starting dryrun")
+        tic = time.perf_counter()
+        self.func(*dryRunArgs, **dryRunKwargs)  # type: ignore
+        toc = time.perf_counter()
+        log.debug("Finished dryrun")
+        mem1 = psutil.Process().memory_info().rss / 1024**2
+        log.debug("Memory consumption estimate after dryrun: %3.f MB", mem1)
+
+        # Remove any generated output files
+        if output_dir is not None:
+            log.debug(
+                "Removing %s generated during dryrun",
+                self.processor.kwargv["outFile"][dryRunIdx],
+            )
+            os.unlink(self.processor.kwargv["outFile"][dryRunIdx])
+
+        # Compute elapsed time and memory usage
+        elapsedTime = toc - tic
+        memUsage = mem1 - mem0
+
+        # Prepare info message
+        memUnit = "MB"
+        if memUsage > 1000:
+            memUsage /= 1024
+            memUnit = "GB"
+        msg = (
+            "Dry-run completed. Elapsed time is %f seconds, "
+            + "estimated memory consumption was %3.2f %s."
+        )
+        log.info(msg, elapsedTime, memUsage, memUnit)
+
+        # If the worker setup is supposed to be interactive, ask for confirmation
+        # here as well; if execution is terminated, remove auto-generated output directory
+        goOn = True
+        if setup_interactive:
+            msg = f"Do you want to continue executing {self.func_name} with the provided arguments?"
+            if not user_yesno(msg, default="yes"):
+                if output_dir is not None:
+                    shutil.rmtree(output_dir, ignore_errors=True)
+                goOn = False
+        return goOn

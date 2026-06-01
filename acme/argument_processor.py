@@ -19,27 +19,16 @@ from collections.abc import Sized
 log = logging.getLogger("ACME")
 
 
-class ArgumentProcessingError(Exception):
-    """
-    Argument processing failed
-    """
-    pass
-
-
 class ArgumentProcessor:
     """
     Handle argument preparation and distribution across workers
     """
 
-    @staticmethod
-    def dryrun_setup(
-        argv: List[List[Any]],
-        kwargv: Dict[str, List[Any]],
-        n_calls: int,
-        n_runs: Optional[int] = None
-    ) -> Tuple[ArrayLike, List[List[Any]], List[Dict[str, Any]]]:
+    def __init__(
+        self, argv: List[List[Any]], kwargv: Dict[str, List[Any]], n_calls: int
+    ):
         """
-        Pick scheduled jobs at random and extract corresponding args + kwargs
+        Initialize argument processing class
 
         Parameters
         ----------
@@ -49,6 +38,20 @@ class ArgumentProcessor:
             Keyword arguments for each call
         n_calls : int
             Total number of function calls
+        """
+        self.argv = argv
+        self.kwargv = kwargv
+        self.n_calls = n_calls
+
+    def dryrun_setup(
+        self,
+        n_runs: Optional[int] = None,
+    ) -> Tuple[ArrayLike, List[List[Any]], List[Dict[str, Any]]]:
+        """
+        Pick scheduled jobs at random and extract corresponding args + kwargs
+
+        Parameters
+        ----------
         n_runs : int, optional
             Number of jobs to pick for dryrun
 
@@ -59,52 +62,40 @@ class ArgumentProcessor:
         """
         # If not provided, attempt to infer a "sane" default for the number of jobs to pick
         if n_runs is None:
-            n_runs = min(
-                n_calls, max(5, min(1, int(0.05 * n_calls)))
-            )
+            n_runs = min(self.n_calls, max(5, min(1, int(0.05 * self.n_calls))))
         log.debug("Picking %d jobs at random", n_runs)
 
         # Randomly pick `n_runs` jobs and extract positional and keyword args
-        dry_run_idx = np.random.choice(n_calls, size=min(n_runs, n_calls), replace=False)
+        dry_run_idx = np.random.choice(
+            self.n_calls, size=min(n_runs, self.n_calls), replace=False
+        )
         dry_run_args = []
         dry_run_kwargs = []
         for idx in dry_run_idx:
             dry_run_args.append(
-                [arg[idx] if len(arg) > 1 else arg[0] for arg in argv]
+                [arg[idx] if len(arg) > 1 else arg[0] for arg in self.argv]
             )
             dry_run_kwargs.append(
                 [
                     {
                         key: value[idx] if len(value) > 1 else value[0]
-                        for key, value in kwargv.items()
+                        for key, value in self.kwargv.items()
                     }
                 ][0]
             )
         return dry_run_idx, dry_run_args, dry_run_kwargs
 
-    @staticmethod
     def broadcast_arguments(
-        argv: List[List[Any]],
-        kwargv: Dict[str, List[Any]],
-        n_calls: int,
+        self,
         client: Any,
-        logger: logging.Logger
     ) -> Tuple[List[List[Any]], Dict[str, List[Any]]]:
         """
         Broadcast single-element arguments via scatter()
 
         Parameters
         ----------
-        argv : list of list
-            Positional arguments
-        kwargv : dict of list
-            Keyword arguments
-        n_calls : int
-            Number of function calls
         client : dask.distributed.Client
             Dask client for scattering
-        logger : logging.Logger
-            Logger for debugging
 
         Returns
         -------
@@ -114,37 +105,26 @@ class ArgumentProcessor:
         # Format positional arguments for worker-distribution: broadcast all
         # inputs that are used by all workers and create a list of references
         # to this (single!) future on the cluster for submission
-        for ak, arg in enumerate(argv):
+        for ak, arg in enumerate(self.argv):
             if len(arg) == 1:
-                 ft_arg = client.scatter(arg, broadcast=True)
-                 logger.debug("Broadcasting single-element pos arg %s to client", str(arg))
-                 if isinstance(ft_arg, Sized):
-                     ft_arg = ft_arg[0]
-                 argv[ak] = [ft_arg] * n_calls
+                ft_arg = client.scatter(arg, broadcast=True)
+                log.debug("Broadcasting single-element pos arg %s to client", str(arg))
+                if isinstance(ft_arg, Sized):
+                    ft_arg = ft_arg[0]
+                self.argv[ak] = [ft_arg] * self.n_calls
 
         # Same as above but for keyword-arguments
-        for name, value in kwargv.items():
+        for name, value in self.kwargv.items():
             if len(value) == 1:
                 ft_val = client.scatter(value, broadcast=True)[0]
-                kwargv[name] = [ft_val] * n_calls
-                logger.debug("Broadcasting single-element kwarg `%s` to client", name)
+                self.kwargv[name] = [ft_val] * self.n_calls
+                log.debug("Broadcasting single-element kwarg `%s` to client", name)
 
-        return argv, kwargv
+        return self.argv, self.kwargv
 
-    @staticmethod
-    def format_kwarg_list(
-        kwargv: Dict[str, List[Any]],
-        n_calls: int
-    ) -> List[Dict[str, Any]]:
+    def format_kwarg_list(self) -> List[Dict[str, Any]]:
         """
         Convert parallel keyword args to list of kwarg dictionaries
-
-        Parameters
-        ----------
-        kwargv : dict of list
-            Keyword arguments for each call
-        n_calls : int
-            Number of function calls
 
         Returns
         -------
@@ -152,12 +132,12 @@ class ArgumentProcessor:
             List of keyword argument dictionaries
         """
         # Re-format keyword arguments to be usable with single-to-many arg submission.
-        # Idea: with `n_calls = 3` and ``kwargv = {'a': [5, 5, 5], 'b': [6, 6, 6]}``
+        # Idea: with `self.n_calls = 3` and ``kwargv = {'a': [5, 5, 5], 'b': [6, 6, 6]}``
         # then ``kwarg_list = [{'a': 5, 'b': 6}, {'a': 5, 'b': 6}, {'a': 5, 'b': 6}]``
         kwarg_list = []
-        kwarg_keys = kwargv.keys()
-        kwarg_vals = list(kwargv.values())
-        for nc in range(n_calls):
+        kwarg_keys = self.kwargv.keys()
+        kwarg_vals = list(self.kwargv.values())
+        for nc in range(self.n_calls):
             kw_dict = {}
             for kc, key in enumerate(kwarg_keys):
                 # Handle single-element lists by repeating the single value

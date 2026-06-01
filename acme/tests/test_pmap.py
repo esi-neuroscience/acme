@@ -2152,7 +2152,7 @@ class TestParallelMap:
 
             # Fire off `estimate_memuse` manually
             tic = time.perf_counter()
-            memEst = pmap.daemon.estimate_memuse()
+            memEst = pmap.daemon.profiler.estimate_memory(pmap.daemon.config.output_dir)
             toc = time.perf_counter()
 
             # Ensure 2.12GB array allocation was profiled correctly (2.x GB are rounded
@@ -2230,7 +2230,7 @@ class TestParallelMap:
         # Again, fire off `estimate_memuse` manually if tests are run locally
         if not useSLURM:
             tic = time.perf_counter()
-            memEst = pmap.daemon.estimate_memuse()
+            memEst = pmap.daemon.profiler.estimate_memory(pmap.daemon.config.output_dir)
             toc = time.perf_counter()
 
             # Ensure 2.12GB array allocation was profiled correctly
