@@ -47,6 +47,8 @@ from .shared import user_yesno, is_esi_node, is_slurm_node, is_bic_node
 from .logger import prepare_log
 from .validators import validate_boolean, validate_pmap
 from .config import ACMEConfig
+from .memory_profiler import MemoryProfiler
+from .argument_processor import ArgumentProcessor
 
 isSpyModule = False
 if "syncopy" in sys.modules:  # pragma: no cover
@@ -467,31 +469,9 @@ class ACMEdaemon(object):
         """
         Pick scheduled job(s) at random and extract corresponding (already prepared!) args + kwargs
         """
-
-        # If not provided, attempt to infer a "sane" default for the number of jobs to pick
-        if n_runs is None:
-            n_runs = min(
-                self.config.n_calls, max(5, min(1, int(0.05 * self.config.n_calls)))
-            )
-        log.debug("Picking %d jobs at random", n_runs)
-
-        # Randomly pick `n_runs` jobs and extract positional and keyword args
-        dryRunIdx = np.random.choice(self.config.n_calls, size=n_runs, replace=False)
-        dryRunArgs = []
-        dryRunKwargs = []
-        for idx in dryRunIdx:
-            dryRunArgs.append(
-                [arg[idx] if len(arg) > 1 else arg[0] for arg in self.config.argv]
-            )
-            dryRunKwargs.append(
-                [
-                    {
-                        key: value[idx] if len(value) > 1 else value[0]
-                        for key, value in self.config.kwargv.items()
-                    }
-                ][0]
-            )
-        return dryRunIdx, dryRunArgs, dryRunKwargs
+        return ArgumentProcessor.dryrun_setup(
+            self.config.argv, self.config.kwargv, self.config.n_calls, n_runs
+        )
 
     def prepare_client(self) -> None:
         """
@@ -623,72 +603,8 @@ class ACMEdaemon(object):
         A brute-force guessing approach to determine memory consumption of provided
         workload
         """
-
-        # Let helper randomly pick some jobs and prepare corresponding args + kwargs
-        dryRunIdx, dryRunArgs, dryRunKwargs = self._dryrun_setup()
-
-        # Append new dummy keyword to return before any disk-writes happen
-        # in case ACME handles results output
-        if self.config.output_dir is not None:
-            msg = "Appending `memEstRun` keyword to func_wrapper to prevent any disk-writes"
-            log.debug(msg)
-            for k in range(len(dryRunKwargs)):
-                dryRunKwargs[k]["memEstRun"] = True
-
-        # Set run-time for each job (in seconds) and allocate arrays for memory
-        # consumption estimates (in GB)
-        runTime = 30
-        memPerSec = np.zeros((runTime,))
-        memPerJob = np.zeros((len(dryRunIdx),))  # type: ignore
-
-        # Adequately warn about this heuristic gymnastics...
-        log.info("Estimating memory footprint of %s", self.config.func.__name__)
-
-        msg = "Running %d random workers evaluating %s for max. %d seconds"
-        log.debug(msg % (len(dryRunIdx), self.config.func.__name__, runTime))  # type: ignore
-        for i, idx in enumerate(dryRunIdx):  # type: ignore
-
-            # Set up dedicated process to execute user-provided function w/allocated args/kwargs
-            proc = multiprocessing.Process(
-                target=self.config.acme_func, args=dryRunArgs[i], kwargs=dryRunKwargs[i]
-            )
-
-            # Run user-func for max. `runTime` seconds (or worker finishes),
-            # get memory footprint every second
-            proc.start()
-            with tqdm.tqdm(
-                desc=f"Launching worker #{idx}",  # type: ignore
-                total=runTime,
-                bar_format=self.config.tqdmFormat,
-                position=0,
-            ) as pbar:
-                for k in range(runTime):
-                    memPerSec[k] = psutil.Process(proc.pid).memory_info().rss / 1024**3
-                    time.sleep(1)
-                    pbar.update(1)
-                    if not proc.is_alive():
-                        pbar.n = runTime
-                        break
-            proc.kill()
-
-            # Compute peak memory consumption across `runTime` seconds
-            memPerJob[i] = memPerSec.max()
-            log.debug("Peak memory for worker #%d: %3.2f GB", idx, memPerJob[i])
-
-        # Compute aggregate average memory consumption across all runs
-        memUsage = memPerJob.mean()
-
-        # Communicate results
-        msg = "Estimated memory consumption across %d runs is %3.2f GB "
-        log.info(msg % (len(dryRunIdx), memUsage))  # type: ignore
-
-        # Return specially formatted string
-        mem_per_worker = "estimate_memuse:" + str(max(1, int(np.ceil(memUsage))))
-        log.debug(
-            "Finished memory estimation, returning `mem_per_worker = %s`",
-            mem_per_worker,
-        )
-        return mem_per_worker
+        profiler = MemoryProfiler(self.config.func, self.config.tqdmFormat)
+        return profiler.estimate_memory(self._dryrun_setup, self.config.output_dir)
 
     def compute(self, debug: bool = False) -> Union[List, None]:
         """
@@ -734,35 +650,11 @@ class ACMEdaemon(object):
         )
         log.debug("Registered worker callback to forward `sys.path`")
 
-        # Format positional arguments for worker-distribution: broadcast all
-        # inputs that are used by all workers and create a list of references
-        # to this (single!) future on the cluster for submission
-        for ak, arg in enumerate(self.config.argv):
-            if len(arg) == 1:
-                ftArg = self.config.client.scatter(arg, broadcast=True)
-                log.debug("Broadcasting single-element pos arg %s to client", str(arg))
-                if isinstance(ftArg, collections.abc.Sized):
-                    ftArg = ftArg[0]
-                self.config.argv[ak] = [ftArg] * self.config.n_calls
-
-        # Same as above but for keyword-arguments
-        for name, value in self.config.kwargv.items():
-            if len(value) == 1:
-                ftVal = self.config.client.scatter(value, broadcast=True)[0]
-                self.config.kwargv[name] = [ftVal] * self.config.n_calls
-                log.debug("Broadcasting single-element kwarg `%s` to client", name)
-
-        # Re-format keyword arguments to be usable with single-to-many arg submission.
-        # Idea: with `self.config.n_calls = 3` and ``self.config.kwargv = {'a': [5, 5, 5], 'b': [6, 6, 6]}``
-        # then ``kwargList = [{'a': 5, 'b': 6}, {'a': 5, 'b': 6}, {'a': 5, 'b': 6}]``
-        kwargList = []
-        kwargKeys = self.config.kwargv.keys()
-        kwargVals = list(self.config.kwargv.values())
-        for nc in range(self.config.n_calls):
-            kwDict = {}
-            for kc, key in enumerate(kwargKeys):
-                kwDict[key] = kwargVals[kc][nc]
-            kwargList.append(kwDict)
+        # Broadcast arguments and format keyword arguments
+        self.config.argv, self.config.kwargv = ArgumentProcessor.broadcast_arguments(
+            self.config.argv, self.config.kwargv, self.config.n_calls, self.config.client, log
+        )
+        kwargList = ArgumentProcessor.format_kwarg_list(self.config.kwargv, self.config.n_calls)
 
         # In case a debugging run is performed, use the single-threaded scheduler and return
         if debug:
