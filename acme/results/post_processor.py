@@ -138,15 +138,14 @@ class ResultPostProcessor:
         """Handle results saved as pickle files"""
         log.debug("Saved results as pickle files")
         values = list(kwargv["outFile"])
-        self.finalMsg.format(self.results_dir)
+        self.finalMsg = self.finalMsg.format(self.results_dir)
         log.debug("Returning a list of file-names")
         return values
 
     def _handle_single_file_results(self) -> List[str]:
         """Handle results saved to single shared container"""
         log.debug("Saved results to single shared container")
-        self.finalMsg = "Results have been saved to %s"
-        self.finalMsg.format(self.results_dir)
+        self.finalMsg = self.finalMsg.format(self.results_dir)
         log.debug("Returning container name as single-element list")
         return [self.results_dir]
 
@@ -207,7 +206,7 @@ class ResultPostProcessor:
         shutil.rmtree(payloadDir)
         log.debug("Deleted payload directory %s", payloadDir)
         self.successMsg = ""
-        self.finalMsg.format(target)
+        self.finalMsg = self.finalMsg.format(target)
 
         return values
 
@@ -228,7 +227,7 @@ class ResultPostProcessor:
         if stacking_dim is not None:
             self._add_missing_return_values(results_container, values, payloadDir)
 
-        self.finalMsg.format(results_container)
+        self.finalMsg = self.finalMsg.format(results_container)
         msg = "Container ready, links to data payload located in %s"
         log.debug(msg, payloadDir)
         log.debug("Returning a list of file-names")

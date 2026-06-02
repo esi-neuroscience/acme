@@ -761,7 +761,7 @@ class ACMEdaemon(object):
         result_handler = ResultStorageManager.create_handler(
             fname=fname,
             result=result,
-            task_id=taskId,
+            task_id=taskID,
             write_pickle=fname.endswith(".pickle"),
             single_file=singleFile,
             stacking_dim=stackingDim,

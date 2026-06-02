@@ -26,7 +26,7 @@ class ResultHandler(ABC):
     """Abstract base for result storage strategies"""
 
     @abstractmethod
-    def write_result(self, fname: str, result: Any, task_id: int, **kwargs) -> None:
+    def write_result(self, **kwargs) -> None:
         """Write result to storage"""
         pass
 
@@ -96,73 +96,74 @@ class HDF5ResultHandler(ResultHandler):
 
     def _write_no_shape(self, h5f: h5py.File) -> None:
         """Create datasets in container"""
-        if not all(isinstance(value, (numbers.Number, str)) for value in self.results):
-            for rk, res in enumerate(self.results):
+        if not all(isinstance(value, (numbers.Number, str)) for value in self.result):
+            for rk, res in enumerate(self.result):
                 h5f.create_dataset(f"{self.grpName}result_{rk}", data=res)
             else:
-                h5f.create_dataset(self.grpName + "result_0", data=self.results)
+                h5f.create_dataset(self.grpName + "result_0", data=self.result)
 
-    def _write_with_shape(self, h5f: h5py.File, data: list, task_id: int) -> None:
+    def _write_with_shape(self, h5f: h5py.File) -> None:
         """Write to pre-allocated dataset with specific shape"""
         dset = h5f["result_0"]
         idx = [slice(None)] * len(dset.shape)
-        idx[self.stacking_dim] = task_id
+        idx[self.stacking_dim] = self.task_id
 
         # Handle resizable datasets
         if None in dset.maxshape:
-            actShape = self._calculate_actual_shape(dset, data[0])
+            actShape = self._calculate_actual_shape(dset)
             dset.resize(actShape)
 
-        dset[tuple(idx)] = data[0]
+        dset[tuple(idx)] = self.result[0]
 
         # Handle additional return values
-        for rk, res in enumerate(data[1:]):
-            h5f.create_dataset(f"comp_{task_id}/result_{rk + 1}", data=res)
+        for rk, res in enumerate(self.result[1:]):
+            h5f.create_dataset(f"comp_{self.task_id}/result_{rk + 1}", data=res)
 
-    def _calculate_actual_shape(self, dset: h5py.Dataset, first_result: Any) -> tuple:
+    def _calculate_actual_shape(self, dset: h5py.Dataset) -> tuple:
         """Calculate actual shape for resizable dataset"""
-        if len(first_result.shape) < len(dset.maxshape):
-            lenDim = list(set(first_result.shape).difference(dset.maxshape))
+        if len(self.result[0].shape) < len(dset.maxshape):
+            lenDim = list(set(self.result[0].shape).difference(dset.maxshape))
             return tuple(
                 (
                     spec
                     if spec is not None
-                    else (lenDim[0] if lenDim else first_result.shape[0])
+                    else (lenDim[0] if lenDim else self.result[0].shape[0])
                 )
                 for spec in dset.maxshape
             )
         else:
-            actShape = list(first_result.shape)
+            actShape = list(self.result[0].shape)
             actShape[self.stacking_dim] = dset.maxshape[self.stacking_dim]
             return tuple(actShape)
 
-    def _write_multiple_files(self, fname: str, data: list) -> None:
+    def _write_multiple_files(self) -> None:
         """Write to separate HDF5 file per task"""
-        grpName = ""
+        self.grpName = ""
         try:
-            with h5py.File(fname, "a") as h5f:
+            with h5py.File(self.fname, "a") as h5f:
                 if self.stacking_dim is None:
-                    self._write_no_shape(h5f, data)
+                    self._write_no_shape(h5f)
                 else:
-                    for rk, res in enumerate(data):
+                    for rk, res in enumerate(self.result):
                         h5f.create_dataset(f"result_{rk}", data=res)
         except TypeError as exc:
             if "has no native HDF5 equivalent" in str(
                 exc
             ) or "One of data, shape or dtype must be specified" in str(exc):
-                os.unlink(fname)  # type: ignore
-                err = f"Unable to write {fname}, successive attempts to pickle results failed too: %s"
-                PickleResultHandler().write_result(
-                    fname, data, task_id, original_exception=exc, err_msg=err
+                os.unlink(self.fname)  # type: ignore
+                err = f"Unable to write {self.fname}, successive attempts to pickle results failed too: %s"
+                pickle_handler = PickleResultHandler(
+                    fname=self.fname, result=self.result, task_id=self.task_id
                 )
+                pickle_handler.write_result(original_exception=exc, err_msg=err)
                 msg = (
-                    "Could not write %s results have been pickled instead: %s. Return values are most likely "
+                    "Could not write %s results have been pickled instead. Return values are most likely "
                     + "not suitable for storage in HDF5 containers. Original error message: %s"
                 )
-                log.warning(msg, fname, pname, str(exc))
+                log.warning(msg, self.fname, str(exc))
             else:
                 err = "Could not access %s. Original error message: %s"
-                log.error(err, fname, str(exc))
+                log.error(err, self.fname, str(exc))
                 raise exc
         except Exception as exc:
             log.error(str(exc))
@@ -225,8 +226,9 @@ class ResultStorageManager:
             return PickleResultHandler(fname=fname, result=result, task_id=task_id)
         else:
             return HDF5ResultHandler(
+                fname=fname,
+                result=result,
+                task_id=task_id,
                 single_file=single_file,
-                result_dtype=result_dtype,
                 stacking_dim=stacking_dim,
-                # stacking_dim=result_shape.index(None) if result_shape else None,
             )
