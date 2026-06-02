@@ -268,29 +268,17 @@ class ACMEdaemon(object):
         """
         Local helper for creating output directories and preparing containers
         """
-        from .results.output_setup import OutputDirectoryManager, HDF5ContainerFactory
 
         # Use output setup manager for directory creation
-        
+        output_manager = OutputDirectoryManager()
+
         # Create output directory structure
-        if not self.config.single_file and not self.config.write_pickle:
-            log.debug("Preparing payload directory for HDF5 containers")
-            payloadName = f"{self.config.func.__name__}_payload"
-            outputDir = HDF5ContainerFactory.create_payload_directory(self.config.output_dir, self.config.func.__name__)
-        else:
-            msg = (
-                "Either single-file output or pickling was requested. "
-                + "Not creating payload directory"
-            )
-            log.debug(msg)
-            outputDir = self.config.output_dir
-            try:
-                os.makedirs(outputDir)
-                log.debug("Created %s", outputDir)
-            except Exception as exc:
-                err = "automatic creation of output folder %s failed: %s"
-                log.error(err, outputDir, str(exc))
-                raise OSError(err % (outputDir, str(exc)))
+        outputDir = output_manager.create_output_directory(
+            self.config.output_dir,
+            self.config.single_file,
+            self.config.write_pickle,
+            self.config.func.__name__,
+        )
 
         # Re-define or allocate key "taskID" to track concurrent processing results
         self.config.kwargv["taskID"] = self.config.task_ids
@@ -324,14 +312,14 @@ class ACMEdaemon(object):
                     self.config.results_container,
                     self.config.task_ids,
                     None,
-                    self.config.result_dtype
+                    self.config.result_dtype,
                 )
             else:
                 container_factory.create_single_file_container(
                     self.config.results_container,
                     self.config.task_ids,
                     self.config.result_shape,
-                    self.config.result_dtype
+                    self.config.result_dtype,
                 )
 
         else:
@@ -351,7 +339,7 @@ class ACMEdaemon(object):
                         None,
                         0,  # default stacking dim
                         self.config.result_dtype,
-                        outputDir
+                        outputDir,
                     )
                 else:
                     container_factory.create_virtual_dataset_container(
@@ -361,7 +349,7 @@ class ACMEdaemon(object):
                         self.config.result_shape,
                         self.config.stacking_dim,  # type: ignore
                         self.config.result_dtype,
-                        outputDir
+                        outputDir,
                     )
 
         # Include logger name in keywords so that workers can use it
@@ -511,6 +499,7 @@ class ACMEdaemon(object):
         in a sequential setup.
         """
 
+        # Ensure validity of debug flag
         validate_boolean(debug, name="debug")
 
         # If `prepare_client` has not been called yet, don't attempt to compute anything
@@ -692,11 +681,12 @@ class ACMEdaemon(object):
         list of file-names: if `write_worker_results` is `True`
         list of objects: if in-memory results collection was requested
         """
-        from .results.post_processor import ResultPostProcessor
 
         # Use result post-processor for handling results
-        post_processor = ResultPostProcessor(self.config.client, self.config.results_container)
-        
+        post_processor = ResultPostProcessor(
+            self.config.client, self.config.results_container
+        )
+
         # Process futures using the post-processor
         result = post_processor.process_futures(
             futures,
@@ -706,7 +696,7 @@ class ACMEdaemon(object):
             self.config.result_dtype,
             self.config.acme_func,
             self.config.func,
-            self.config.kwargv
+            self.config.kwargv,
         )
 
         # Finally, establish shortcut to `results_container` (if present) for easier access
@@ -743,7 +733,6 @@ class ACMEdaemon(object):
         If writing to HDF5 fails, use an "emergency-pickling" mechanism to try
         to save the output of `func` using pickle instead
         """
-        from .results.result_handler import ResultStorageManager
 
         # Extract everything from `kwargs` appended by `ACMEdaemon`
         func = kwargs.pop("userFunc")
@@ -755,11 +744,11 @@ class ACMEdaemon(object):
         stackingDim = kwargs.pop("stackingDim", None)
         memEstRun = kwargs.pop("memEstRun", False)
 
-        # Set up logger
-        log = logging.getLogger(logName)
-        log.setLevel(logLevel)  # type: ignore
-        for h in log.handlers:
-            h.setLevel(logLevel)  # type: ignore
+        # # Set up logger
+        # log = logging.getLogger(logName)
+        # log.setLevel(logLevel)  # type: ignore
+        # for h in log.handlers:
+        #     h.setLevel(logLevel)  # type: ignore
 
         # Call user-provided function
         result = func(*args, **kwargs)  # type: ignore
@@ -768,153 +757,13 @@ class ACMEdaemon(object):
         if memEstRun:
             return
 
-        # Use result storage manager for handling result storage
-        try:
-            # Determine storage strategy based on file extension
-            write_pickle = fname.endswith(".pickle")
-            write_worker_results = True  # Since we're in func_wrapper
-            
-            # Create appropriate result handler
-            result_handler = ResultStorageManager.create_handler(
-                write_pickle=write_pickle,
-                write_worker_results=write_worker_results,
-                single_file=singleFile,
-                result_shape=None,  # Will be determined by result
-                result_dtype="float",  # Default dtype
-                outfile_pattern=fname
-            )
-            
-            # Write result using the handler
-            result_handler.write_result(
-                result,
-                taskID,
-                outFile=fname,
-                singleFile=singleFile,
-                stackingDim=stackingDim,
-                logName=logName
-            )
-            
-        except Exception as exc:
-            log.error("Failed to write result using result handler: %s", str(exc))
-            # Fallback to original implementation for compatibility
-            if fname.endswith(".h5"):  # type: ignore
-                self._legacy_hdf5_write(result, taskID, fname, singleFile, stackingDim, log)
-            else:
-                self._legacy_pickle_write(result, fname, log)
-
-    def _legacy_hdf5_write(self, result: Any, taskID: int, fname: str, singleFile: bool, stackingDim: Optional[int], log: logging.Logger) -> None:
-        """Legacy HDF5 writing method for backward compatibility"""
-        grpName = ""
-        if singleFile:
-            lock = dd.lock.Lock(name=os.path.basename(fname))  # type: ignore
-            lock.acquire()
-            grpName = f"comp_{taskID}/"
-
-        if not isinstance(result, (list, tuple)):
-            result = [result]
-
-        try:
-            with h5py.File(fname, "a") as h5f:
-                if stackingDim is None:
-                    if not all(
-                        isinstance(value, (numbers.Number, str)) for value in result
-                    ):
-                        for rk, res in enumerate(result):
-                            h5f.create_dataset(f"{grpName}result_{rk}", data=res)
-                            log.debug(
-                                "Created new dataset `result_%d` in %s", rk, fname
-                            )
-                    else:
-                        h5f.create_dataset(grpName + "result_0", data=result)
-                        log.debug("Created new dataset `result_0` in %s", fname)
-                else:
-                    if singleFile:
-                        dset = h5f["result_0"]
-                        idx = [slice(None)] * len(dset.shape)  # type: ignore
-                        idx[stackingDim] = taskID  # type: ignore
-                        if None in dset.maxshape:
-                            if len(result[0].shape) < len(idx):
-                                lenDim = list(
-                                    set(result[0].shape).difference(dset.maxshape)
-                                )
-                                if len(lenDim) == 0:
-                                    lenDim = result[0].shape[0]
-                                else:
-                                    lenDim = lenDim[0]
-                                actShape = tuple(
-                                    spec if spec is not None else lenDim
-                                    for spec in dset.maxshape
-                                )
-                            else:
-                                actShape = list(result[0].shape)  # type: ignore
-                                actShape[stackingDim] = dset.maxshape[stackingDim]  # type: ignore
-                                actShape = tuple(actShape)
-                            dset.resize(actShape)
-                        dset[tuple(idx)] = result[0]
-                        log.debug(
-                            "Wrote to pre-allocated dataset `result_0` in %s", fname
-                        )
-                        for rk, res in enumerate(result[1:]):
-                            h5f.create_dataset(
-                                f"{grpName}result_{rk + 1}", data=res
-                            )
-                            log.debug(
-                                "Created new dataset `result_%d` in %s",
-                                rk + 1,
-                                fname,
-                            )
-                    else:
-                        for rk, res in enumerate(result):
-                            h5f.create_dataset(f"{grpName}result_{rk}", data=res)
-                            log.debug(
-                                "Created new dataset `result_%d` in %s", rk, fname
-                            )
-
-            if singleFile:
-                lock.release()
-
-        except TypeError as exc:
-            if (
-                "has no native HDF5 equivalent" in str(exc)
-                or "One of data, shape or dtype must be specified" in str(exc)
-            ) and not singleFile:
-                try:
-                    os.unlink(fname)  # type: ignore
-                    pname = fname.rstrip(".h5") + ".pickle"  # type: ignore
-                    with open(os.path.join(pname), "wb") as pkf:
-                        pickle.dump(result, pkf)
-                    msg = (
-                        "Could not write %s results have been pickled instead: %s. Return values are most likely "
-                        + "not suitable for storage in HDF5 containers. Original error message: %s"
-                    )
-                    log.warning(msg, fname, pname, str(exc))
-                except pickle.PicklingError as pexc:
-                    err = "Unable to write %s, successive attempts to pickle results failed too: %s"
-                    log.error(err, fname, str(pexc))
-            else:
-                if singleFile:
-                    err = "Could not write to %s. File potentially corrupted. Original error message: %s"
-                    lock.release()
-                else:
-                    err = "Could not access %s. Original error message: %s"
-                log.error(err, fname, str(exc))
-                raise exc
-
-        except Exception as exc:
-            if singleFile:
-                lock.release()
-            log.error(str(exc))
-            raise exc
-
-    def _legacy_pickle_write(self, result: Any, fname: str, log: logging.Logger) -> None:
-        """Legacy pickle writing method for backward compatibility"""
-        try:
-            with open(os.path.join(fname), "wb") as pkf:  # type: ignore
-                pickle.dump(result, pkf)
-                log.debug("Pickled to %s", fname)
-        except pickle.PicklingError as pexc:
-            err = "Could not pickle results to file %s. Original error message: %s"
-            log.error(err, fname, str(pexc))
-            raise pexc
-
-        return
+        # Use result storage manager for writing HDF5/pickle
+        result_handler = ResultStorageManager.create_handler(
+            fname=fname,
+            result=result,
+            task_id=taskId,
+            write_pickle=fname.endswith(".pickle"),
+            single_file=singleFile,
+            stacking_dim=stackingDim,
+        )
+        result_handler.write_result()
