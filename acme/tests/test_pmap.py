@@ -48,6 +48,9 @@ realArray = NDArray[np.float64]
 # Get machine architecture
 mArch = platform.machine()
 
+# Sleep period (in s) for dask to collect its bearings when using an existing client
+sleeptime = 1.0
+
 
 # Functions that act as stand-ins for user-funcs
 def simple_func(x: float, y: float, z: float = 3) -> float:
@@ -689,6 +692,8 @@ class TestParallelMap:
         colResPayload = str(payloadDir)
 
         # Same with `single_file`
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             lowpass_simple,
             sigName,
@@ -717,6 +722,8 @@ class TestParallelMap:
                     )
 
         # Now use non-standard output directory
+        if testclient:
+            time.sleep(sleeptime)
         outDir = os.path.join(tempDir, "somewhere")
         with ParallelMap(
             lowpass_simple,
@@ -749,6 +756,8 @@ class TestParallelMap:
                     )
 
         # Finally collect results in memory: ensure nothing freaky happens
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             lowpass_simple,
             sigName,
@@ -773,6 +782,8 @@ class TestParallelMap:
                 h5col[f"comp_{chNo}"]["result_0"]
 
         # Ensure `output_dir` is properly ignored if `write_worker_results` is `False`
+        if testclient:
+            time.sleep(sleeptime)
         pmap = ParallelMap(
             lowpass_simple,
             sigName,
@@ -797,6 +808,8 @@ class TestParallelMap:
         os.makedirs(tempDir2, exist_ok=True)
 
         # Same task, different function: simulate user-defined saving scheme and "weird" inputs
+        if testclient:
+            time.sleep(sleeptime)
         sigData = h5py.File(sigName, "r")["data"]
         res_base = "lowpass_hard_"
         dset_name = "custom_dset_name"
@@ -830,6 +843,8 @@ class TestParallelMap:
         # Bonus: leave computing client alive and vet default SLURM settings
         if testclient is None:
             cluster_cleanup(pmap.config.client)
+        else:
+            time.sleep(sleeptime)
         log = logging.getLogger("ACME")
         for handler in log.handlers:
             if isinstance(handler, logging.FileHandler):
@@ -888,7 +903,7 @@ class TestParallelMap:
 
         # Wait a sec (literally) for dask to collect its bearings (after the
         # `get_client` above) before proceeding
-        time.sleep(1.0)
+        time.sleep(sleeptime)
 
         # Same, but use custom log-file
         customLog = os.path.join(tempDir, "acme_log.txt")
@@ -923,7 +938,7 @@ class TestParallelMap:
                 dd.get_client()
 
         # Wait a sec (literally) to give dask enough time to close the client
-        time.sleep(1.0)
+        time.sleep(sleeptime)
 
         # Request a log-file but don't save results
         with ParallelMap(
@@ -951,6 +966,8 @@ class TestParallelMap:
 
         # Ensure ACME warns if arguments increase its "sanity" threshold
         # (lowered here to not overwhelm CI runners)
+        if testclient:
+            time.sleep(sleeptime)
         mAS = ParallelMap._maxArgSize
         ParallelMap._maxArgSize = 1  # in MB
         pmap = ParallelMap(
@@ -975,6 +992,8 @@ class TestParallelMap:
         os.unlink(thisLogFile)
 
         # Same with kwargs
+        if testclient:
+            time.sleep(sleeptime)
         pmap = ParallelMap(
             simple_func,
             [2, 4, 6, 8],
@@ -1002,6 +1021,8 @@ class TestParallelMap:
         ParallelMap._maxArgSize = mAS
 
         # Ensure warning is issued if single-file saving is requested but result writing is turned off
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             lowpass_simple,
             sigName,
@@ -1033,6 +1054,7 @@ class TestParallelMap:
 
         if testclient is None:
             cluster_cleanup(pmap.config.client)
+        time.sleep(sleeptime)
 
         # Underbook SLURM (more calls than workers)
         n_workers = int(self.nChannels / 2)
@@ -1126,7 +1148,7 @@ class TestParallelMap:
 
         # Wait a second (literally) so that no new parallel workers started by
         # `test_existing_cluster` erroneously use existing HDF files
-        time.sleep(1.0)
+        time.sleep(sleeptime)
 
         return testclient
 
@@ -1140,6 +1162,8 @@ class TestParallelMap:
         outDirs = []
 
         # Parallelize across channels, write results to disk
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             lowpass_medium,
             sigName,
@@ -1248,7 +1272,7 @@ class TestParallelMap:
 
         # Wait a second (literally) so that no new parallel workers started by
         # `test_existing_cluster` erroneously use existing HDF files
-        time.sleep(1.0)
+        time.sleep(sleeptime)
 
         return testclient
 
@@ -1320,6 +1344,8 @@ class TestParallelMap:
                 assert np.array_equal(h5col["result_0"][()], h5inf["result_0"][()])
 
         # Same but don't use a virtual dataset and transpose the final array
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             lowpass_simple,
             sigName,
@@ -1347,6 +1373,8 @@ class TestParallelMap:
                 assert np.array_equal(h5single["result_0"][()].T, h5col["result_0"][()])
 
         # Use a resizable single hdf container (not specifying `nSamples`)
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             lowpass_simple,
             sigName,
@@ -1369,6 +1397,8 @@ class TestParallelMap:
                 )
 
         # More elaborate stacking/expendable dimension
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             simple_func,
             [elem * np.ones((3, 3)) for elem in [2, 4]],
@@ -1382,6 +1412,8 @@ class TestParallelMap:
 
         tripleDim = str(pmap.results_container)
 
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             simple_func,
             [elem * np.ones((3, 3)) for elem in [2, 4]],
@@ -1401,6 +1433,8 @@ class TestParallelMap:
                     h5triple["result_0"][()], h5tripleinf["result_0"][()]
                 )
 
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             simple_func,
             [elem * np.ones((3, 3)) for elem in [2, 4]],
@@ -1415,6 +1449,8 @@ class TestParallelMap:
 
         tripleDimSingle = str(pmap.results_container)
 
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             simple_func,
             [elem * np.ones((3, 3)) for elem in [2, 4]],
@@ -1442,6 +1478,8 @@ class TestParallelMap:
                 )
 
         # Finally, ensure in-memory results-collection works as expected
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             lowpass_simple,
             sigName,
@@ -1456,6 +1494,8 @@ class TestParallelMap:
             assert np.array_equal(h5col["result_0"][()], resInMem)
 
         # Ensure dtype is respected
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             lowpass_simple,
             sigName,
@@ -1591,6 +1631,8 @@ class TestParallelMap:
         assert "cannot use more than one `np.inf` in `result_shape`" in str(valerr)
 
         # Emergency pickling
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             pickle_func,
             self.sig,
@@ -1620,7 +1662,8 @@ class TestParallelMap:
         assert len(mixedResults) == pmap.config.n_calls
 
         # Ensure deliberate pickling doesn't clash w/(erroneous) shape spec
-        time.sleep(1)
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             pickle_func,
             self.sig,
@@ -1640,6 +1683,8 @@ class TestParallelMap:
         assert len(pickles) == pmap.config.n_calls
 
         # Ensure multiple return values are handled correctly
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             lowpass_medium,
             sigName,
@@ -1668,6 +1713,8 @@ class TestParallelMap:
                     assert np.array_equal(h5f[f"comp_{k}/result_3"][()], self.a)
 
         # Same w/single output container
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             lowpass_medium,
             sigName,
@@ -1690,6 +1737,8 @@ class TestParallelMap:
                         assert np.array_equal(h5f[dset], h5ref[dset])
 
         # Finally, ensure in-memory results-collection works w/multiple returns
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             lowpass_medium,
             sigName,
@@ -1717,7 +1766,7 @@ class TestParallelMap:
 
         # Wait a second (literally) so that no new parallel workers started by
         # `test_existing_cluster` erroneously use existing HDF files
-        time.sleep(1.0)
+        time.sleep(sleeptime)
 
         # Close SLURM client allocated on ESI/BIC clusters
         if testclient is None and useSLURM and (onESI or onBIC):
@@ -2090,7 +2139,7 @@ class TestParallelMap:
         pmap = ParallelMap(
             simple_func, [2, 4, 6, 8], 4, setup_interactive=True, dryrun=True
         )
-        time.sleep(1.0)
+        time.sleep(sleeptime)
 
         # Ensure auto-generated output dir has been successfully removed
         outDir = pmap.daemon.config.output_dir
