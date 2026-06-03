@@ -352,16 +352,10 @@ class ACMEdaemon(object):
                         outputDir,
                     )
 
-        # Include logger name in keywords so that workers can use it
-        self.config.kwargv["logName"] = [log.name]
-
         # Wrap the user-provided func and distribute it across workers
         self.config.kwargv["userFunc"] = [self.config.func]
         self.config.acme_func = self.func_wrapper  # type: ignore
         log.debug("Wrapping user-provided function inside func_wrapper")
-
-        # Finally, attach verbosity flag to enable logging inside wrapper
-        self.config.kwargv["logLevel"] = [log.level]
 
         return
 
@@ -684,13 +678,18 @@ class ACMEdaemon(object):
 
         # Use result post-processor for handling results
         post_processor = ResultPostProcessor(
-            self.config.client, self.config.results_container
+            self.config.client,
+            self.config.results_container,
+            self.config.collect_results,
+            self.config.write_worker_results,
+            self.config.write_pickle,
+            self.config.single_file,
+            self.config.results_container,
         )
 
         # Process futures using the post-processor
         result = post_processor.process_futures(
             futures,
-            self.config.collect_results,
             self.config.result_shape,
             self.config.stacking_dim,
             self.config.result_dtype,
@@ -700,7 +699,7 @@ class ACMEdaemon(object):
         )
 
         # Finally, establish shortcut to `results_container` (if present) for easier access
-        self.results_container = self.config.results_container
+        self.results_container = post_processor.results_container
 
         return result
 
@@ -738,17 +737,9 @@ class ACMEdaemon(object):
         func = kwargs.pop("userFunc")
         taskID = kwargs.pop("taskID")
         fname = kwargs.pop("outFile")
-        logName = kwargs.pop("logName")
-        logLevel = kwargs.pop("logLevel")
         singleFile = kwargs.pop("singleFile", False)
         stackingDim = kwargs.pop("stackingDim", None)
         memEstRun = kwargs.pop("memEstRun", False)
-
-        # # Set up logger
-        # log = logging.getLogger(logName)
-        # log.setLevel(logLevel)  # type: ignore
-        # for h in log.handlers:
-        #     h.setLevel(logLevel)  # type: ignore
 
         # Call user-provided function
         result = func(*args, **kwargs)  # type: ignore

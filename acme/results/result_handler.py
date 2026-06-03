@@ -75,7 +75,7 @@ class HDF5ResultHandler(ResultHandler):
             self.locks[lock_name] = dd.lock.Lock(name=lock_name)
         lock = self.locks[lock_name]
         lock.acquire()
-        self.grpName = f"comp_{taskID}/"
+        self.grpName = f"comp_{self.task_id}/"
         try:
             with h5py.File(self.fname, "a") as h5f:
                 if self.stacking_dim is None:
@@ -99,8 +99,8 @@ class HDF5ResultHandler(ResultHandler):
         if not all(isinstance(value, (numbers.Number, str)) for value in self.result):
             for rk, res in enumerate(self.result):
                 h5f.create_dataset(f"{self.grpName}result_{rk}", data=res)
-            else:
-                h5f.create_dataset(self.grpName + "result_0", data=self.result)
+        else:
+            h5f.create_dataset(self.grpName + "result_0", data=self.result)
 
     def _write_with_shape(self, h5f: h5py.File) -> None:
         """Write to pre-allocated dataset with specific shape"""
@@ -147,6 +147,7 @@ class HDF5ResultHandler(ResultHandler):
                     for rk, res in enumerate(self.result):
                         h5f.create_dataset(f"result_{rk}", data=res)
         except TypeError as exc:
+            # Emergency pickling
             if "has no native HDF5 equivalent" in str(
                 exc
             ) or "One of data, shape or dtype must be specified" in str(exc):
@@ -172,8 +173,10 @@ class HDF5ResultHandler(ResultHandler):
     def finalize(self) -> None:
         """Clean up any remaining locks"""
         for lock in self.locks.values():
-            if lock._held:
+            try:
                 lock.release()
+            except:
+                pass
 
 
 class PickleResultHandler(ResultHandler):
