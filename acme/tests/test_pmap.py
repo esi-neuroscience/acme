@@ -1799,6 +1799,8 @@ class TestParallelMap:
         time.sleep(5)
 
         # Execute `pickle_func` w/pickling
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             pickle_func,
             self.sig,
@@ -1844,6 +1846,8 @@ class TestParallelMap:
         )
 
         # Test emergency pickling
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             pickle_func,
             self.sig,
@@ -1860,6 +1864,8 @@ class TestParallelMap:
         outDirs.append(pmap.config.output_dir)
 
         # Ensure warning is issued if pickling is requested but result writing is turned off
+        if testclient:
+            time.sleep(sleeptime)
         with ParallelMap(
             simple_func,
             [2, 4, 6, 8],
@@ -1932,6 +1938,8 @@ class TestParallelMap:
                 pmap.compute()
 
         # Test write breakdown (both for HDF5 saving and pickling)
+        if testclient:
+            time.sleep(sleeptime)
         pmap = ParallelMap(
             pickle_func,
             self.sig,
@@ -1949,6 +1957,8 @@ class TestParallelMap:
         with pytest.raises(RuntimeError) as runerr:
             pmap.compute()
         assert "Parallel computation failed" in str(runerr.value)
+        if testclient:
+            time.sleep(sleeptime)
         pmap = ParallelMap(
             pickle_func,
             self.sig,
