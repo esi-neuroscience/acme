@@ -10,31 +10,18 @@
 # Builtin/3rd party package imports
 import time
 import socket
-import getpass
-import datetime
-import inspect
-import numbers
-import collections
 import os
 import sys
 import glob
-import shutil
 import functools
-import pickle
 import logging
-import multiprocessing
-import psutil
 import tqdm
-import h5py
 import dask
 import dask.distributed as dd
-import numpy as np
 from dask_jobqueue import SLURMCluster
 from typing import TYPE_CHECKING, Optional, Any, Union, List
-from numpy.typing import ArrayLike
 
 # Local imports
-from . import __path__
 from .dask_helpers import (
     esi_cluster_setup,
     bic_cluster_setup,
@@ -43,7 +30,7 @@ from .dask_helpers import (
     cluster_cleanup,
     count_online_workers,
 )
-from .shared import user_yesno, is_esi_node, is_slurm_node, is_bic_node
+from .shared import is_esi_node, is_bic_node
 from .logger import prepare_log
 from .validators import validate_boolean, validate_pmap
 from .config import ACMEConfig
@@ -408,7 +395,7 @@ class ACMEdaemon(object):
 
             # If `partition` is "auto", attempt to heuristically determine average
             # memory consumption of jobs
-            if partition == "auto":
+            if self.config.partition == "auto":
                 mem_per_worker = self.profiler.estimate_memory(self.config.output_dir)
 
             # All set, remaining input processing is done by respective `*_cluster_setup` routines
@@ -416,11 +403,11 @@ class ACMEdaemon(object):
                 msg = "Running on ESI compute node, Calling `esi_cluster_setup`"
                 log.debug(msg)
                 self.config.client = esi_cluster_setup(
-                    partition=partition,
-                    n_workers=n_workers,  # type: ignore
-                    mem_per_worker=mem_per_worker,
-                    timeout=setup_timeout,
-                    interactive=setup_interactive,
+                    partition=self.config.partition,
+                    n_workers=self.config.n_workers,  # type: ignore
+                    mem_per_worker=self.config.mem_per_worker,
+                    timeout=self.config.setup_timeout,
+                    interactive=self.config.setup_interactive,
                     start_client=True,
                 )
 
@@ -429,11 +416,11 @@ class ACMEdaemon(object):
                 msg = "Running on CoBIC compute node, Calling `bic_cluster_setup`"
                 log.debug(msg)
                 self.config.client = bic_cluster_setup(
-                    partition=partition,
-                    n_workers=n_workers,  # type: ignore
-                    mem_per_worker=mem_per_worker,
-                    timeout=setup_timeout,
-                    interactive=setup_interactive,
+                    partition=self.config.partition,
+                    n_workers=self.config.n_workers,  # type: ignore
+                    mem_per_worker=self.config.mem_per_worker,
+                    timeout=self.config.setup_timeout,
+                    interactive=self.config.setup_interactive,
                     start_client=True,
                 )
 
@@ -447,14 +434,14 @@ class ACMEdaemon(object):
                 processes_per_worker = 1
                 n_cores = 1
                 self.config.client = slurm_cluster_setup(
-                    partition=partition,  # type: ignore
+                    partition=self.config.partition,  # type: ignore
                     n_cores=n_cores,
-                    n_workers=n_workers,  # type: ignore
+                    n_workers=self.config.n_workers,  # type: ignore
                     processes_per_worker=processes_per_worker,
-                    mem_per_worker=mem_per_worker,
+                    mem_per_worker=self.config.mem_per_worker,
                     n_workers_startup=1,
-                    timeout=setup_timeout,
-                    interactive=setup_interactive,
+                    timeout=self.config.setup_timeout,
+                    interactive=self.config.setup_interactive,
                     interactive_wait=120,
                     start_client=True,
                     job_extra=[],

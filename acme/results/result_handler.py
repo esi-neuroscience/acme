@@ -16,7 +16,7 @@ import numbers
 import weakref
 import dask.distributed as dd
 from abc import ABC, abstractmethod
-from typing import Any, Optional, List, Tuple
+from typing import Any, Optional
 
 # Fetch logger
 log = logging.getLogger("ACME")

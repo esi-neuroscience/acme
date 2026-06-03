@@ -9,7 +9,6 @@
 
 # Builtin/3rd party package imports
 import pytest
-from unittest.mock import Mock, MagicMock
 
 # Local imports
 from acme.config import ACMEConfig
