@@ -10,31 +10,18 @@
 # Builtin/3rd party package imports
 import time
 import socket
-import getpass
-import datetime
-import inspect
-import numbers
-import collections
 import os
 import sys
 import glob
-import shutil
 import functools
-import pickle
 import logging
-import multiprocessing
-import psutil
 import tqdm
-import h5py
 import dask
 import dask.distributed as dd
-import numpy as np
 from dask_jobqueue import SLURMCluster
 from typing import TYPE_CHECKING, Optional, Any, Union, List
-from numpy.typing import ArrayLike
 
 # Local imports
-from . import __path__
 from .dask_helpers import (
     esi_cluster_setup,
     bic_cluster_setup,
@@ -43,12 +30,15 @@ from .dask_helpers import (
     cluster_cleanup,
     count_online_workers,
 )
-from .shared import user_yesno, is_esi_node, is_slurm_node, is_bic_node
+from .shared import is_esi_node, is_bic_node
 from .logger import prepare_log
 from .validators import validate_boolean, validate_pmap
 from .config import ACMEConfig
 from .memory_profiler import MemoryProfiler
 from .argument_processor import ArgumentProcessor
+from .results.output_setup import OutputDirectoryManager, HDF5ContainerFactory
+from .results.result_handler import ResultStorageManager
+from .results.post_processor import ResultPostProcessor
 
 isSpyModule = False
 if "syncopy" in sys.modules:  # pragma: no cover
@@ -266,27 +256,16 @@ class ACMEdaemon(object):
         Local helper for creating output directories and preparing containers
         """
 
-        # Unless specifically denied by the user, each worker stores results
-        # separately with a common container file pointing to the individual
-        # by-worker files residing in a "payload" directory
-        if not self.config.single_file and not self.config.write_pickle:
-            log.debug("Preparing payload directory for HDF5 containers")
-            payloadName = f"{self.config.func.__name__}_payload"
-            outputDir = os.path.join(self.config.output_dir, payloadName)  # type: ignore
-        else:
-            msg = (
-                "Either single-file output or pickling was requested. "
-                + "Not creating payload directory"
-            )
-            log.debug(msg)
-            outputDir = self.config.output_dir
-        try:
-            os.makedirs(outputDir)
-            log.debug("Created %s", outputDir)
-        except Exception as exc:
-            err = "automatic creation of output folder %s failed: %s"
-            log.error(err, outputDir, str(exc))
-            raise OSError(err % (outputDir, str(exc)))
+        # Use output setup manager for directory creation
+        output_manager = OutputDirectoryManager()
+
+        # Create output directory structure
+        outputDir = output_manager.create_output_directory(
+            self.config.output_dir,
+            self.config.single_file,
+            self.config.write_pickle,
+            self.config.func.__name__,
+        )
 
         # Re-define or allocate key "taskID" to track concurrent processing results
         self.config.kwargv["taskID"] = self.config.task_ids
@@ -302,6 +281,9 @@ class ACMEdaemon(object):
             self.config.results_container = os.path.join(self.config.output_dir, f"{self.config.func.__name__}.h5")  # type: ignore
             log.debug("Using HDF5 storage %s", self.config.results_container)
 
+        # Use HDF5 container factory for container creation
+        container_factory = HDF5ContainerFactory()
+
         # By default, `results_container` is a collection of links that point to
         # worker-generated HDF5 containers; if `single_file` is `True`, then
         # `results_container` is a "real" container with actual dataset(s)
@@ -313,30 +295,19 @@ class ACMEdaemon(object):
             # If no output shape provided, prepare groups for storing datasets;
             # otherwise allocate a single dataset w/specified dimension
             if self.config.result_shape is None:
-                msg = "Created group comp_%d in single shared results container"
-                with h5py.File(self.config.results_container, "w") as h5f:
-                    for i in self.config.task_ids:
-                        h5f.create_group(f"comp_{i}")
-                        log.debug(msg, i)
-            else:
-                if np.inf in self.config.result_shape:  # type: ignore
-                    actShape = tuple(spec if spec is not np.inf else 1 for spec in self.config.result_shape)  # type: ignore
-                    maxShape = tuple(spec if spec is not np.inf else None for spec in self.config.result_shape)  # type: ignore
-                else:
-                    actShape = self.config.result_shape  # type: ignore
-                    maxShape = None
-                msg = (
-                    "Created unique dataset 'result_0' with shape %s "
-                    + "in single shared results container"
+                container_factory.create_single_file_container(
+                    self.config.results_container,
+                    self.config.task_ids,
+                    None,
+                    self.config.result_dtype,
                 )
-                with h5py.File(self.config.results_container, "w") as h5f:
-                    h5f.create_dataset(
-                        "result_0",
-                        shape=actShape,
-                        maxshape=maxShape,
-                        dtype=self.config.result_dtype,
-                    )
-                    log.debug(msg, str(self.config.result_shape))
+            else:
+                container_factory.create_single_file_container(
+                    self.config.results_container,
+                    self.config.task_ids,
+                    self.config.result_shape,
+                    self.config.result_dtype,
+                )
 
         else:
             self.config.kwargv["outFile"] = [
@@ -348,71 +319,30 @@ class ACMEdaemon(object):
                 # If no output shape provided, generate links to external datasets;
                 # otherwise allocate a virtual dataset w/specified dimension
                 if self.config.result_shape is None:
-
-                    msg = (
-                        "Created external link comp_%d pointing to "
-                        + "%s in results container"
+                    container_factory.create_virtual_dataset_container(
+                        self.config.results_container,
+                        self.config.task_ids,
+                        self.config.kwargv["outFile"],
+                        None,
+                        0,  # default stacking dim
+                        self.config.result_dtype,
+                        outputDir,
                     )
-                    with h5py.File(self.config.results_container, "w") as h5f:
-                        for i, fname in enumerate(self.config.kwargv["outFile"]):
-                            relPath = os.path.join(payloadName, os.path.basename(fname))
-                            h5f[f"comp_{i}"] = h5py.ExternalLink(relPath, "/")
-                            log.debug(msg, i, relPath)
                 else:
-
-                    VSourceShape = [spec if spec is not np.inf else None for spec in self.config.result_shape]  # type: ignore
-                    VSourceShape.pop(self.config.stacking_dim)  # type: ignore
-                    VSourceShape = tuple(VSourceShape)
-
-                    # Account for resizable datasets
-                    if None in VSourceShape:
-                        resActShape = tuple(spec if spec is not np.inf else 1 for spec in self.config.result_shape)  # type: ignore
-                        resMaxShape = tuple(spec if spec is not np.inf else None for spec in self.config.result_shape)  # type: ignore
-                        vsActShape = tuple(
-                            spec if spec is not None else 1 for spec in VSourceShape
-                        )
-                        vsMaxShape = VSourceShape
-                    else:
-                        resActShape = self.config.result_shape  # type: ignore
-                        resMaxShape = None
-                        vsActShape = VSourceShape
-                        vsMaxShape = None
-                    layout = h5py.VirtualLayout(
-                        shape=resActShape,
-                        dtype=self.config.result_dtype,
-                        maxshape=resMaxShape,
-                    )  # type: ignore
-                    idx = [slice(None) if spec is not np.inf else slice(h5py.h5s.UNLIMITED) for spec in self.config.result_shape]  # type: ignore
-                    jdx = list(idx)
-                    jdx.pop(self.config.stacking_dim)  # type: ignore
-
-                    msg = (
-                        "Created virtual dataset result_0' with shape "
-                        + "%s in results container"
+                    container_factory.create_virtual_dataset_container(
+                        self.config.results_container,
+                        self.config.task_ids,
+                        self.config.kwargv["outFile"],
+                        self.config.result_shape,
+                        self.config.stacking_dim,  # type: ignore
+                        self.config.result_dtype,
+                        outputDir,
                     )
-                    for i, fname in enumerate(self.config.kwargv["outFile"]):
-                        idx[self.config.stacking_dim] = i  # type: ignore
-                        relPath = os.path.join(payloadName, os.path.basename(fname))
-                        vsource = h5py.VirtualSource(
-                            fname, "result_0", shape=vsActShape, maxshape=vsMaxShape
-                        )
-                        layout[tuple(idx)] = vsource[tuple(jdx)]
-                    with h5py.File(
-                        self.config.results_container, "w", libver="latest"
-                    ) as h5f:
-                        h5f.create_virtual_dataset("result_0", layout)
-                        log.debug(msg, self.config.result_shape)
-
-        # Include logger name in keywords so that workers can use it
-        self.config.kwargv["logName"] = [log.name]
 
         # Wrap the user-provided func and distribute it across workers
         self.config.kwargv["userFunc"] = [self.config.func]
         self.config.acme_func = self.func_wrapper  # type: ignore
         log.debug("Wrapping user-provided function inside func_wrapper")
-
-        # Finally, attach verbosity flag to enable logging inside wrapper
-        self.config.kwargv["logLevel"] = [log.level]
 
         return
 
@@ -465,7 +395,7 @@ class ACMEdaemon(object):
 
             # If `partition` is "auto", attempt to heuristically determine average
             # memory consumption of jobs
-            if partition == "auto":
+            if self.config.partition == "auto":
                 mem_per_worker = self.profiler.estimate_memory(self.config.output_dir)
 
             # All set, remaining input processing is done by respective `*_cluster_setup` routines
@@ -473,11 +403,11 @@ class ACMEdaemon(object):
                 msg = "Running on ESI compute node, Calling `esi_cluster_setup`"
                 log.debug(msg)
                 self.config.client = esi_cluster_setup(
-                    partition=partition,
-                    n_workers=n_workers,  # type: ignore
-                    mem_per_worker=mem_per_worker,
-                    timeout=setup_timeout,
-                    interactive=setup_interactive,
+                    partition=self.config.partition,
+                    n_workers=self.config.n_workers,  # type: ignore
+                    mem_per_worker=self.config.mem_per_worker,
+                    timeout=self.config.setup_timeout,
+                    interactive=self.config.setup_interactive,
                     start_client=True,
                 )
 
@@ -486,11 +416,11 @@ class ACMEdaemon(object):
                 msg = "Running on CoBIC compute node, Calling `bic_cluster_setup`"
                 log.debug(msg)
                 self.config.client = bic_cluster_setup(
-                    partition=partition,
-                    n_workers=n_workers,  # type: ignore
-                    mem_per_worker=mem_per_worker,
-                    timeout=setup_timeout,
-                    interactive=setup_interactive,
+                    partition=self.config.partition,
+                    n_workers=self.config.n_workers,  # type: ignore
+                    mem_per_worker=self.config.mem_per_worker,
+                    timeout=self.config.setup_timeout,
+                    interactive=self.config.setup_interactive,
                     start_client=True,
                 )
 
@@ -504,14 +434,14 @@ class ACMEdaemon(object):
                 processes_per_worker = 1
                 n_cores = 1
                 self.config.client = slurm_cluster_setup(
-                    partition=partition,  # type: ignore
+                    partition=self.config.partition,  # type: ignore
                     n_cores=n_cores,
-                    n_workers=n_workers,  # type: ignore
+                    n_workers=self.config.n_workers,  # type: ignore
                     processes_per_worker=processes_per_worker,
-                    mem_per_worker=mem_per_worker,
+                    mem_per_worker=self.config.mem_per_worker,
                     n_workers_startup=1,
-                    timeout=setup_timeout,
-                    interactive=setup_interactive,
+                    timeout=self.config.setup_timeout,
+                    interactive=self.config.setup_interactive,
                     interactive_wait=120,
                     start_client=True,
                     job_extra=[],
@@ -550,6 +480,7 @@ class ACMEdaemon(object):
         in a sequential setup.
         """
 
+        # Ensure validity of debug flag
         validate_boolean(debug, name="debug")
 
         # If `prepare_client` has not been called yet, don't attempt to compute anything
@@ -732,176 +663,32 @@ class ACMEdaemon(object):
         list of objects: if in-memory results collection was requested
         """
 
-        # Deduce result output information
-        write_worker_results = self.config.acme_func == self.func_wrapper
-        single_file = False
-        if write_worker_results:
-            write_pickle = self.config.results_container is None
-            if not write_pickle and self.config.kwargv.get("singleFile") is not None:
-                single_file = True
-        else:
-            write_pickle = False
-        msg = "Inferred that `write_worker_results = %s`, `single_file = %s`, `write_pickle = %s`"
-        log.debug(msg, str(write_worker_results), str(single_file), str(write_pickle))
+        # Use result post-processor for handling results
+        post_processor = ResultPostProcessor(
+            self.config.client,
+            self.config.results_container,
+            self.config.collect_results,
+            self.config.write_worker_results,
+            self.config.write_pickle,
+            self.config.single_file,
+            self.config.results_container,
+        )
 
-        # If wanted (not recommended) collect computed results in local memory
-        if self.config.collect_results:
-            if not isSpyModule:
-                log.info("Gathering results in local memory")
-            collected = self.config.client.gather(futures)
-            log.debug(
-                "Gathered results from client in a %d-element list", len(collected)
-            )
-            if self.config.result_shape is not None:
-                log.debug(
-                    "Returning single NumPy array of shape %s and type %s",
-                    str(self.config.result_shape),
-                    str(self.config.result_dtype),
-                )
-                values = []
-                arrVal = np.empty(
-                    shape=self.config.result_shape, dtype=self.config.result_dtype
-                )
-                idx = [slice(None)] * len(self.config.result_shape)
-                for i, res in enumerate(collected):
-                    if not isinstance(res, (list, tuple)):
-                        res = [res]
-                    idx[self.config.stacking_dim] = i
-                    arrVal[tuple(idx)] = res[0]
-                    for r in res[1:]:
-                        values.append(r)
-                values.insert(0, arrVal)
-                # If `values` is a single array, don't wrap it inside a list
-                if len(values) == 1:
-                    values = values[0]
-            else:
-                log.debug("Returning a list of values")
-                values = collected
-        else:
-            values = None
+        # Process futures using the post-processor
+        result = post_processor.process_futures(
+            futures,
+            self.config.result_shape,
+            self.config.stacking_dim,
+            self.config.result_dtype,
+            self.config.acme_func,
+            self.config.func,
+            self.config.kwargv,
+        )
 
-        # Prepare final output message
-        successMsg = "SUCCESS!"
+        # Finally, establish shortcut to `results_container` (if present) for easier access
+        self.results_container = post_processor.results_container
 
-        # If automatic results writing was requested, perform some housekeeping
-        if write_worker_results:
-            finalMsg = "Results have been saved to %s"
-            if write_pickle:
-                log.debug("Saved results as pickle files")
-                values = list(self.config.kwargv["outFile"])
-                finalMsg = finalMsg % (self.config.output_dir)
-                log.debug("Returning a list of file-names")
-            else:
-                if single_file:
-                    log.debug("Saved results to single shared container")
-                    finalMsg = finalMsg % (self.config.results_container)
-                    if values is None:
-                        values = [self.config.results_container]
-                        log.debug("Returning container name as single-element list")
-                else:
-                    log.debug("Scanning payload directory for emergency pickles")
-                    picklesFound = False
-                    values = []
-                    for fname in self.config.kwargv["outFile"]:
-                        pklName = fname.rstrip(".h5") + ".pickle"
-                        if os.path.isfile(fname):
-                            values.append(fname)
-                        elif os.path.isfile(pklName):
-                            values.append(pklName)
-                            picklesFound = True
-                            log.debug("Found emergency pickle %s", pklName)
-                        else:
-                            missing = fname.rstrip(".h5")
-                            values.append("Missing %s" % (missing))
-                            log.debug("Missing file %s", missing)
-                    payloadDir = os.path.dirname(values[0])
-
-                    # If pickles are found, remove global `results_container` as it
-                    # would contain invalid file-links and move compute results out
-                    # of payload dir
-                    if picklesFound:
-                        os.unlink(self.config.results_container)  # type: ignore
-                        wrng = (
-                            "Some compute runs could not be saved as HDF5, "
-                            + "collection container %s has been removed as it would "
-                            + "comprise invalid file-links"
-                        )
-                        log.warning(wrng, self.config.results_container)
-                        self.config.results_container = None
-
-                        # Move files out of payload dir and update return `values`
-                        target = os.path.abspath(os.path.join(payloadDir, os.pardir))
-                        for i, fname in enumerate(values):
-                            shutil.move(fname, target)
-                            self.config.kwargv["outFile"][i] = os.path.join(
-                                target, os.path.basename(fname)
-                            )
-                            log.debug("Moved %s to %s", fname, target)
-                        values = list(self.config.kwargv["outFile"])
-                        log.debug("Returning a list of file-names")
-                        shutil.rmtree(payloadDir)
-                        log.debug("Deleted payload directory %s", payloadDir)
-                        successMsg = ""
-                        finalMsg = finalMsg % (target)
-
-                    # All good, no pickle gymnastics was needed
-                    else:
-
-                        # In case of multiple return values present in by-worker
-                        # containers but missing in collection container (happens
-                        # if `result_shape` is not `None` and data-sets have to
-                        # be pre-allocated), create "symlinks" to corresponding
-                        # missing returns
-                        log.debug("No emergency pickles found")
-                        if self.config.stacking_dim is not None:
-                            msg = (
-                                "Check if additional return values "
-                                + "need to be added to container with pre-allocated dataset"
-                            )
-                            log.debug(msg)
-                            with h5py.File(self.config.results_container, "r") as h5r:
-                                with h5py.File(values[0], "r") as h5Tmp:
-                                    missingReturns = set(h5Tmp.keys()).difference(
-                                        h5r.keys()
-                                    )
-                            if len(missingReturns) > 0:
-                                log.debug("Found return values to be added")
-                                with h5py.File(
-                                    self.config.results_container, "a"
-                                ) as h5r:
-                                    for retVal in missingReturns:
-                                        for i, fname in enumerate(values):
-                                            relPath = os.path.join(
-                                                os.path.basename(payloadDir),
-                                                os.path.basename(fname),
-                                            )
-                                            h5r[f"comp_{i}/{retVal}"] = (
-                                                h5py.ExternalLink(relPath, retVal)
-                                            )
-                                            log.debug(
-                                                "Added return value via external link comp_%d/%s",
-                                                i,
-                                                retVal,
-                                            )
-
-                        finalMsg = finalMsg % (self.config.results_container)
-                        msg = "Container ready, links to data payload located in %s"
-                        log.debug(msg, payloadDir)
-                        log.debug("Returning a list of file-names")
-        else:
-            finalMsg = "Finished parallel computation"
-
-        # Finally, estabslish shortcut to `results_container` (if present) for easier access
-        self.results_container = self.config.results_container
-
-        # Print final triumphant output message and force-flush all logging handlers
-        if len(successMsg) > 0:
-            log.announce(successMsg)  # type: ignore
-        log.info(finalMsg)
-        for h in log.handlers:
-            if hasattr(h, "flush"):
-                h.flush()
-        return values
+        return result
 
     def cleanup(self) -> None:
         """
@@ -937,17 +724,9 @@ class ACMEdaemon(object):
         func = kwargs.pop("userFunc")
         taskID = kwargs.pop("taskID")
         fname = kwargs.pop("outFile")
-        logName = kwargs.pop("logName")
-        logLevel = kwargs.pop("logLevel")
         singleFile = kwargs.pop("singleFile", False)
         stackingDim = kwargs.pop("stackingDim", None)
         memEstRun = kwargs.pop("memEstRun", False)
-
-        # Set up logger
-        log = logging.getLogger(logName)
-        log.setLevel(logLevel)  # type: ignore
-        for h in log.handlers:
-            h.setLevel(logLevel)  # type: ignore
 
         # Call user-provided function
         result = func(*args, **kwargs)  # type: ignore
@@ -956,123 +735,13 @@ class ACMEdaemon(object):
         if memEstRun:
             return
 
-        # Save results: either (try to) use HDF5 or pickle stuff
-        if fname.endswith(".h5"):  # type: ignore
-
-            grpName = ""
-            if singleFile:
-                lock = dd.lock.Lock(name=os.path.basename(fname))  # type: ignore
-                lock.acquire()
-                grpName = f"comp_{taskID}/"
-
-            if not isinstance(result, (list, tuple)):
-                result = [result]
-
-            try:
-
-                with h5py.File(fname, "a") as h5f:
-                    if stackingDim is None:
-                        if not all(
-                            isinstance(value, (numbers.Number, str)) for value in result
-                        ):
-                            for rk, res in enumerate(result):
-                                h5f.create_dataset(f"{grpName}result_{rk}", data=res)
-                                log.debug(
-                                    "Created new dataset `result_%d` in %s", rk, fname
-                                )
-                        else:
-                            h5f.create_dataset(grpName + "result_0", data=result)
-                            log.debug("Created new dataset `result_0` in %s", fname)
-                    else:
-                        if singleFile:
-                            dset = h5f["result_0"]
-                            idx = [slice(None)] * len(dset.shape)  # type: ignore
-                            idx[stackingDim] = taskID  # type: ignore
-                            if None in dset.maxshape:
-                                if len(result[0].shape) < len(idx):
-                                    lenDim = list(
-                                        set(result[0].shape).difference(dset.maxshape)
-                                    )
-                                    if len(lenDim) == 0:
-                                        lenDim = result[0].shape[0]
-                                    else:
-                                        lenDim = lenDim[0]
-                                    actShape = tuple(
-                                        spec if spec is not None else lenDim
-                                        for spec in dset.maxshape
-                                    )
-                                else:
-                                    actShape = list(result[0].shape)  # type: ignore
-                                    actShape[stackingDim] = dset.maxshape[stackingDim]  # type: ignore
-                                    actShape = tuple(actShape)
-                                dset.resize(actShape)
-                            dset[tuple(idx)] = result[0]
-                            log.debug(
-                                "Wrote to pre-allocated dataset `result_0` in %s", fname
-                            )
-                            for rk, res in enumerate(result[1:]):
-                                h5f.create_dataset(
-                                    f"{grpName}result_{rk + 1}", data=res
-                                )
-                                log.debug(
-                                    "Created new dataset `result_%d` in %s",
-                                    rk + 1,
-                                    fname,
-                                )
-                        else:
-                            for rk, res in enumerate(result):
-                                h5f.create_dataset(f"{grpName}result_{rk}", data=res)
-                                log.debug(
-                                    "Created new dataset `result_%d` in %s", rk, fname
-                                )
-
-                if singleFile:
-                    lock.release()
-
-            except TypeError as exc:
-
-                if (
-                    "has no native HDF5 equivalent" in str(exc)
-                    or "One of data, shape or dtype must be specified" in str(exc)
-                ) and not singleFile:
-                    try:
-                        os.unlink(fname)  # type: ignore
-                        pname = fname.rstrip(".h5") + ".pickle"  # type: ignore
-                        with open(os.path.join(pname), "wb") as pkf:
-                            pickle.dump(result, pkf)
-                        msg = (
-                            "Could not write %s results have been pickled instead: %s. Return values are most likely "
-                            + "not suitable for storage in HDF5 containers. Original error message: %s"
-                        )
-                        log.warning(msg, fname, pname, str(exc))
-                    except pickle.PicklingError as pexc:
-                        err = "Unable to write %s, successive attempts to pickle results failed too: %s"
-                        log.error(err, fname, str(pexc))
-                else:
-                    if singleFile:
-                        err = "Could not write to %s. File potentially corrupted. Original error message: %s"
-                        lock.release()
-                    else:
-                        err = "Could not access %s. Original error message: %s"
-                    log.error(err, fname, str(exc))
-                    raise exc
-
-            except Exception as exc:
-
-                if singleFile:
-                    lock.release()
-                log.error(str(exc))
-                raise exc
-
-        else:
-
-            try:
-                with open(os.path.join(fname), "wb") as pkf:  # type: ignore
-                    pickle.dump(result, pkf)
-                    log.debug("Pickled to %s", fname)
-            except pickle.PicklingError as pexc:
-                err = "Could not pickle results to file %s. Original error message: %s"
-                log.error(err, fname, str(pexc))
-                raise pexc
-
-        return
+        # Use result storage manager for writing HDF5/pickle
+        result_handler = ResultStorageManager.create_handler(
+            fname=fname,
+            result=result,
+            task_id=taskID,
+            write_pickle=fname.endswith(".pickle"),
+            single_file=singleFile,
+            stacking_dim=stackingDim,
+        )
+        result_handler.write_result()

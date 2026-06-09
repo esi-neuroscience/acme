@@ -10,14 +10,9 @@
 # Builtin/3rd party package imports
 import pytest
 import numpy as np
-import logging
-import inspect
 import os
 import tempfile
-import datetime
-import sys
 import types
-from unittest.mock import Mock
 
 # Local imports
 from acme.validators import (

@@ -24,7 +24,6 @@ from logging import handlers
 from typing import Any, Optional, List
 
 # Local imports
-from acme import __version__
 from . import dask_helpers as dh
 
 callCount = 0
@@ -33,9 +32,7 @@ callMax = 1000000
 __all__: List["str"] = []
 
 
-def sizeOf(
-        obj: Any,
-        varname: str) -> float:
+def sizeOf(obj: Any, varname: str) -> float:
     """
     Estimate memory consumption of Python objects
 
@@ -63,18 +60,22 @@ def sizeOf(
     global callCount
 
     # For later reference: dynamically fetch name of current function
-    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"  # type: ignore
 
     # Protect against circular object references
     callCount += 1
     if callCount >= callMax:
         msg = "%s maximum recursion depth %s exceeded while processing %s"
-        raise RecursionError(msg%(funcName, callMax, varname))
+        raise RecursionError(msg % (funcName, callMax, varname))
 
     # Use `sys.getsizeof` to estimate memory consumption of primitive objects
     objsize = sys.getsizeof(obj) / 1024**2
     if isinstance(obj, dict):
-        return objsize + sum(list(map(sizeOf, obj.keys(), [varname] * len(obj.keys())))) + sum(list(map(sizeOf, obj.values(), [varname] * len(obj.values()))))
+        return (
+            objsize
+            + sum(list(map(sizeOf, obj.keys(), [varname] * len(obj.keys()))))
+            + sum(list(map(sizeOf, obj.values(), [varname] * len(obj.values()))))
+        )
     if isinstance(obj, (list, tuple, set)):
         return objsize + sum(list(map(sizeOf, obj, [varname] * len(obj))))
     return objsize
@@ -91,9 +92,13 @@ def is_slurm_node() -> bool:
 
     # Simply test if the srun command is available
     log.debug("Test if `sinfo` is available")
-    out, _ = subprocess.Popen("sinfo --version",
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              text=True, shell=True).communicate()
+    out, _ = subprocess.Popen(
+        "sinfo --version",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        shell=True,
+    ).communicate()
     return len(out) > 0
 
 
@@ -130,7 +135,7 @@ def is_x86_node() -> bool:
     return platform.machine() == "x86_64"
 
 
-def get_interface(ipaddress : str) -> str:                                      # pragma: no cover
+def get_interface(ipaddress: str) -> str:  # pragma: no cover
     """
     Returns the name of the first network interface associated to `ipaddress`
     """
@@ -143,12 +148,10 @@ def get_interface(ipaddress : str) -> str:                                      
                 return iface
     err = "IP address %s not associated to any NIC"
     log.error(err, ipaddress)
-    raise ValueError(err%(ipaddress))
+    raise ValueError(err % (ipaddress))
 
 
-def get_free_port(                                                              # pragma: no cover
-        lo : int,
-        hi: int) -> int:
+def get_free_port(lo: int, hi: int) -> int:  # pragma: no cover
     """
     Returns lowest open port in the given range `lo` to `hi`
     """
@@ -166,20 +169,21 @@ def get_free_port(                                                              
             port += 1
     err = "Could not find open port in the range %d-%d"
     log.error(err, lo, hi)
-    raise IOError(err%(lo,hi))
+    raise IOError(err % (lo, hi))
 
 
 def _scalar_parser(
-        var: Any,
-        varname: str = "varname",
-        ntype: str = "int_like",
-        lims: List = [-np.inf, np.inf]) -> None:
+    var: Any,
+    varname: str = "varname",
+    ntype: str = "int_like",
+    lims: List = [-np.inf, np.inf],
+) -> None:
     """
     ACME-specific version of Syncopy's `scalar_parser` (used for cross-compatibility)
     """
 
     # Get name of calling method/function
-    funcName = f"<{inspect.currentframe().f_code.co_name}>"     # type: ignore
+    funcName = f"<{inspect.currentframe().f_code.co_name}>"  # type: ignore
 
     # Make sure `var` is a scalar-like number
     msg = "%s `%s` has to be %s between %s and %s, not %s"
@@ -194,28 +198,24 @@ def _scalar_parser(
         if var < lims[0] or var > lims[1]:
             error = True
         if error:
-            raise ValueError(msg%(funcName,
-                                  varname,
-                                  scalartype,
-                                  str(lims[0]),
-                                  str(lims[1]),
-                                  str(var)))
+            raise ValueError(
+                msg
+                % (funcName, varname, scalartype, str(lims[0]), str(lims[1]), str(var))
+            )
     else:
         msg = "%s `%s` has to be a scalar, not %s"
-        raise TypeError(msg%(funcName, varname, str(type(var))))
+        raise TypeError(msg % (funcName, varname, str(type(var))))
 
     return
 
 
-def user_yesno(                                                         # pragma: no cover
-        msg: str,
-        default: Optional[str] = None) -> bool:
+def user_yesno(msg: str, default: Optional[str] = None) -> bool:  # pragma: no cover
     """
     ACME specific version of user-input query
     """
 
     # Parse optional `default` answer
-    valid = {"yes": True, "y": True, "ye":True, "no":False, "n":False}
+    valid = {"yes": True, "y": True, "ye": True, "no": False, "n": False}
     if default is None:
         suffix = " [y/n] "
     elif default == "yes":
@@ -234,11 +234,12 @@ def user_yesno(                                                         # pragma
             print("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
 
 
-def user_input(                                                         # pragma: no cover
-        msg: str,
-        valid: Optional[List] = None,
-        default: Optional[str] = None,
-        timeout: Optional[float] = None) -> str:
+def user_input(  # pragma: no cover
+    msg: str,
+    valid: Optional[List] = None,
+    default: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> str:
     """
     ACME specific version of user-input query
     """
@@ -250,7 +251,7 @@ def user_input(                                                         # pragma
     # default reply (if provided)
     suffix = "" + " " * (not msg.endswith(" "))
     if default is not None:
-        default = default.replace("[", "").replace("]","")
+        default = default.replace("[", "").replace("]", "")
         if valid is not None:
             assert default in valid
         suffix = f"[Default: '{default}'] "
@@ -284,14 +285,14 @@ def user_input(                                                         # pragma
 
 def is_jupyter() -> bool:
     try:
-        return get_ipython().__class__.__name__ == "ZMQInteractiveShell"    # type: ignore
+        return get_ipython().__class__.__name__ == "ZMQInteractiveShell"  # type: ignore
     except NameError:
         return False
 
 
-def ctrlc_catcher(                                                              # pragma: no cover
-        *excargs: Any,
-        **exckwargs: Optional[Any]) -> None:
+def ctrlc_catcher(  # pragma: no cover
+    *excargs: Any, **exckwargs: Optional[Any]
+) -> None:
     """
     Custom Traceback for properly handling CTRL + C interrupts while parallel
     computations are running
@@ -303,12 +304,12 @@ def ctrlc_catcher(                                                              
         isipy = False
         etype, evalue, etb = excargs
     else:
-        shell, = excargs
+        (shell,) = excargs
         etype, evalue, etb = sys.exc_info()
-        try:                            # careful: if iPython is used to launch a script, ``get_ipython`` is not defined
-            get_ipython()               # type: ignore
+        try:  # careful: if iPython is used to launch a script, ``get_ipython`` is not defined
+            get_ipython()  # type: ignore
             isipy = True
-            sys.last_traceback = etb    # smartify ``sys``
+            sys.last_traceback = etb  # smartify ``sys``
         except NameError:
             isipy = False
 
@@ -330,7 +331,7 @@ def ctrlc_catcher(                                                              
             log.debug("CTRL + C acknowledged, client and workers successfully killed")
 
     # Relay exception handling back to appropriate system tools
-    if isipy:                                                           # pragma: no cover
+    if isipy:  # pragma: no cover
         shell.ipyTBshower(shell, exc_tuple=(etype, evalue, etb), **exckwargs)
     else:
         sys.__excepthook__(etype, evalue, etb)
@@ -339,9 +340,9 @@ def ctrlc_catcher(                                                              
     # printing was handled above)
     log.error("Exception received.")
     memHandler = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)][0]
-    if memHandler.target is not None:                                   # pragma: no cover
+    if memHandler.target is not None:  # pragma: no cover
         memHandler.acquire()
-        with open(memHandler.target.baseFilename, "a", encoding="utf-8") as logfile:    # type: ignore
+        with open(memHandler.target.baseFilename, "a", encoding="utf-8") as logfile:  # type: ignore
             logfile.write("".join(traceback.format_exception_only(etype, evalue)))
             logfile.write("".join(traceback.format_tb(etb)))
         memHandler.release()

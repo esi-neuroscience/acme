@@ -7,9 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 
-import pytest
-import numpy as np
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from acme.memory_profiler import MemoryProfiler
 from acme.argument_processor import ArgumentProcessor
 
