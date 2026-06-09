@@ -8,37 +8,21 @@
 #
 
 # Builtin/3rd party package imports
-import time
-import socket
 import os
 import sys
-import glob
-import functools
 import logging
-import tqdm
-import dask
-import dask.distributed as dd
-from dask_jobqueue import SLURMCluster
 from typing import TYPE_CHECKING, Optional, Any, Union, List
 
 # Local imports
-from .dask_helpers import (
-    esi_cluster_setup,
-    bic_cluster_setup,
-    local_cluster_setup,
-    slurm_cluster_setup,
-    cluster_cleanup,
-    count_online_workers,
-)
-from .shared import is_esi_node, is_bic_node
 from .logger import prepare_log
-from .validators import validate_boolean, validate_pmap
+from .validators import validate_pmap
 from .config import ACMEConfig
 from .memory_profiler import MemoryProfiler
 from .argument_processor import ArgumentProcessor
 from .results.output_setup import OutputDirectoryManager, HDF5ContainerFactory
 from .results.result_handler import ResultStorageManager
 from .results.post_processor import ResultPostProcessor
+from .client_orchestrator import ClientOrchestrator
 
 isSpyModule = False
 if "syncopy" in sys.modules:  # pragma: no cover
@@ -56,7 +40,7 @@ log = logging.getLogger("ACME")
 class ACMEdaemon(object):
 
     # Restrict valid class attributes
-    __slots__ = ("results_container", "config", "processor", "profiler")
+    __slots__ = ("results_container", "config", "processor", "profiler", "orchestrator")
 
     def __init__(
         self,
@@ -191,6 +175,11 @@ class ACMEdaemon(object):
             self.config.acme_func,
             self.config.func.__name__,
             self.config.tqdmFormat,
+        )
+
+        # Set up client orchestration helper class
+        self.orchestrator = ClientOrchestrator(
+            self.config, self.processor, self.profiler
         )
 
         # If requested, perform single-worker dry-run (and quit if desired)
@@ -348,128 +337,11 @@ class ACMEdaemon(object):
 
     def prepare_client(self) -> None:
         """
-        Setup or fetch dask distributed processing client. Depending on available
-        hardware, either start a local multi-processing client or launch a
-        worker cluster via SLURM.
+        Setup or fetch dask distributed processing client.
 
-        Also ensure that ad-hoc clients created here are stopped and worker jobs
-        are properly released at the end of computation. However, ensure any client
-        not created by `prepare_client` is **not** automatically cleaned up.
+        Delegates to ClientOrchestrator for all client lifecycle management.
         """
-
-        # Check if a dask client is already running
-        try:
-            self.config.client = dd.get_client()  # type: ignore
-            log.debug("Detected running client %s", str(self.config.client))
-            if self.config.stop_client == "auto":
-                self.config.stop_client = False
-                msg = (
-                    "Changing `stop_client` from `'auto'` to `False` "
-                    + "to not terminate external client"
-                )
-                log.debug(msg)
-            self.config.n_workers = count_online_workers(self.config.client.cluster)  # type: ignore
-            log.debug("Found %d alive workers in the client", self.config.n_workers)
-            msg = "Attaching to parallel computing client %s"
-            log.info(msg % (str(self.config.client)))
-            return
-        except ValueError:
-            msg = "No running client detected, preparing to start a new one"
-            log.debug(msg)
-            if self.config.stop_client == "auto":
-                self.config.stop_client = True  # type: ignore
-                msg = (
-                    "Changing `stop_client` from `'auto'` to `True` "
-                    + "to clean up client started by `ParallelMap`"
-                )
-                log.debug(msg)
-
-        # If things are running locally, simply fire up a dask-distributed client,
-        # otherwise go through the motions of preparing a full worker cluster
-        if not self.config.has_slurm:  # pragma: no cover
-
-            log.debug("SLURM not found, Calling `local_cluster_setup`")
-            self.config.client = local_cluster_setup(n_workers=self.config.n_workers, interactive=False)  # type: ignore
-
-        else:
-
-            # If `partition` is "auto", attempt to heuristically determine average
-            # memory consumption of jobs
-            if self.config.partition == "auto":
-                mem_per_worker = self.profiler.estimate_memory(self.config.output_dir)
-
-            # All set, remaining input processing is done by respective `*_cluster_setup` routines
-            if is_esi_node():
-                msg = "Running on ESI compute node, Calling `esi_cluster_setup`"
-                log.debug(msg)
-                self.config.client = esi_cluster_setup(
-                    partition=self.config.partition,
-                    n_workers=self.config.n_workers,  # type: ignore
-                    mem_per_worker=self.config.mem_per_worker,
-                    timeout=self.config.setup_timeout,
-                    interactive=self.config.setup_interactive,
-                    start_client=True,
-                )
-
-            # All set, remaining input processing is done by respective `*_cluster_setup` routines
-            elif is_bic_node():
-                msg = "Running on CoBIC compute node, Calling `bic_cluster_setup`"
-                log.debug(msg)
-                self.config.client = bic_cluster_setup(
-                    partition=self.config.partition,
-                    n_workers=self.config.n_workers,  # type: ignore
-                    mem_per_worker=self.config.mem_per_worker,
-                    timeout=self.config.setup_timeout,
-                    interactive=self.config.setup_interactive,
-                    start_client=True,
-                )
-
-            # Unknown cluster node, use vanilla config
-            else:  # pragma: no cover
-                wrng = (
-                    "Cluster node %s not recognized. Falling back to vanilla "
-                    + "SLURM setup allocating one worker and one core per worker"
-                )
-                log.warning(wrng % (socket.getfqdn()))
-                processes_per_worker = 1
-                n_cores = 1
-                self.config.client = slurm_cluster_setup(
-                    partition=self.config.partition,  # type: ignore
-                    n_cores=n_cores,
-                    n_workers=self.config.n_workers,  # type: ignore
-                    processes_per_worker=processes_per_worker,
-                    mem_per_worker=self.config.mem_per_worker,
-                    n_workers_startup=1,
-                    timeout=self.config.setup_timeout,
-                    interactive=self.config.setup_interactive,
-                    interactive_wait=120,
-                    start_client=True,
-                    job_extra=[],
-                    invalid_partitions=[],
-                )
-
-            # If startup is aborted by user, get outta here
-            if self.config.client is None:  # pragma: no cover
-                err = "Could not start distributed computing client. "
-                log.error(err)
-                raise ConnectionAbortedError(err)
-
-        # Set `n_workers` to no. of active workers in the initialized cluster
-        self.config.n_workers = len(self.config.client.cluster.workers)  # type: ignore
-        log.debug(
-            "Setting `n_workers = %d` based on active workers in %s",
-            self.config.n_workers,
-            str(self.config.client),
-        )
-
-        # If single output file saving was chosen, initialize distributed
-        # lock for shared writing to container
-        if self.config.kwargv.get("singleFile") is not None:
-            msg = "Initializing distributed lock for writing to single shared results container"
-            log.debug(msg)
-            dd.lock.Lock(name=os.path.basename(self.config.results_container))  # type: ignore
-
-        return
+        self.orchestrator.prepare_client()
 
     def compute(self, debug: bool = False) -> Union[List, None]:
         """
@@ -479,176 +351,14 @@ class ACMEdaemon(object):
         not actually process anything concurrently but uses the dask framework
         in a sequential setup.
         """
-
-        # Ensure validity of debug flag
-        validate_boolean(debug, name="debug")
-
-        # If `prepare_client` has not been called yet, don't attempt to compute anything
-        if self.config.client is None:
-            log.debug("No parallel computing client allocated, exiting")
-            return None
-
-        # Check if the underlying parallel computing cluster hosts actually usable workers
-        if count_online_workers(self.config.client.cluster) == 0:
-            err = (
-                "no active workers found in distributed computing client %s "
-                + "Consider running \n"
-                + "\timport dask.distributed as dd; dd.get_client().restart()\n"
-                + "If this fails to make workers come online, please use\n"
-                + "\timport acme; acme.cluster_cleanup()\n"
-                + "to shut down any defunct distributed computing clients"
-            )
-            log.error(err, str(self.config.client))
-            raise RuntimeError(err % (str(self.config.client)))
-        log.debug(
-            "Found %d workers in client %s",
-            count_online_workers(self.config.client.cluster),
-            str(self.config.client),
-        )
-
-        # Dask does not correctly forward the `sys.path` from the parent process
-        # to its workers. Fix this.
-        def init_acme(dask_worker, syspath):
-            sys.path = list(syspath)
-
-        self.config.client.register_worker_callbacks(
-            setup=functools.partial(init_acme, syspath=sys.path)
-        )
-        log.debug("Registered worker callback to forward `sys.path`")
-
-        # Broadcast arguments and format keyword arguments
-        self.config.argv, self.config.kwargv = self.processor.broadcast_arguments(
-            self.config.client
-        )
-        kwargList = self.processor.format_kwarg_list()
-
-        # In case a debugging run is performed, use the single-threaded scheduler and return
-        if debug:
-            log.warning("Running in debug mode")
-            with dask.config.set(scheduler="single-threaded"):
-                log.debug("Using single-threaded scheduler to evaluate function")
-                values = self.config.client.gather(
-                    [
-                        self.config.client.submit(
-                            self.config.acme_func, *args, **kwargs
-                        )
-                        for args, kwargs in zip(zip(*self.config.argv), kwargList)
-                    ]
-                )
-                return values
-
-        # Depending on the used dask cluster object, point to respective log info
-        if isinstance(self.config.client.cluster, SLURMCluster):
-            logFiles = self.config.client.cluster.job_header.split("--output=")[
-                1
-            ].replace("%j", "{}")
-            logDir = os.path.split(logFiles)[0]
-        else:  # pragma: no cover
-            logFiles = []
-            logDir = (
-                os.path.dirname(self.config.client.cluster.dashboard_link)
-                + "/info/main/workers.html"
-            )
-        msg = "Preparing %d parallel calls of `%s` using %d workers"
-        log.info(
-            msg
-            % (self.config.n_calls, self.config.func.__name__, self.config.n_workers)
-        )
-        msg = "Log information available at %s"
-        log.debug(msg % (logDir))
-
-        # Submit `self.config.n_calls` function calls to the cluster
-        log.debug(
-            "Submitting %d function calls to client %s",
-            self.config.n_calls,
-            str(self.config.client),
-        )
-        futures = [
-            self.config.client.submit(self.config.acme_func, *args, **kwargs)
-            for args, kwargs in zip(zip(*self.config.argv), kwargList)
-        ]
-
-        # Set up progress bar: the while loop ensures all futures are executed
-        totalTasks = len(futures)
-        pbar = tqdm.tqdm(
-            total=totalTasks, bar_format=self.config.tqdmFormat, position=0, leave=True
-        )
-        cnt = 0
-        while any(f.status == "pending" for f in futures):
-            time.sleep(self.config.sleepTime)
-            new = max(0, sum([f.status == "finished" for f in futures]) - cnt)
-            cnt += new
-            pbar.update(new)
-        pbar.close()
-
-        # Avoid race condition: give futures time to perform switch from 'pending'
-        # to 'finished' so that `finishedTasks` is computed correctly
-        log.debug("Waiting %f seconds for futures", self.config.sleepTime)
-        time.sleep(self.config.sleepTime)
-
-        # If number of 'finished' tasks is less than expected, go into
-        # problem analysis mode: all futures that erred hav an `.exception`
-        # method which can be used to track down the worker it was executed by
-        # Once we know the worker, we can point to the right log file. If
-        # futures were cancelled (by the user or the SLURM controller),
-        # `.exception` is `None` and we can't reliably track down the
-        # respective executing worker
-        finishedTasks = sum([f.status == "finished" for f in futures])
-        if finishedTasks < totalTasks:
-            schedulerLog = list(
-                self.config.client.cluster.get_logs(
-                    cluster=False, scheduler=True, workers=False
-                ).values()
-            )[0]
-            erredFutures = [f for f in futures if f.status == "error"]
-            msg = "Parallel computation failed: %d/%d tasks failed or stalled. "
-            msg = msg % (totalTasks - finishedTasks, totalTasks)
-            msg += "Concurrent computing scheduler log info: "
-            msg += schedulerLog + "\n"
-
-            # If we're working w/`SLURMCluster`, perform the Herculean task of
-            # tracking down which dask worker was executed by which SLURM job...
-            if self.config.client.cluster.__class__.__name__ == "SLURMCluster":
-                try:
-                    erredJobs = [
-                        f.exception().last_worker.identity()["id"] for f in erredFutures
-                    ]
-                except AttributeError:
-                    erredJobs = []
-                erredJobs = list(set(erredJobs))
-                validIDs = [
-                    job
-                    for job in erredJobs
-                    if job in self.config.client.cluster.workers.keys()
-                ]
-                erredJobIDs = [
-                    self.config.client.cluster.workers[job].job_id for job in validIDs
-                ]
-                errFiles = glob.glob(logDir + os.sep + "*.err")
-                if len(erredFutures) > 0 or len(errFiles) > 0:
-                    msg += "Please consult the following SLURM log files for details:\n"
-                    if len(erredJobIDs) > 0:
-                        msg += "".join(logFiles.format(id) + "\n" for id in erredJobIDs)
-                    else:
-                        msg += "".join(logDir)
-                    msg += "".join(errfile + "\n" for errfile in errFiles)
-                else:
-                    msg += "Please check SLURM logs in %s" % (logDir)
-
-            # In case of a `LocalCluster`, syphon worker logs
-            else:  # pragma: no cover
-                msg += "Parallel worker log details: \n"
-                workerLogs = self.config.client.get_worker_logs().values()
-                for wLog in workerLogs:
-                    if "Failed" in wLog:
-                        msg += wLog
-
-            # Finally, raise an error and get outta here
-            log.error(msg)
-            raise RuntimeError(msg)
+        # Delegate to orchestrator for computation execution
+        futures = self.orchestrator.execute_computation(debug=debug)
 
         # Postprocessing of results
-        values = self.post_process(futures)
+        if futures is not None:
+            values = self.post_process(futures)
+        else:
+            values = None
 
         # Either return collected by-worker results or the filepaths of results
         return values
@@ -693,22 +403,10 @@ class ACMEdaemon(object):
     def cleanup(self) -> None:
         """
         Shut down any ad-hoc distributed computing clients created by `prepare_client`
+
+        Delegates to ClientOrchestrator for all client lifecycle management.
         """
-
-        # If `prepare_client` has not been launched yet, just get outta here
-        if self.config.client is None:
-            log.debug("Helper `prepare_client` not yet launched, exiting")
-            return
-        if self.config.stop_client and self.config.client is not None:
-            log.debug(
-                "Found client %s, calling `cluster_cleanup`", str(self.config.client)
-            )
-            cluster_cleanup(self.config.client)
-            self.config.client = None
-            return
-        log.debug("Either `stop_client = False` or no client found, returning")
-
-        return
+        self.orchestrator.cleanup()
 
     @staticmethod
     def func_wrapper(*args: Any, **kwargs: Optional[Any]) -> None:  # pragma: no cover
