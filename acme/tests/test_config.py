@@ -104,7 +104,8 @@ class TestACMEConfig:
         config = ACMEConfig(partition=123)
 
         with pytest.raises(
-            TypeError, match="has to be 'auto' or a valid partition name"
+            TypeError,
+            match="`partition` has to be 'auto' or a valid SLURM partition name, not <class 'int'>",
         ):
             config.validate()
 

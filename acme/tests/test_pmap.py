@@ -880,8 +880,8 @@ class TestParallelMap:
         assert dd.get_client()
         client = dd.get_client()
         if useSLURM and testclient is None:
-            assert pmap.config.n_calls == pmap.n_workers
-            assert len(client.cluster.workers) == pmap.n_workers
+            assert pmap.config.n_calls == pmap.config.n_workers
+            assert len(client.cluster.workers) == pmap.config.n_workers
             partition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
             if onx86 and (onESI or onBIC):
                 assert "8GB" in partition
