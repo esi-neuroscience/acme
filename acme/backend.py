@@ -11,6 +11,7 @@
 import os
 import sys
 import logging
+import dask.distributed as dd
 from typing import TYPE_CHECKING, Optional, Any, Union, List
 
 # Local imports

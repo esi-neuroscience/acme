@@ -10,6 +10,7 @@
 # Builtin/3rd party package imports
 import socket
 import os
+import sys
 import time
 import glob
 import functools
@@ -18,7 +19,7 @@ import tqdm
 import dask
 import dask.distributed as dd
 from dask_jobqueue import SLURMCluster
-from typing import Union, List, Optional, Any
+from typing import Union, List
 
 # Local imports
 from .dask_helpers import (
@@ -30,8 +31,10 @@ from .dask_helpers import (
     count_online_workers,
 )
 from .shared import is_esi_node, is_bic_node
+from .validators import validate_boolean
 from .argument_processor import ArgumentProcessor
 from .memory_profiler import MemoryProfiler
+from .config import ACMEConfig
 
 # Fetch logger
 log = logging.getLogger("ACME")
@@ -40,10 +43,10 @@ log = logging.getLogger("ACME")
 class ClientOrchestrator:
     """
     Unified manager for dask client lifecycle and computation orchestration.
-    
+
     Consolidates client management and execution coordination into a single
     coherent interface, building on successful patterns from Phase 1-3.
-    
+
     This class handles:
     - Client lifecycle management (creation, validation, cleanup)
     - Cluster setup and configuration
@@ -54,7 +57,7 @@ class ClientOrchestrator:
 
     def __init__(
         self,
-        config,
+        config: ACMEConfig,
         processor: ArgumentProcessor,
         profiler: MemoryProfiler,
     ):
@@ -153,7 +156,6 @@ class ClientOrchestrator:
             return None
 
         # Ensure validity of debug flag
-        from .validators import validate_boolean
         validate_boolean(debug, name="debug")
 
         # Validate client has active workers
@@ -178,7 +180,8 @@ class ClientOrchestrator:
         # Log execution information
         msg = "Preparing %d parallel calls of `%s` using %d workers"
         log.info(
-            msg % (self.config.n_calls, self.config.func.__name__, self.config.n_workers)
+            msg
+            % (self.config.n_calls, self.config.func.__name__, self.config.n_workers)
         )
         msg = "Log information available at %s"
         log.debug(msg % logDir)
@@ -334,6 +337,7 @@ class ClientOrchestrator:
 
     def _setup_worker_callbacks(self) -> None:
         """Register worker callbacks for sys.path forwarding."""
+
         # Dask does not correctly forward the `sys.path` from the parent process
         # to its workers. Fix this.
         def init_acme(dask_worker, syspath):
@@ -351,9 +355,7 @@ class ClientOrchestrator:
             log.debug("Using single-threaded scheduler to evaluate function")
             values = self.config.client.gather(
                 [
-                    self.config.client.submit(
-                        self.config.acme_func, *args, **kwargs
-                    )
+                    self.config.client.submit(self.config.acme_func, *args, **kwargs)
                     for args, kwargs in zip(zip(*self.config.argv), kwargList)
                 ]
             )
@@ -435,7 +437,9 @@ class ClientOrchestrator:
             # Analyze errors based on cluster type
             if self.config.client.cluster.__class__.__name__ == "SLURMCluster":
                 logFiles, logDirectory = self._get_slurm_log_info()
-                msg += self._analyze_slurm_errors(erredFutures, schedulerLog, logFiles, logDirectory)
+                msg += self._analyze_slurm_errors(
+                    erredFutures, schedulerLog, logFiles, logDirectory
+                )
             else:
                 msg += self._analyze_local_errors(erredFutures)
 
@@ -445,12 +449,18 @@ class ClientOrchestrator:
 
     def _get_slurm_log_info(self) -> tuple:
         """Get SLURM log file information."""
-        logFiles = self.config.client.cluster.job_header.split("--output=")[1].replace("%j", "{}")
+        logFiles = self.config.client.cluster.job_header.split("--output=")[1].replace(
+            "%j", "{}"
+        )
         logDir = os.path.split(logFiles)[0]
         return logFiles, logDir
 
     def _analyze_slurm_errors(
-        self, erredFutures: List[dd.Future], schedulerLog: str, logFiles: str, logDir: str
+        self,
+        erredFutures: List[dd.Future],
+        schedulerLog: str,
+        logFiles: str,
+        logDir: str,
     ) -> str:
         """
         Analyze SLURM-specific errors and generate detailed error messages.
