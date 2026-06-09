@@ -250,7 +250,9 @@ class ClientOrchestrator:
         # If `partition` is "auto", attempt to heuristically determine average
         # memory consumption of jobs
         if self.config.partition == "auto":
-            mem_per_worker = self.profiler.estimate_memory(self.config.output_dir)
+            self.config.mem_per_worker = self.profiler.estimate_memory(
+                self.config.output_dir
+            )
 
         # Use appropriate cluster setup based on environment
         if is_esi_node():
