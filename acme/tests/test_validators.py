@@ -282,3 +282,49 @@ class TestValidateStopClient:
             match="`stop_client` has to be `True` or `False`, not <class 'int'>",
         ):
             validate_stop_client(123)
+
+
+class TestValidateNWorkers:
+    """Tests for validate_n_workers"""
+
+    def test_auto_with_slurm(self):
+        """Test that 'auto' with SLURM returns n_calls"""
+        result = validate_n_workers("auto", 10, True)
+        assert result == 10
+
+    def test_auto_without_slurm(self):
+        """Test that 'auto' without SLURM returns None"""
+        result = validate_n_workers("auto", 10, False)
+        assert result is None
+
+    def test_invalid_string(self):
+        """Test that invalid string raises ValueError"""
+        with pytest.raises(
+            ValueError, match="has to be 'auto' or an integer >= 1"
+        ):
+            validate_n_workers("invalid", 10, True)
+
+    def test_valid_integer(self):
+        """Test that valid integer returns the integer"""
+        result = validate_n_workers(5, 10, True)
+        assert result == 5
+
+    def test_zero_workers(self):
+        """Test that zero workers raises exception"""
+        with pytest.raises((ValueError, TypeError)):
+            validate_n_workers(0, 10, True)
+
+    def test_negative_workers(self):
+        """Test that negative workers raises exception"""
+        with pytest.raises((ValueError, TypeError)):
+            validate_n_workers(-5, 10, True)
+
+    def test_float_workers(self):
+        """Test that float workers raises ValueError"""
+        with pytest.raises(ValueError):
+            validate_n_workers(5.5, 10, True)
+
+    def test_list_workers(self):
+        """Test that list workers raises TypeError"""
+        with pytest.raises(TypeError):
+            validate_n_workers([1, 2, 3], 10, True)

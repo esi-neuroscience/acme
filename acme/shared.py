@@ -23,9 +23,6 @@ import dask.distributed as dd
 from logging import handlers
 from typing import Any, Optional, List
 
-# Local imports
-from . import dask_helpers as dh
-
 callCount = 0
 callMax = 1000000
 
@@ -324,6 +321,8 @@ def ctrlc_catcher(  # pragma: no cover
         except ValueError:
             client = None
         if client is not None:
+            from . import dask_helpers as dh
+
             for st in client.futures.values():
                 st.cancel()
             client.futures.clear()
