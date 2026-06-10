@@ -1077,8 +1077,8 @@ class TestParallelMap:
         client = pmap.config.client
         assert pmap.config.n_calls == self.nChannels
         if useSLURM is True and testclient is None:
-            assert pmap.n_workers == n_workers
-            assert len(client.cluster.workers) == pmap.n_workers
+            assert pmap.config.n_workers == n_workers
+            assert len(client.cluster.workers) == pmap.config.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
             assert actualPartition == defaultQ
             memory = np.unique(
@@ -1117,8 +1117,8 @@ class TestParallelMap:
         client = pmap.config.client
         assert pmap.config.n_calls == self.nChannels
         if useSLURM and testclient is None:
-            assert pmap.n_workers == n_workers
-            assert len(client.cluster.workers) == pmap.n_workers
+            assert pmap.config.n_workers == n_workers
+            assert len(client.cluster.workers) == pmap.config.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
             assert actualPartition == defaultQ
             memory = np.unique(
