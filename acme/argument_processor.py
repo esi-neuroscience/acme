@@ -1,8 +1,7 @@
 #
 # Argument processing utilities for ACME
 #
-# Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
-# in Cooperation with Max Planck Society
+# Copyright © 2026 Ernst Strüngmann Institute (ESI) of the Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #

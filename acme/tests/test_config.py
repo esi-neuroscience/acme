@@ -1,8 +1,7 @@
 #
 # Test module for ACME configuration classes
 #
-# Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
-# in Cooperation with Max Planck Society
+# Copyright © 2026 Ernst Strüngmann Institute (ESI) of the Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -104,7 +103,8 @@ class TestACMEConfig:
         config = ACMEConfig(partition=123)
 
         with pytest.raises(
-            TypeError, match="has to be 'auto' or a valid partition name"
+            TypeError,
+            match="`partition` has to be 'auto' or a valid SLURM partition name, not <class 'int'>",
         ):
             config.validate()
 

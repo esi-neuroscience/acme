@@ -1,16 +1,25 @@
- <!--
- Copyright (c) 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
- in Cooperation with Max Planck Society
- SPDX-License-Identifier: CC-BY-NC-SA-1.0
- -->
+  <!--
+  Copyright © 2020-2025 Ernst Strüngmann Institute (ESI) for Neuroscience
+  in Cooperation with Max Planck Society
+  Copyright © 2026 Ernst Strüngmann Institute (ESI) of the Max Planck Society
+  SPDX-License-Identifier: CC-BY-NC-SA-1.0
+  -->
 
 # Changelog of ACME
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
+Code cleanup, dependency updates + maintenance feature. 
+
 ### NEW
+
 ### CHANGED
+- Overhauled and fundamentally refactored ACME's backend: the `ACMEdaemon` class 
+  shrinked from almost 1200 loc to less than 450; its core compoonents have been 
+  migrated to dedicated helper classes that permit easier modifications/extensions
+  
+
 ### REMOVED
 ### DEPRECATED
 ### FIXED
