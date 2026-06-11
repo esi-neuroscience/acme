@@ -19,7 +19,7 @@ import logging
 from typing import Optional, Tuple, Union, Callable
 
 # Local imports
-from .shared import _scalar_parser, is_esi_node, is_bic_node, user_input
+from .shared import _scalar_parser, is_esi_node, is_bic_node, user_input, user_yesno
 
 # Fetch logger
 log = logging.getLogger("ACME")
@@ -404,11 +404,7 @@ def _cleanup_old_acme_directories(
         no matter if `threshold_days` has been provided
     """
 
-    log.debug(
-        "Starting cleanup in directory: %s with threshold: %d days",
-        base_dir,
-        threshold_days,
-    )
+    log.debug("Scanning directory %s for left-over ACME folders", base_dir)
 
     # Get current time
     now = datetime.datetime.now()
@@ -453,6 +449,8 @@ def _cleanup_old_acme_directories(
             log.debug(msg)
             return
 
+    log.info("Cleanup requested with threshold: %d days", threshold_days)
+
     # Determine which directories to delete
     dirs_to_delete = []
     for dir_name, full_path in acme_dirs:
@@ -493,7 +491,7 @@ def _cleanup_old_acme_directories(
             except (OSError, PermissionError) as exc:
                 log.warning("Could not delete directory %s: %s", full_path, str(exc))
     else:
-        log.debug("No ACME directories need cleanup in %s", base_dir)
+        log.info("No ACME directories need cleanup in %s", base_dir)
 
 
 def validate_outputdir(
@@ -527,12 +525,8 @@ def validate_outputdir(
             else:
                 baseDir = os.path.dirname(os.path.abspath(inspect.getfile(func)))
 
-        # Clean up old ACME directories if requested
-        if cleanup_threshold_days is not None:
-            log.debug(
-                "Cleanup requested with threshold: %d days", cleanup_threshold_days
-            )
-            _cleanup_old_acme_directories(baseDir, cleanup_threshold_days, interactive)
+        # Scan for old ACME directories
+        _cleanup_old_acme_directories(baseDir, cleanup_threshold_days, interactive)
 
         outDir = os.path.join(
             baseDir, f"ACME_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
