@@ -380,8 +380,80 @@ def validate_n_workers(
     return nwrk
 
 
+def _cleanup_old_acme_directories(base_dir: str, threshold_days: int) -> None:
+    """
+    Clean up old ACME directories in the specified base directory
+    
+    Parameters
+    ----------
+    base_dir : str
+        Base directory to scan for ACME directories
+    threshold_days : int
+        Number of days threshold. If 0, delete all ACME directories.
+        If > 0, delete ACME directories older than threshold_days days.
+    """
+    import shutil
+    
+    log.debug("Starting cleanup in directory: %s with threshold: %d days", base_dir, threshold_days)
+    
+    # Get current time
+    now = datetime.datetime.now()
+    
+    # Scan for ACME directories
+    try:
+        entries = os.listdir(base_dir)
+    except (OSError, PermissionError) as exc:
+        log.warning("Could not scan directory %s for cleanup: %s", base_dir, str(exc))
+        return
+    
+    acme_dirs = []
+    for entry in entries:
+        if entry.startswith("ACME_"):
+            full_path = os.path.join(base_dir, entry)
+            if os.path.isdir(full_path):
+                acme_dirs.append((entry, full_path))
+    
+    if not acme_dirs:
+        log.debug("No ACME directories found in %s", base_dir)
+        return
+    
+    # Determine which directories to delete
+    dirs_to_delete = []
+    for dir_name, full_path in acme_dirs:
+        try:
+            # Get directory modification time
+            mtime = os.path.getmtime(full_path)
+            dir_time = datetime.datetime.fromtimestamp(mtime)
+            
+            # Calculate age in days
+            age_days = (now - dir_time).days
+            
+            # Check if directory should be deleted
+            if threshold_days == 0:
+                # Delete all ACME directories
+                dirs_to_delete.append((dir_name, full_path, age_days))
+            elif age_days > threshold_days:
+                # Delete directories older than threshold
+                dirs_to_delete.append((dir_name, full_path, age_days))
+                
+        except (OSError, PermissionError) as exc:
+            log.warning("Could not check modification time for %s: %s", full_path, str(exc))
+    
+    # Delete the directories
+    if dirs_to_delete:
+        log.debug("Found %d ACME directories to clean up", len(dirs_to_delete))
+        for dir_name, full_path, age_days in dirs_to_delete:
+            try:
+                shutil.rmtree(full_path)
+                log.info("Deleted old ACME directory %s (age: %d days)", dir_name, age_days)
+            except (OSError, PermissionError) as exc:
+                log.warning("Could not delete directory %s: %s", full_path, str(exc))
+    else:
+        log.debug("No ACME directories need cleanup in %s", base_dir)
+
+
 def validate_outputdir(
-    output_dir: Union[str, None], func: Optional[Callable] = None
+    output_dir: Union[str, None], func: Optional[Callable] = None, cleanup_threshold_days: Optional[int] = None
 ) -> str:
     """
     Coming soon...
@@ -400,13 +472,21 @@ def validate_outputdir(
     else:
         # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
         if is_esi_node() or is_bic_node():
-            outDir = f"/mnt/hpc/home/{getpass.getuser()}/"
+            baseDir = f"/mnt/hpc/home/{getpass.getuser()}/"
         else:  # pragma: no cover
             if func is None:
-                func = inspect.currentframe()
-            outDir = os.path.dirname(os.path.abspath(inspect.getfile(func)))
+                # Use current working directory for cleanup when no function is provided
+                baseDir = os.getcwd()
+            else:
+                baseDir = os.path.dirname(os.path.abspath(inspect.getfile(func)))
+        
+        # Clean up old ACME directories if requested
+        if cleanup_threshold_days is not None:
+            log.debug("Cleanup requested with threshold: %d days", cleanup_threshold_days)
+            _cleanup_old_acme_directories(baseDir, cleanup_threshold_days)
+        
         outDir = os.path.join(
-            outDir, f"ACME_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
+            baseDir, f"ACME_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
         )
     log.debug("Using output directory %s", outDir)
 

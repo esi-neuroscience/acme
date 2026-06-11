@@ -57,6 +57,7 @@ class ParallelMap(object):
         verbose: Optional[bool] = None,
         dryrun: bool = False,
         logfile: Optional[Union[bool, str]] = None,
+        cleanup_threshold_days: Optional[int] = None,
         **kwargs: Optional[Any]) -> None:
         """
         Context manager that executes user-defined functions in parallel
@@ -179,16 +180,21 @@ class ParallelMap(object):
             dry-run. The `dryrun` keyword is intended to to estimate memory consumption
             as well as runtime of worker jobs prior to the actual concurrent
             computation. See [1]_ and [2]_ for more information.
-        logfile : None or bool or str
-            If `None` (default) and ``write_worker_results = True``,
-            a logfile is created alongside the auto-generated on-disk results.
-            If `None` and ``write_worker_results = False``, no logfile is
-            created. To override this mechanism, either explicitly set
-            `logfile` to `True` or `False` to enforce or suppress logfile
-            creation.
-            Alternatively, the name of a custom log-file can be provided.
-            The verbosity of recorded runtime information can be controlled
-            via setting `verbose`. See [2]_ for more details.
+         logfile : None or bool or str
+             If `None` (default) and ``write_worker_results = True``,
+             a logfile is created alongside the auto-generated on-disk results.
+             If `None` and ``write_worker_results = False``, no logfile is
+             created. To override this mechanism, either explicitly set
+             `logfile` to `True` or `False` to enforce or suppress logfile
+             creation.
+             Alternatively, the name of a custom log-file can be provided.
+             The verbosity of recorded runtime information can be controlled
+             via setting `verbose`. See [2]_ for more details.
+         cleanup_threshold_days : None or int
+             If provided, clean up old ACME directories in the output directory.
+             If `None` (default), no cleanup is performed. If `0`, all existing
+             ACME directories are deleted. If a positive integer, delete ACME
+             directories older than the specified number of days.
 
         Returns
         -------
@@ -255,21 +261,22 @@ class ParallelMap(object):
         # Create an instance of `ACMEdaemon` that does the actual parallel computing work
         log.debug("Instantiating `ACMEdaemon`")
         self.daemon = ACMEdaemon(self,
-                                 n_workers=n_workers,
-                                 write_worker_results=write_worker_results,
-                                 output_dir=output_dir,
-                                 result_shape=result_shape,
-                                 result_dtype=result_dtype,
-                                 single_file=single_file,
-                                 write_pickle=write_pickle,
-                                 dryrun=dryrun,
-                                 partition=partition,
-                                 mem_per_worker=mem_per_worker,
-                                 setup_timeout=setup_timeout,
-                                 setup_interactive=setup_interactive,
-                                 stop_client=stop_client,
-                                 verbose=verbose,
-                                 logfile=logfile)
+                                  n_workers=n_workers,
+                                  write_worker_results=write_worker_results,
+                                  output_dir=output_dir,
+                                  result_shape=result_shape,
+                                  result_dtype=result_dtype,
+                                  single_file=single_file,
+                                  write_pickle=write_pickle,
+                                  dryrun=dryrun,
+                                  partition=partition,
+                                  mem_per_worker=mem_per_worker,
+                                  setup_timeout=setup_timeout,
+                                  setup_interactive=setup_interactive,
+                                  stop_client=stop_client,
+                                  verbose=verbose,
+                                  logfile=logfile,
+                                  cleanup_threshold_days=cleanup_threshold_days)
 
     def prepare_input(
             self,

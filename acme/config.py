@@ -73,6 +73,9 @@ class ACMEConfig:
     # Logging
     verbose: Optional[bool] = None
     logfile: Optional[Union[bool, str]] = None
+    
+    # Cleanup configuration
+    cleanup_threshold_days: Optional[int] = None
 
     # Internal state
     acme_func: Optional[Callable] = None
@@ -118,7 +121,7 @@ class ACMEConfig:
 
         # Validate output directory
         if self.write_worker_results:
-            self.output_dir = validate_outputdir(self.output_dir, self.func)
+            self.output_dir = validate_outputdir(self.output_dir, self.func, self.cleanup_threshold_days)
         else:
             self.output_dir = None
 
