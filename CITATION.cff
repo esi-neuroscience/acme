@@ -1,21 +1,18 @@
 authors:
-- affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
-    \ Max Planck Society"
+- affiliation: Ernst Strüngmann Institute of the Max Planck Society
   family-names: Fuertinger
   given-names: Stefan
   orcid: https://orcid.org/0000-0002-8118-036X
-- affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
-    \ Max Planck Society"
+- affiliation: Ernst Strüngmann Institute of the Max Planck Society
   family-names: Shapcott
   given-names: Katharine
   orcid: https://orcid.org/0000-0001-8618-5779
-- affiliation: "Ernst Str\xFCngmann Institute for Neuroscience in Cooperation with\
-    \ Max Planck Society"
+- affiliation: Ernst Strüngmann Institute of the Max Planck Society
   family-names: Schmiedt
   given-names: Joscha Tapani
   orcid: https://orcid.org/0000-0001-6233-1866
 cff-version: 1.1.0
-date-released: '2026-05-22'
+date-released: '2026-06-11'
 keywords:
 - high-performance computing
 - parallel computing
