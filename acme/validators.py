@@ -14,11 +14,12 @@ import os
 import datetime
 import inspect
 import getpass
+import shutil
 import logging
 from typing import Optional, Tuple, Union, Callable
 
 # Local imports
-from .shared import _scalar_parser, is_esi_node, is_bic_node
+from .shared import _scalar_parser, is_esi_node, is_bic_node, user_input
 
 # Fetch logger
 log = logging.getLogger("ACME")
@@ -380,43 +381,78 @@ def validate_n_workers(
     return nwrk
 
 
-def _cleanup_old_acme_directories(base_dir: str, threshold_days: int) -> None:
+def _cleanup_old_acme_directories(
+    base_dir: str,
+    threshold_days: Optional[int],
+    interactive: bool,
+    threshold_dir_count: int = 20,
+) -> None:
     """
     Clean up old ACME directories in the specified base directory
-    
+
     Parameters
     ----------
     base_dir : str
         Base directory to scan for ACME directories
-    threshold_days : int
+    threshold_days : int or None
         Number of days threshold. If 0, delete all ACME directories.
         If > 0, delete ACME directories older than threshold_days days.
+    interactive : bool
+        If `True` ask for confirmation before deleting anything
+    threshold_dir_count : int
+        If more than `threshold_dir_count` ACME folders are found, issue a warning,
+        no matter if `threshold_days` has been provided
     """
-    import shutil
-    
-    log.debug("Starting cleanup in directory: %s with threshold: %d days", base_dir, threshold_days)
-    
+
+    log.debug(
+        "Starting cleanup in directory: %s with threshold: %d days",
+        base_dir,
+        threshold_days,
+    )
+
     # Get current time
     now = datetime.datetime.now()
-    
+
     # Scan for ACME directories
     try:
         entries = os.listdir(base_dir)
     except (OSError, PermissionError) as exc:
         log.warning("Could not scan directory %s for cleanup: %s", base_dir, str(exc))
         return
-    
+
     acme_dirs = []
     for entry in entries:
         if entry.startswith("ACME_"):
             full_path = os.path.join(base_dir, entry)
             if os.path.isdir(full_path):
                 acme_dirs.append((entry, full_path))
-    
+
     if not acme_dirs:
         log.debug("No ACME directories found in %s", base_dir)
         return
-    
+
+    # No matter if cleanup was requested, issue a warning if "many" ACME directories
+    # were found - and ask to delete if we're running interactively
+    if threshold_days is None:
+        msg = "Found %d ACME directories in %s" % (len(acme_dirs), base_dir)
+        if len(acme_dirs) > threshold_dir_count:
+            log.warning(msg)
+            if interactive:
+                query = "Do you want to [k]eep these directories or delete entries older than N days?"
+                invalid_choice_msg = "Please pick a number between 1 and 99 days or respond with k to keep all"
+                choice = user_input(
+                    query,
+                    valid=["k"] + [str(x) for x in range(1, 100)],
+                    default="7",
+                    invalid_choice_msg=invalid_choice_msg,
+                )
+                if choice == "k":
+                    return
+                threshold_days = int(choice)
+        else:
+            log.debug(msg)
+            return
+
     # Determine which directories to delete
     dirs_to_delete = []
     for dir_name, full_path in acme_dirs:
@@ -424,10 +460,10 @@ def _cleanup_old_acme_directories(base_dir: str, threshold_days: int) -> None:
             # Get directory modification time
             mtime = os.path.getmtime(full_path)
             dir_time = datetime.datetime.fromtimestamp(mtime)
-            
+
             # Calculate age in days
             age_days = (now - dir_time).days
-            
+
             # Check if directory should be deleted
             if threshold_days == 0:
                 # Delete all ACME directories
@@ -435,17 +471,25 @@ def _cleanup_old_acme_directories(base_dir: str, threshold_days: int) -> None:
             elif age_days > threshold_days:
                 # Delete directories older than threshold
                 dirs_to_delete.append((dir_name, full_path, age_days))
-                
+
         except (OSError, PermissionError) as exc:
-            log.warning("Could not check modification time for %s: %s", full_path, str(exc))
-    
+            log.warning(
+                "Could not check modification time for %s: %s", full_path, str(exc)
+            )
+
     # Delete the directories
     if dirs_to_delete:
-        log.debug("Found %d ACME directories to clean up", len(dirs_to_delete))
+        log.info("Found %d ACME directories to clean up", len(dirs_to_delete))
+        if interactive:
+            if not user_yesno("Do you want to proceed?", default="no"):
+                log.info("No cleanup performed. ")
+                return
         for dir_name, full_path, age_days in dirs_to_delete:
             try:
                 shutil.rmtree(full_path)
-                log.info("Deleted old ACME directory %s (age: %d days)", dir_name, age_days)
+                log.info(
+                    "Deleted old ACME directory %s (age: %d days)", dir_name, age_days
+                )
             except (OSError, PermissionError) as exc:
                 log.warning("Could not delete directory %s: %s", full_path, str(exc))
     else:
@@ -453,7 +497,10 @@ def _cleanup_old_acme_directories(base_dir: str, threshold_days: int) -> None:
 
 
 def validate_outputdir(
-    output_dir: Union[str, None], func: Optional[Callable] = None, cleanup_threshold_days: Optional[int] = None
+    output_dir: Union[str, None],
+    func: Optional[Callable] = None,
+    cleanup_threshold_days: Optional[int] = None,
+    interactive: bool = True,
 ) -> str:
     """
     Coming soon...
@@ -479,12 +526,14 @@ def validate_outputdir(
                 baseDir = os.getcwd()
             else:
                 baseDir = os.path.dirname(os.path.abspath(inspect.getfile(func)))
-        
+
         # Clean up old ACME directories if requested
         if cleanup_threshold_days is not None:
-            log.debug("Cleanup requested with threshold: %d days", cleanup_threshold_days)
-            _cleanup_old_acme_directories(baseDir, cleanup_threshold_days)
-        
+            log.debug(
+                "Cleanup requested with threshold: %d days", cleanup_threshold_days
+            )
+            _cleanup_old_acme_directories(baseDir, cleanup_threshold_days, interactive)
+
         outDir = os.path.join(
             baseDir, f"ACME_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
         )

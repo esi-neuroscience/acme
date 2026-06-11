@@ -234,9 +234,10 @@ def user_yesno(msg: str, default: Optional[str] = None) -> bool:  # pragma: no c
 
 def user_input(  # pragma: no cover
     msg: str,
-    valid: Optional[List] = None,
+    valid: Optional[List[str]] = None,
     default: Optional[str] = None,
     timeout: Optional[float] = None,
+    invalid_choice_msg: Optional[str] = None,
 ) -> str:
     """
     ACME specific version of user-input query
@@ -254,6 +255,10 @@ def user_input(  # pragma: no cover
             assert default in valid
         suffix += f"[Default: '{default}'] "
     query = msg + suffix
+
+    # Prepare options hint if invalid input is provided
+    if invalid_choice_msg is None:
+        invalid_choice_msg = "Please respond with " + " or ".join(valid)
 
     # Jupyter only supports hard-blocking `input` fields
     if is_jupyter():
@@ -276,7 +281,7 @@ def user_input(  # pragma: no cover
         if default is not None and choice == "":
             return default
         elif valid is not None and choice not in valid:
-            print("Please respond with " + " or ".join(valid))
+            print(invalid_choice_msg)
         else:
             return choice
 
