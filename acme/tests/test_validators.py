@@ -1,8 +1,7 @@
 #
 # Test module for ACME validation functions
 #
-# Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
-# in Cooperation with Max Planck Society
+# Copyright © 2026 Ernst Strüngmann Institute (ESI) of the Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -299,9 +298,7 @@ class TestValidateNWorkers:
 
     def test_invalid_string(self):
         """Test that invalid string raises ValueError"""
-        with pytest.raises(
-            ValueError, match="has to be 'auto' or an integer >= 1"
-        ):
+        with pytest.raises(ValueError, match="has to be 'auto' or an integer >= 1"):
             validate_n_workers("invalid", 10, True)
 
     def test_valid_integer(self):
