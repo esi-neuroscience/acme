@@ -1,3 +1,9 @@
+<!--
+Copyright (c) 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
+in Cooperation with Max Planck Society
+SPDX-License-Identifier: CC0-1.0
+-->
+
 # ACME (Asynchronous Computing Made ESI) - Agent Instructions
 
 ## Package Structure
