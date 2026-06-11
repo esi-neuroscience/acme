@@ -252,7 +252,7 @@ def user_input(  # pragma: no cover
         default = default.replace("[", "").replace("]", "")
         if valid is not None:
             assert default in valid
-        suffix = f"[Default: '{default}'] "
+        suffix += f"[Default: '{default}'] "
     query = msg + suffix
 
     # Jupyter only supports hard-blocking `input` fields
