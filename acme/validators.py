@@ -445,6 +445,9 @@ def _cleanup_old_acme_directories(
                 if choice == "k":
                     return
                 threshold_days = int(choice)
+            else:
+                # Non-interactive mode: just warn and return without cleanup
+                return
         else:
             log.debug(msg)
             return
