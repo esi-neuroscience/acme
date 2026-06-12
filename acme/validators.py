@@ -11,6 +11,7 @@ import numbers
 import numpy as np
 import tempfile
 import os
+import sys
 import datetime
 import inspect
 import getpass
@@ -531,7 +532,9 @@ def validate_outputdir(
             else:
                 baseDir = os.path.dirname(os.path.abspath(inspect.getfile(func)))
 
-        # Scan for old ACME directories
+        # Scan for old ACME directories (turn off user query under pytest)
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            interactive = False
         _cleanup_old_acme_directories(baseDir, cleanup_threshold_days, interactive)
 
         outDir = os.path.join(
@@ -577,3 +580,24 @@ def validate_partition(partition: str) -> None:
             raise ValueError(err)
     log.debug("Found SLURM partition selection %s", partition)
     return
+
+
+def validate_setup_interactive(setup_interactive: bool) -> bool:
+    """
+    Coming soon
+    """
+
+    # Check type
+    validate_boolean(setup_interactive, "setup_interactive")
+
+    # Change to `False` if `True` but running non-interactively
+    if setup_interactive:
+        try:
+            return sys.stdin is not None and sys.stdin.isatty()
+        except (AttributeError, OSError, ValueError):
+            log.warning(
+                "Cannot read from stdin - setting `setup_interactive` to `False`"
+            )
+            return False
+
+    return setup_interactive
