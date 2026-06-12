@@ -479,7 +479,10 @@ def _cleanup_old_acme_directories(
     if dirs_to_delete:
         log.info("Found %d ACME directories to clean up", len(dirs_to_delete))
         if interactive:
-            if not user_yesno("Do you want to proceed?", default="no"):
+            query = "Do you want to proceed removing %d directories?" % (
+                len(dirs_to_delete)
+            )
+            if not user_yesno(query, default="no"):
                 log.info("No cleanup performed. ")
                 return
         for dir_name, full_path, age_days in dirs_to_delete:
