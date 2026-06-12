@@ -12,6 +12,8 @@ import numpy as np
 import os
 import tempfile
 import types
+import datetime
+import time
 
 # Local imports
 from acme.validators import (
@@ -333,35 +335,32 @@ class TestCleanupOldACMEDirectories:
 
     def test_cleanup_old_acme_directories_basic(self):
         """Test that old ACME directories are cleaned up based on age threshold"""
-        import datetime
-        import os
-        import time
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create some old ACME directories (5 days old)
             old_dir1 = os.path.join(tmpdir, "ACME_20230101-120000-000001")
             old_dir2 = os.path.join(tmpdir, "ACME_20230101-120000-000002")
             os.makedirs(old_dir1)
             os.makedirs(old_dir2)
-            
+
             # Set modification time to 5 days ago
             five_days_ago = time.time() - (5 * 24 * 60 * 60)
             os.utime(old_dir1, (five_days_ago, five_days_ago))
             os.utime(old_dir2, (five_days_ago, five_days_ago))
-            
+
             # Create a recent ACME directory (1 day old)
             recent_dir = os.path.join(tmpdir, "ACME_20230106-120000-000001")
             os.makedirs(recent_dir)
             one_day_ago = time.time() - (1 * 24 * 60 * 60)
             os.utime(recent_dir, (one_day_ago, one_day_ago))
-            
+
             # Create a non-ACME directory (should be ignored)
             other_dir = os.path.join(tmpdir, "other_directory")
             os.makedirs(other_dir)
-            
+
             # Run cleanup with threshold of 2 days (should delete the 5-day-old dirs)
             _cleanup_old_acme_directories(tmpdir, threshold_days=2, interactive=False)
-            
+
             # Verify old directories are deleted
             assert not os.path.exists(old_dir1)
             assert not os.path.exists(old_dir2)
@@ -374,23 +373,23 @@ class TestCleanupOldACMEDirectories:
         """Test that threshold_days=0 deletes all ACME directories"""
         import os
         import time
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create some ACME directories with different ages
             dir1 = os.path.join(tmpdir, "ACME_20230101-120000-000001")
             dir2 = os.path.join(tmpdir, "ACME_20230106-120000-000001")
             os.makedirs(dir1)
             os.makedirs(dir2)
-            
+
             # Set different modification times
             five_days_ago = time.time() - (5 * 24 * 60 * 60)
             one_day_ago = time.time() - (1 * 24 * 60 * 60)
             os.utime(dir1, (five_days_ago, five_days_ago))
             os.utime(dir2, (one_day_ago, one_day_ago))
-            
+
             # Run cleanup with threshold of 0 (should delete ALL ACME dirs)
             _cleanup_old_acme_directories(tmpdir, threshold_days=0, interactive=False)
-            
+
             # Verify all ACME directories are deleted
             assert not os.path.exists(dir1)
             assert not os.path.exists(dir2)
@@ -400,7 +399,7 @@ class TestCleanupOldACMEDirectories:
         import os
         import time
         import logging
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create many ACME directories (more than threshold_dir_count=20)
             for i in range(25):
@@ -408,10 +407,12 @@ class TestCleanupOldACMEDirectories:
                 os.makedirs(dir_name)
                 five_days_ago = time.time() - (5 * 24 * 60 * 60)
                 os.utime(dir_name, (five_days_ago, five_days_ago))
-            
+
             # Run cleanup with no threshold (should not delete anything)
-            _cleanup_old_acme_directories(tmpdir, threshold_days=None, interactive=False)
-            
+            _cleanup_old_acme_directories(
+                tmpdir, threshold_days=None, interactive=False
+            )
+
             # Verify no directories are deleted
             remaining_dirs = [d for d in os.listdir(tmpdir) if d.startswith("ACME_")]
             assert len(remaining_dirs) == 25
@@ -419,14 +420,14 @@ class TestCleanupOldACMEDirectories:
     def test_cleanup_no_acme_directories(self):
         """Test that function handles directories with no ACME folders gracefully"""
         import os
-        
+
         with tempfile.TemporaryDirectory() as tmpdir:
             # Create only non-ACME directories
             other_dir = os.path.join(tmpdir, "other_directory")
             os.makedirs(other_dir)
-            
+
             # Run cleanup (should do nothing and not raise errors)
             _cleanup_old_acme_directories(tmpdir, threshold_days=10, interactive=False)
-            
+
             # Verify non-ACME directory is untouched
             assert os.path.exists(other_dir)
