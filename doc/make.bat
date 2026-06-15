@@ -1,6 +1,7 @@
 REM
-REM Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
+REM Copyright © 2020-2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 REM in Cooperation with Max Planck Society
+REM Copyright © 2026 Ernst Strüngmann Institute (ESI) of the Max Planck Society
 REM
 REM SPDX-License-Identifier: BSD-3-Clause
 REM

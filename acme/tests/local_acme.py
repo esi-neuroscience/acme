@@ -1,8 +1,9 @@
 #
 # Simple script for testing acme w/o pip-installing it
 #
-# Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
+# Copyright © 2020-2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 # in Cooperation with Max Planck Society
+# Copyright © 2026 Ernst Strüngmann Institute (ESI) of the Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -14,6 +15,7 @@ import h5py
 # Add acme to Python search path
 import os
 import sys
+
 acme_path = os.path.abspath(".." + os.sep + "..")
 if acme_path not in sys.path:
     sys.path.insert(0, acme_path)
@@ -22,9 +24,9 @@ if acme_path not in sys.path:
 from acme import ParallelMap, esi_cluster_setup
 
 
-
 def f(x, y, z=3):
     return (x + y) * z
+
 
 # import time
 
@@ -39,20 +41,30 @@ def f(x, y, z=3):
 # def arr_test(x, y):
 #     return x + y
 
-# # Prepare code to be executed using, e.g., iPython's `%run` magic command
-# if __name__ == "__main__":
+# Prepare code to be executed using, e.g., iPython's `%run` magic command
+if __name__ == "__main__":
 
-#     # Test stuff within here...
-#     client = esi_cluster_setup(partition="8GBXS", n_workers=1)
-#     # with ParallelMap(f, [elem * np.ones((3,)) for elem in [2, 4, 6, 8]], 4, result_shape=(None, np.inf), verbose=True, single_file=True) as pmap:
-#     #     pmap.compute()
+    # # Test stuff within here...
+    # client = esi_cluster_setup(partition="8GBXS", n_workers=1)
+    # # with ParallelMap(f, [elem * np.ones((3,)) for elem in [2, 4, 6, 8]], 4, result_shape=(None, np.inf), verbose=True, single_file=True) as pmap:
+    # #     pmap.compute()
 
-#     with ParallelMap(f, [elem * np.ones((3, 3)) for elem in [2, 4, 6, 8]], 4, result_shape=(np.inf, None, 3), verbose=True, single_file=True, logfile="asdf.txt") as pmap:
-#         pmap.compute(debug=True)
+    pmap = ParallelMap(f, [2, 4, 6, 8], 4, verbose=False)
 
-#     h5f = h5py.File(pmap.results_container, "r")
-#     dset = h5f["result_0"]
+    # with ParallelMap(
+    #     f,
+    #     [elem * np.ones((3, 3)) for elem in [2, 4, 6, 8]],
+    #     4,
+    #     result_shape=(np.inf, None, 3),
+    #     verbose=True,
+    #     single_file=True,
+    #     logfile="asdf.txt",
+    # ) as pmap:
+    #     pmap.compute(debug=True)
 
-#     payloadDir = pmap.results_container.replace(".h5", "_payload")
-#     ff = h5py.File(f"{payloadDir}/f_0.h5", "r")
-#     subset = ff["result_0"]
+    # h5f = h5py.File(pmap.results_container, "r")
+    # dset = h5f["result_0"]
+
+    # payloadDir = pmap.results_container.replace(".h5", "_payload")
+    # ff = h5py.File(f"{payloadDir}/f_0.h5", "r")
+    # subset = ff["result_0"]

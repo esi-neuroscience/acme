@@ -1,0 +1,5 @@
+version = 1
+SPDX-PackageName = "esi-acme"
+SPDX-PackageSupplier = "Stefan Fürtinger <stefan.fuertinger@esi-frankfurt.de>"
+SPDX-PackageDownloadLocation = "https://esi-acme.readthedocs.io/"
+annotations = []

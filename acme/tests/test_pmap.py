@@ -1,8 +1,9 @@
 #
 # Testing module for ACME's `ParallelMap` interface
 #
-# Copyright © 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
+# Copyright © 2020-2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 # in Cooperation with Max Planck Society
+# Copyright © 2026 Ernst Strüngmann Institute (ESI) of the Max Planck Society
 #
 # SPDX-License-Identifier: BSD-3-Clause
 #
@@ -32,8 +33,14 @@ from numpy.typing import NDArray
 from typing import Any, Optional, Union, Dict
 
 # Import main actors here
-from acme import ParallelMap, ACMEdaemon, cluster_cleanup, local_cluster_setup, esi_cluster_setup
-from conftest import skip_if_not_linux, useSLURM, onESI, onBIC, onx86, defaultQ, setup_func # type: ignore
+from acme import (
+    ParallelMap,
+    ACMEdaemon,
+    cluster_cleanup,
+    local_cluster_setup,
+    esi_cluster_setup,
+)
+from conftest import skip_if_not_linux, useSLURM, onESI, onBIC, onx86, defaultQ, setup_func  # type: ignore
 
 # Define custom types
 realArrayLike = Union[float, NDArray[np.float64]]
@@ -42,32 +49,32 @@ realArray = NDArray[np.float64]
 # Get machine architecture
 mArch = platform.machine()
 
+# Sleep period (in s) for dask to collect its bearings when using an existing client
+sleeptime = 1.0
+
 
 # Functions that act as stand-ins for user-funcs
-def simple_func(
-        x: float,
-        y: float,
-        z: float = 3) -> float:
+def simple_func(x: float, y: float, z: float = 3) -> float:
     return (x + y) * z
 
+
 def medium_func(
-        x: realArray,
-        y: realArrayLike,
-        z: realArrayLike = 3,
-        w: NDArray = np.ones((3, 3))) -> realArrayLike:
+    x: realArray, y: realArrayLike, z: realArrayLike = 3, w: NDArray = np.ones((3, 3))
+) -> realArrayLike:
     return (sum(x) + y) * z * w.max()
 
-def hard_func(
-        x: realArray,
-        y: realArrayLike,
-        z: realArrayLike = 3,
-        w: realArray = np.zeros((3, 1)),
-        **kwargs: Optional[Any]) -> tuple[realArrayLike, realArray]:
-    return sum(x) + y,  z * w                                                   # type: ignore
 
-def lowpass_simple(
-        h5name: str,
-        channel_no: int) -> realArray:
+def hard_func(
+    x: realArray,
+    y: realArrayLike,
+    z: realArrayLike = 3,
+    w: realArray = np.zeros((3, 1)),
+    **kwargs: Optional[Any],
+) -> tuple[realArrayLike, realArray]:
+    return sum(x) + y, z * w  # type: ignore
+
+
+def lowpass_simple(h5name: str, channel_no: int) -> realArray:
     with h5py.File(h5name, "r") as h5f:
         channel = h5f["data"][:, channel_no]
         b = h5f["data"].attrs["b"]
@@ -75,9 +82,8 @@ def lowpass_simple(
     res = signal.filtfilt(b, a, channel, padlen=200)
     return res
 
-def lowpass_medium(
-        h5name: str,
-        channel_no: int) -> tuple[realArray, int, float, float]:
+
+def lowpass_medium(h5name: str, channel_no: int) -> tuple[realArray, int, float, float]:
     with h5py.File(h5name, "r") as h5f:
         channel = h5f["data"][:, channel_no]
         b = h5f["data"].attrs["b"]
@@ -85,15 +91,17 @@ def lowpass_medium(
     res = signal.filtfilt(b, a, channel, padlen=200)
     return res, channel_no, b, a
 
+
 def lowpass_hard(
-        arr_like: realArray,
-        b: float,
-        a: float,
-        res_dir: str,
-        res_base: str = "lowpass_hard_",
-        dset_name: str = "custom_dset_name",
-        padlen: int = 200,
-        taskID: Optional[int] = None) -> None:
+    arr_like: realArray,
+    b: float,
+    a: float,
+    res_dir: str,
+    res_base: str = "lowpass_hard_",
+    dset_name: str = "custom_dset_name",
+    padlen: int = 200,
+    taskID: Optional[int] = None,
+) -> None:
     channel = arr_like[:, taskID]
     res = signal.filtfilt(b, a, channel, padlen=padlen)
     h5name = os.path.join(res_dir, f"{res_base}{taskID}.h5")
@@ -101,49 +109,52 @@ def lowpass_hard(
         h5f.create_dataset(dset_name, data=res)
     return
 
+
 def pickle_func(
-        arr: realArray,
-        b: float,
-        a: float,
-        channel_no: int,
-        sabotage_hdf5: bool = False) -> Union[Dict[str, float], realArray]:
+    arr: realArray, b: float, a: float, channel_no: int, sabotage_hdf5: bool = False
+) -> Union[Dict[str, float], realArray]:
     res = signal.filtfilt(b, a, arr[:, channel_no], padlen=200)
     if sabotage_hdf5:
         if channel_no % 2 == 0:
-            return {"b" : b}
+            return {"b": b}
     return res
 
+
 def memtest_func(
-        x: float,
-        y: float,
-        z: float = 3,
-        arrsize: float = 2,
-        sleeper: int = 300) -> float:
+    x: float, y: float, z: float = 3, arrsize: float = 2, sleeper: int = 300
+) -> float:
     fSize = np.dtype("float").itemsize
     time.sleep(2)
-    arr = np.ones((int(arrsize * 1024**3 / fSize), ))   # `arrsize` denotes array size in GB
+    arr = np.ones(
+        (int(arrsize * 1024**3 / fSize),)
+    )  # `arrsize` denotes array size in GB
     time.sleep(sleeper)
     return (x + y) * z * arr.max()
 
+
 def github_f(x, y, z=3):
     return (x + y) * z
+
 
 def github_mock_processing(val, mock_file):
     data = np.load(mock_file)
     return val * data
 
+
 def github_f2(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
     return (sum(x) + y) * z * w.max()
 
+
 def github_f3(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
     return (sum(x) + y) * z * w.max()
+
 
 def github_g(x, y, z=3, w=np.zeros((3, 1)), **kwargs):
     return (max(x) + y) * z * w.sum()
 
 
 # Main testing class
-class TestParallelMap():
+class TestParallelMap:
 
     # Construct linear combination of low- and high-frequency sine waves
     # and use an IIR filter to reconstruct the low-frequency component
@@ -197,62 +208,176 @@ class TestParallelMap():
         outDirs = []
 
         # Basic functionality w/simplest conceivable user-func
-        pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(simple_func, [2, 4, 6, 8], y=4, partition=defaultQ, setup_interactive=False)  # pos arg referenced via kwarg, cfg #2
-        outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(simple_func, 0, 4, z=[3, 4, 5, 6], partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=2, partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
+        pmap = ParallelMap(
+            simple_func, [2, 4, 6, 8], 4, partition=defaultQ, setup_interactive=False
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
+        pmap = ParallelMap(
+            simple_func, [2, 4, 6, 8], y=4, partition=defaultQ, setup_interactive=False
+        )  # pos arg referenced via kwarg, cfg #2
+        outDirs.append(pmap.daemon.config.output_dir)
+        pmap = ParallelMap(
+            simple_func,
+            0,
+            4,
+            z=[3, 4, 5, 6],
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
+        pmap = ParallelMap(
+            simple_func,
+            [2, 4, 6, 8],
+            [2, 2],
+            n_inputs=2,
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
 
         # User func has `np.ndarray` as keyword
-        pmap = ParallelMap(medium_func, [2, 4, 6, 8], y=[2, 2], n_inputs=2, partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(medium_func, None, None, w=[np.ones((3, 3)), 2 * np.ones((3,3))], partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(medium_func, None, None, z=np.zeros((3,)), partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(medium_func, None, None, z=np.zeros((3, 1)), partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
+        pmap = ParallelMap(
+            medium_func,
+            [2, 4, 6, 8],
+            y=[2, 2],
+            n_inputs=2,
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
+        pmap = ParallelMap(
+            medium_func,
+            None,
+            None,
+            w=[np.ones((3, 3)), 2 * np.ones((3, 3))],
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
+        pmap = ParallelMap(
+            medium_func,
+            None,
+            None,
+            z=np.zeros((3,)),
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
+        pmap = ParallelMap(
+            medium_func,
+            None,
+            None,
+            z=np.zeros((3, 1)),
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
 
         # Lots of ways for this to go wrong...
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], 2, w=np.ones((3,)), partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], y=22, w=np.ones((7, 1)), partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(hard_func, np.ones((3,)), 1, w=np.ones((7, 1)), partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2, partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
-        pmap = ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=4, partition=defaultQ, setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
+        pmap = ParallelMap(
+            hard_func,
+            [2, 4, 6, 8],
+            2,
+            w=np.ones((3,)),
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
+        pmap = ParallelMap(
+            hard_func,
+            [2, 4, 6, 8],
+            y=22,
+            w=np.ones((7, 1)),
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
+        pmap = ParallelMap(
+            hard_func,
+            np.ones((3,)),
+            1,
+            w=np.ones((7, 1)),
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
+        pmap = ParallelMap(
+            hard_func,
+            [2, 4, 6, 8],
+            [2, 2],
+            z=np.array([1, 2]),
+            w=np.ones((8, 1)),
+            n_inputs=2,
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
+        pmap = ParallelMap(
+            hard_func,
+            [2, 4, 6, 8],
+            [2, 2],
+            w=np.ones((8, 1)),
+            n_inputs=4,
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
 
         # Ensure erroneous/ambiguous setups trigger the appropriate errors:
         # not enough positional args
         with pytest.raises(ValueError) as valerr:
             ParallelMap(simple_func, 4, setup_interactive=False)
-        assert "simple_func expects 2 positional arguments ('x', 'y'), found 1" in str(valerr.value)
+        assert "simple_func expects 2 positional arguments ('x', 'y'), found 1" in str(
+            valerr.value
+        )
         # invalid kwargs
         with pytest.raises(ValueError) as valerr:
             ParallelMap(simple_func, 4, 4, z=3, w=4, setup_interactive=False)
-        assert "simple_func accepts at maximum 1 keyword arguments ('z'), found 2" in str(valerr.value)
+        assert (
+            "simple_func accepts at maximum 1 keyword arguments ('z'), found 2"
+            in str(valerr.value)
+        )
         # ill-posed parallelization: two candidate lists for input distribution
         with pytest.raises(ValueError) as valerr:
             ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], setup_interactive=False)
-        assert "automatic input distribution failed: found 2 objects containing 2 to 4 elements" in str(valerr.value)
+        assert (
+            "automatic input distribution failed: found 2 objects containing 2 to 4 elements"
+            in str(valerr.value)
+        )
         # ill-posed parallelization: two candidate lists for input distribution (`x` and `w`)
         with pytest.raises(ValueError) as valerr:
-            ParallelMap(medium_func, [1, 2, 3], None, w=[np.ones((3,3)), 2 * np.ones((3,3))], setup_interactive=False)
-        assert "automatic input distribution failed: found 2 objects containing 2 to 3 elements." in str(valerr.value)
+            ParallelMap(
+                medium_func,
+                [1, 2, 3],
+                None,
+                w=[np.ones((3, 3)), 2 * np.ones((3, 3))],
+                setup_interactive=False,
+            )
+        assert (
+            "automatic input distribution failed: found 2 objects containing 2 to 3 elements."
+            in str(valerr.value)
+        )
         # invalid input spec
         with pytest.raises(ValueError) as valerr:
-            ParallelMap(simple_func, [2, 4, 6, 8], [2, 2], n_inputs=3, setup_interactive=False)
-        assert "No object has required length of 3 matching `n_inputs`" in str(valerr.value)
+            ParallelMap(
+                simple_func, [2, 4, 6, 8], [2, 2], n_inputs=3, setup_interactive=False
+            )
+        assert "No object has required length of 3 matching `n_inputs`" in str(
+            valerr.value
+        )
         # invalid input spec: `w` expects a NumPy array, thus it is not considered for input distribution
         with pytest.raises(ValueError) as valerr:
-            ParallelMap(hard_func, [2, 4, 6, 8], [2, 2], w=np.ones((8, 1)), n_inputs=8, setup_interactive=False)
-        assert "No object has required length of 8 matching `n_inputs`" in str(valerr.value)
+            ParallelMap(
+                hard_func,
+                [2, 4, 6, 8],
+                [2, 2],
+                w=np.ones((8, 1)),
+                n_inputs=8,
+                setup_interactive=False,
+            )
+        assert "No object has required length of 8 matching `n_inputs`" in str(
+            valerr.value
+        )
 
         # Check if other parameters  are parsed correctly
         with pytest.raises(TypeError):
@@ -266,23 +391,47 @@ class TestParallelMap():
         with pytest.raises(TypeError):
             ParallelMap(simple_func, [2, 4, 6, 8], 4, n_inputs={})
         with pytest.raises(TypeError):
-            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, write_worker_results="invalid")
+            ParallelMap(
+                simple_func,
+                [2, 4, 6, 8],
+                4,
+                partition=defaultQ,
+                write_worker_results="invalid",
+            )
         with pytest.raises(TypeError):
-            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, single_file="invalid")
+            ParallelMap(
+                simple_func, [2, 4, 6, 8], 4, partition=defaultQ, single_file="invalid"
+            )
         with pytest.raises(TypeError):
-            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, write_pickle="invalid")
+            ParallelMap(
+                simple_func, [2, 4, 6, 8], 4, partition=defaultQ, write_pickle="invalid"
+            )
         with pytest.raises(TypeError):
             ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, logfile=3)
         with pytest.raises(IOError):
-            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, logfile=os.path.dirname(os.path.realpath(__file__)))
+            ParallelMap(
+                simple_func,
+                [2, 4, 6, 8],
+                4,
+                partition=defaultQ,
+                logfile=os.path.dirname(os.path.realpath(__file__)),
+            )
         with pytest.raises(TypeError):
             ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, output_dir=2)
         with pytest.raises(OSError):
-            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, output_dir="/path/to/nowhere")
+            ParallelMap(
+                simple_func,
+                [2, 4, 6, 8],
+                4,
+                partition=defaultQ,
+                output_dir="/path/to/nowhere",
+            )
         with pytest.raises(TypeError):
             ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, stop_client=3)
         with pytest.raises(ValueError):
-            ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, stop_client="not-auto")
+            ParallelMap(
+                simple_func, [2, 4, 6, 8], 4, partition=defaultQ, stop_client="not-auto"
+            )
 
         # Check parameters that are only parsed if a new client has been started
         if testclient is None:
@@ -291,36 +440,48 @@ class TestParallelMap():
                 with pytest.raises(TypeError):
                     ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=3)
             with pytest.raises(ValueError):
-                ParallelMap(simple_func, [2, 4, 6, 8], 4, partition=defaultQ, n_workers="invalid")
+                ParallelMap(
+                    simple_func,
+                    [2, 4, 6, 8],
+                    4,
+                    partition=defaultQ,
+                    n_workers="invalid",
+                )
 
             # start a client for real
             cluster_cleanup()
-            pmap = ParallelMap(simple_func,
-                               [2, 4, 6, 8],
-                               4,
-                               partition=defaultQ,
-                               n_workers=1,
-                               setup_interactive=False)
-            outDirs.append(pmap.daemon.out_dir)
+            pmap = ParallelMap(
+                simple_func,
+                [2, 4, 6, 8],
+                4,
+                partition=defaultQ,
+                n_workers=1,
+                setup_interactive=False,
+            )
+            outDirs.append(pmap.daemon.config.output_dir)
 
             with pytest.raises(TypeError):
                 pmap.daemon.compute(debug="invalid")
 
             # Kill our single worker and ensure ACME takes note
-            client = pmap.daemon.client
-            client.retire_workers(list(client.scheduler_info()['workers']), close_workers=True)
+            client = pmap.daemon.config.client
+            client.retire_workers(
+                list(client.scheduler_info()["workers"]), close_workers=True
+            )
             with pytest.raises(RuntimeError) as rerr:
                 pmap.daemon.compute()
             assert "no active workers found" in str(rerr.value)
 
             # Annihilate client slot and ensure pmap does not do anything funky
-            pmap.daemon.client = None
+            pmap.daemon.config.client = None
             assert pmap.compute() is None
 
         # Finally, test ACMEdaemon only accepts `ParallelMap` objects
         with pytest.raises(TypeError) as tperr:
             ACMEdaemon("invalid")
-        assert "`pmap` has to be a `ParallelMap` instance, not <class 'str'>" in str(tperr.value)
+        assert "`pmap` has to be a `ParallelMap` instance, not <class 'str'>" in str(
+            tperr.value
+        )
 
         # Clean up testing folder and any running clients
         if testclient is None:
@@ -340,19 +501,19 @@ class TestParallelMap():
 
         with ParallelMap(github_f, [2, 4, 6, 8], 4) as pmap:
             filenames = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         out = np.zeros((4,))
         with h5py.File(pmap.results_container, "r") as h5f:
             for k, key in enumerate(h5f.keys()):
-                out[k] = h5f[key]["result_0"][()]
+                out[k] = np.squeeze(h5f[key]["result_0"][()])
         assert np.array_equal(out, expected)
 
         with ParallelMap(github_f, [2, 4, 6, 8], 4, result_shape=(None,)) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
         with h5py.File(pmap.results_container, "r") as h5f:
-            out == h5f["result_0"][()] # returns a NumPy array of shape (4,)
+            out == h5f["result_0"][()]  # returns a NumPy array of shape (4,)
         assert np.array_equal(out, expected)
 
         mockName = f"mock_data_{mArch}"
@@ -370,28 +531,52 @@ class TestParallelMap():
         mock_file = os.path.join(tempDir, "mock_data.npy")
         np.save(mock_file, mock_data)
 
-        with ParallelMap(github_mock_processing, [2, 4, 6, 8], mock_file, result_shape=(None, nChannels, np.inf)) as pmap:
+        with ParallelMap(
+            github_mock_processing,
+            [2, 4, 6, 8],
+            mock_file,
+            result_shape=(None, nChannels, np.inf),
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         with h5py.File(pmap.results_container, "r") as h5f:
-            mock_processed = h5f["result_0"][()] # returns a NumPy array of shape (4, nChannels, nSamples)
+            mock_processed = h5f["result_0"][
+                ()
+            ]  # returns a NumPy array of shape (4, nChannels, nSamples)
         for k, val in enumerate([2, 4, 6, 8]):
             assert np.array_equal(mock_processed[k], val * mock_data)
 
         with ParallelMap(github_f, [2, 4, 6, 8], 4, write_worker_results=False) as pmap:
-            result = pmap.compute() # returns a 4-element list
+            result = pmap.compute()  # returns a 4-element list
         assert result == expected
-        with ParallelMap(github_f, [2, 4, 6, 8], 4, write_worker_results=False, result_shape=(None,)) as pmap:
-            result = pmap.compute() # returns a NumPy array of shape (4,)
+        with ParallelMap(
+            github_f, [2, 4, 6, 8], 4, write_worker_results=False, result_shape=(None,)
+        ) as pmap:
+            result = pmap.compute()  # returns a NumPy array of shape (4,)
         assert np.array_equal(out, expected)
 
-        expected = list(map(github_f2, 2*[[2, 4, 6, 8]], [2, 2], np.array([1, 2]), 2*[np.ones((8, 1))]))
+        expected = list(
+            map(
+                github_f2,
+                2 * [[2, 4, 6, 8]],
+                [2, 2],
+                np.array([1, 2]),
+                2 * [np.ones((8, 1))],
+            )
+        )
 
-        pmap = ParallelMap(github_f2, [2, 4, 6, 8], [2, 2], z=np.array([1, 2]), w=np.ones((8, 1)), n_inputs=2)
+        pmap = ParallelMap(
+            github_f2,
+            [2, 4, 6, 8],
+            [2, 2],
+            z=np.array([1, 2]),
+            w=np.ones((8, 1)),
+            n_inputs=2,
+        )
         with pmap as p:
             p.compute()
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         out = []
         with h5py.File(pmap.daemon.results_container, "r") as h5f:
             for k, key in enumerate(h5f.keys()):
@@ -408,15 +593,17 @@ class TestParallelMap():
 
         if useSLURM:
             if onESI or onBIC:
-                client = setup_func(partition=defaultQ, n_workers=n_workers, interactive=False)
+                client = setup_func(
+                    partition=defaultQ, n_workers=n_workers, interactive=False
+                )
         else:
             client = local_cluster_setup(interactive=False)
 
-        expected = list(map(github_f3, n_workers*[x], y, list(z), n_workers*[w]))
+        expected = list(map(github_f3, n_workers * [x], y, list(z), n_workers * [w]))
         pmap = ParallelMap(github_f3, x, y, z=z, w=w, n_inputs=n_workers)
         with pmap as p:
             p.compute()
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         out = []
         with h5py.File(pmap.daemon.results_container, "r") as h5f:
             for k, key in enumerate(h5f.keys()):
@@ -425,11 +612,11 @@ class TestParallelMap():
 
         time.sleep(2.0)
 
-        expected = list(map(github_g, n_workers*[x], y, list(z), n_workers*[w]))
+        expected = list(map(github_g, n_workers * [x], y, list(z), n_workers * [w]))
         pmap = ParallelMap(github_g, x, y, z=z, w=w, n_inputs=n_workers)
         with pmap as p:
             p.compute()
-        outDirs.append(pmap.daemon.out_dir)
+        outDirs.append(pmap.daemon.config.output_dir)
         out = []
         with h5py.File(pmap.daemon.results_container, "r") as h5f:
             for k, key in enumerate(h5f.keys()):
@@ -455,31 +642,37 @@ class TestParallelMap():
             setup_func(partition=defaultQ, n_workers=self.nChannels, interactive=False)
 
         # Parallelize across channels, write results to disk
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             resOnDisk = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure each compute run generated a dedicated HDF5 file
-        assert len(pmap.kwargv["outFile"]) == pmap.n_calls
+        assert len(pmap.config.kwargv["outFile"]) == pmap.config.n_calls
 
         # Query auto-generated output directory
-        outDirContents = glob(os.path.join(pmap.out_dir, "*"))
+        outDirContents = glob(os.path.join(pmap.config.output_dir, "*"))
         payloadDir = pmap.results_container.replace(".h5", "_payload")
         assert pmap.results_container in outDirContents
         assert payloadDir in outDirContents
         resFiles = glob(os.path.join(payloadDir, "*.h5"))
-        assert len(resFiles) == pmap.n_calls
+        assert len(resFiles) == pmap.config.n_calls
         assert all(fle in resFiles for fle in resOnDisk)
         assert all(os.path.isfile(fle) for fle in resOnDisk)
         log = logging.getLogger("ACME")
-        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        logFileList = [
+            handler.target.baseFilename
+            for handler in log.handlers
+            if isinstance(handler, handlers.MemoryHandler)
+        ]
         assert len(logFileList) == 1
         assert logFileList[0] in outDirContents
-        assert len(outDirContents) == 3 # results container, payload dir and log
+        assert len(outDirContents) == 3  # results container, payload dir and log
 
         # Compare computed single-channel results to expected low-freq signal
         # and ensure collection container was assembled correctly
@@ -487,26 +680,35 @@ class TestParallelMap():
             dset = "comp_{}/result_0"
             for chNo, h5name in enumerate(resOnDisk):
                 with h5py.File(h5name, "r") as h5f:
-                    assert np.mean(np.abs(h5f["result_0"][()] - self.orig[:, chNo])) < self.tol
-                    assert np.array_equal(h5col[dset.format(chNo)][()], h5f["result_0"][()])
+                    assert (
+                        np.mean(np.abs(h5f["result_0"][()] - self.orig[:, chNo]))
+                        < self.tol
+                    )
+                    assert np.array_equal(
+                        h5col[dset.format(chNo)][()], h5f["result_0"][()]
+                    )
 
         # Remember results for later use
         colRes = str(pmap.results_container)
         colResPayload = str(payloadDir)
 
         # Same with `single_file`
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         partition=defaultQ,
-                         setup_interactive=False,
-                         single_file=True) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            partition=defaultQ,
+            setup_interactive=False,
+            single_file=True,
+        ) as pmap:
             singleResOnDisk = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure only one file was generated
         assert len(singleResOnDisk) == 1
-        outDirContents = glob(os.path.join(pmap.out_dir, "*.h5"))
+        outDirContents = glob(os.path.join(pmap.config.output_dir, "*.h5"))
         assert outDirContents == singleResOnDisk
         assert pmap.results_container in outDirContents[0]
         assert os.path.isfile(singleResOnDisk[0])
@@ -516,26 +718,32 @@ class TestParallelMap():
             with h5py.File(pmap.results_container, "r") as h5single:
                 dset = "comp_{}/result_0"
                 for chNo in range(self.nChannels):
-                    assert np.array_equal(h5single[dset.format(chNo)][()], h5col[dset.format(chNo)][()])
+                    assert np.array_equal(
+                        h5single[dset.format(chNo)][()], h5col[dset.format(chNo)][()]
+                    )
 
         # Now use non-standard output directory
+        if testclient:
+            time.sleep(sleeptime)
         outDir = os.path.join(tempDir, "somewhere")
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         output_dir=outDir,
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            output_dir=outDir,
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             resOnDisk = pmap.compute()
 
         # Query specified custom output directory
-        assert pmap.out_dir == outDir
-        outDirContents = glob(os.path.join(pmap.out_dir, "*"))
+        assert pmap.config.output_dir == outDir
+        outDirContents = glob(os.path.join(pmap.config.output_dir, "*"))
         payloadDir = pmap.results_container.replace(".h5", "_payload")
         assert pmap.results_container in outDirContents
         assert payloadDir in outDirContents
         resFiles = glob(os.path.join(payloadDir, "*.h5"))
-        assert len(resFiles) == pmap.n_calls
+        assert len(resFiles) == pmap.config.n_calls
         assert all(fle in resFiles for fle in resOnDisk)
         assert all(os.path.isfile(fle) for fle in resOnDisk)
 
@@ -544,15 +752,21 @@ class TestParallelMap():
             with h5py.File(pmap.results_container, "r") as h5comp:
                 dset = "comp_{}/result_0"
                 for chNo in range(self.nChannels):
-                    assert np.array_equal(h5comp[dset.format(chNo)][()], h5col[dset.format(chNo)][()])
+                    assert np.array_equal(
+                        h5comp[dset.format(chNo)][()], h5col[dset.format(chNo)][()]
+                    )
 
         # Finally collect results in memory: ensure nothing freaky happens
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         write_worker_results=False,
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            write_worker_results=False,
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             resInMem = pmap.compute()
 
         # Be double-paranoid: ensure on-disk and in-memory results match up
@@ -569,68 +783,90 @@ class TestParallelMap():
                 h5col[f"comp_{chNo}"]["result_0"]
 
         # Ensure `output_dir` is properly ignored if `write_worker_results` is `False`
-        pmap = ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         output_dir=tempDir,
-                         write_worker_results=False,
-                         partition=defaultQ,
-                         setup_interactive=False)
-        assert pmap.daemon.out_dir is None
-        assert pmap.daemon.collect_results is True
+        if testclient:
+            time.sleep(sleeptime)
+        pmap = ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            output_dir=tempDir,
+            write_worker_results=False,
+            partition=defaultQ,
+            setup_interactive=False,
+        )
+        assert pmap.daemon.config.output_dir is None
+        assert pmap.daemon.config.collect_results is True
 
         # Simulate user-defined results-directory not auto-populated by ACME
-        tempDir2 = os.path.join(os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard")
+        tempDir2 = os.path.join(
+            os.path.abspath(os.path.expanduser("~")), "acme_tmp_lowpass_hard"
+        )
         if useSLURM and (onESI or onBIC):
-            tempDir2 = f"/mnt/hpc/home/{getpass.getuser()}/acme_tmp_lowpass_hard_{mArch}"
+            tempDir2 = (
+                f"/mnt/hpc/home/{getpass.getuser()}/acme_tmp_lowpass_hard_{mArch}"
+            )
         shutil.rmtree(tempDir2, ignore_errors=True)
         os.makedirs(tempDir2, exist_ok=True)
 
         # Same task, different function: simulate user-defined saving scheme and "weird" inputs
+        if testclient:
+            time.sleep(sleeptime)
         sigData = h5py.File(sigName, "r")["data"]
         res_base = "lowpass_hard_"
         dset_name = "custom_dset_name"
-        with ParallelMap(lowpass_hard,
-                         sigData,
-                         self.b,
-                         self.a,
-                         res_dir=tempDir2,
-                         res_base=res_base,
-                         dset_name=dset_name,
-                         padlen=[200] * self.nChannels,
-                         n_inputs=self.nChannels,
-                         write_worker_results=False,
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        with ParallelMap(
+            lowpass_hard,
+            sigData,
+            self.b,
+            self.a,
+            res_dir=tempDir2,
+            res_base=res_base,
+            dset_name=dset_name,
+            padlen=[200] * self.nChannels,
+            n_inputs=self.nChannels,
+            write_worker_results=False,
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
         resFiles = glob(os.path.join(tempDir2, res_base + "*"))
-        assert len(resFiles) == pmap.n_calls
+        assert len(resFiles) == pmap.config.n_calls
 
         # Compare computed single-channel results to expected low-freq signal
         for chNo in range(self.nChannels):
             h5name = f"{res_base}{chNo}.h5"
             with h5py.File(os.path.join(tempDir2, h5name), "r") as h5f:
-                assert np.mean(np.abs(h5f[dset_name][()] - self.orig[:, chNo])) < self.tol
+                assert (
+                    np.mean(np.abs(h5f[dset_name][()] - self.orig[:, chNo])) < self.tol
+                )
 
         # Ensure log-file generation produces a non-empty log-file at the expected location
         # Bonus: leave computing client alive and vet default SLURM settings
         if testclient is None:
-            cluster_cleanup(pmap.client)
+            cluster_cleanup(pmap.config.client)
+        else:
+            time.sleep(sleeptime)
         log = logging.getLogger("ACME")
         for handler in log.handlers:
             if isinstance(handler, logging.FileHandler):
                 log.handlers.remove(handler)
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         logfile=True,
-                         stop_client=False,
-                         partition=defaultQ,
-                         setup_timeout=120,
-                         setup_interactive=False) as pmap:
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            logfile=True,
+            stop_client=False,
+            partition=defaultQ,
+            setup_timeout=120,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
-        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        outDirs.append(pmap.config.output_dir)
+        logFileList = [
+            handler.target.baseFilename
+            for handler in log.handlers
+            if isinstance(handler, handlers.MemoryHandler)
+        ]
         assert len(logFileList) == 1
         logFile = logFileList[0]
         # If running on ESI/CoBIC clusters, account for /mnt/hpc/home
@@ -645,41 +881,55 @@ class TestParallelMap():
         assert dd.get_client()
         client = dd.get_client()
         if useSLURM and testclient is None:
-            assert pmap.n_calls == pmap.n_workers
-            assert len(client.cluster.workers) == pmap.n_workers
+            assert pmap.config.n_calls == pmap.config.n_workers
+            assert len(client.cluster.workers) == pmap.config.n_workers
             partition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
             if onx86 and (onESI or onBIC):
                 assert "8GB" in partition
-                memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+                memory = np.unique(
+                    [
+                        w["memory_limit"]
+                        for w in client.cluster.scheduler_info["workers"].values()
+                    ]
+                )
                 assert memory.size == 1
                 if onESI:
-                    denom = 2*1024**3
+                    denom = 2 * 1024**3
                 else:
                     denom = 1000**3
-                assert math.ceil(memory[0] / denom) == [int(s) for s in partition if s.isdigit()][0]
+                assert (
+                    math.ceil(memory[0] / denom)
+                    == [int(s) for s in partition if s.isdigit()][0]
+                )
 
         # Wait a sec (literally) for dask to collect its bearings (after the
         # `get_client` above) before proceeding
-        time.sleep(1.0)
+        time.sleep(sleeptime)
 
         # Same, but use custom log-file
         customLog = os.path.join(tempDir, "acme_log.txt")
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         logfile=customLog,
-                         verbose=True,
-                         stop_client=testclient is None,
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            logfile=customLog,
+            verbose=True,
+            stop_client=testclient is None,
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
         assert os.path.isfile(customLog)
         with open(customLog, "r", encoding="utf8") as fl:
             assert len(fl.readlines()) > 1
 
         # Ensure only single log file `customLog` is used
-        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        logFileList = [
+            handler.target.baseFilename
+            for handler in log.handlers
+            if isinstance(handler, handlers.MemoryHandler)
+        ]
         assert len(logFileList) == 1
         assert logFileList[0] == customLog
 
@@ -689,37 +939,47 @@ class TestParallelMap():
                 dd.get_client()
 
         # Wait a sec (literally) to give dask enough time to close the client
-        time.sleep(1.0)
+        time.sleep(sleeptime)
 
         # Request a log-file but don't save results
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         logfile=True,
-                         write_worker_results=False,
-                         n_workers=1,
-                         partition=defaultQ,
-                         setup_timeout=120,
-                        setup_interactive=False) as pmap:
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            logfile=True,
+            write_worker_results=False,
+            n_workers=1,
+            partition=defaultQ,
+            setup_timeout=120,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        assert pmap.out_dir is None
+        assert pmap.config.output_dir is None
         log = logging.getLogger("ACME")
-        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        logFileList = [
+            handler.target.baseFilename
+            for handler in log.handlers
+            if isinstance(handler, handlers.MemoryHandler)
+        ]
         assert len(logFileList) == 1
         assert os.path.dirname(os.path.realpath(__file__)) in logFileList[0]
         os.unlink(logFileList[0])
 
         # Ensure ACME warns if arguments increase its "sanity" threshold
         # (lowered here to not overwhelm CI runners)
+        if testclient:
+            time.sleep(sleeptime)
         mAS = ParallelMap._maxArgSize
-        ParallelMap._maxArgSize = 1   # in MB
-        pmap = ParallelMap(simple_func,
-                           [np.ones((1000, 1000)), 4, 6, 8],
-                           4,
-                           partition=defaultQ,
-                           n_workers=1,
-                           logfile=True,
-                           setup_interactive=False)
+        ParallelMap._maxArgSize = 1  # in MB
+        pmap = ParallelMap(
+            simple_func,
+            [np.ones((1000, 1000)), 4, 6, 8],
+            4,
+            partition=defaultQ,
+            n_workers=1,
+            logfile=True,
+            setup_interactive=False,
+        )
         log = logging.getLogger("ACME")
         memHandlers = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)]
         assert len(memHandlers) == 1
@@ -733,14 +993,18 @@ class TestParallelMap():
         os.unlink(thisLogFile)
 
         # Same with kwargs
-        pmap = ParallelMap(simple_func,
-                           [2, 4, 6, 8],
-                           4,
-                           z=np.ones((1000, 1000)),
-                           partition=defaultQ,
-                           n_workers=1,
-                           logfile=True,
-                           setup_interactive=False)
+        if testclient:
+            time.sleep(sleeptime)
+        pmap = ParallelMap(
+            simple_func,
+            [2, 4, 6, 8],
+            4,
+            z=np.ones((1000, 1000)),
+            partition=defaultQ,
+            n_workers=1,
+            logfile=True,
+            setup_interactive=False,
+        )
         log = logging.getLogger("ACME")
         log = logging.getLogger("ACME")
         memHandlers = [h for h in log.handlers if isinstance(h, handlers.MemoryHandler)]
@@ -758,59 +1022,78 @@ class TestParallelMap():
         ParallelMap._maxArgSize = mAS
 
         # Ensure warning is issued if single-file saving is requested but result writing is turned off
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         write_worker_results=False,
-                         single_file=True,
-                         partition=defaultQ,
-                         logfile=True,
-                         n_workers=1,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            write_worker_results=False,
+            single_file=True,
+            partition=defaultQ,
+            logfile=True,
+            n_workers=1,
+            setup_interactive=False,
+        ) as pmap:
             resInMem2 = pmap.compute()
-        assert pmap.out_dir is None
+        assert pmap.config.output_dir is None
         assert np.all(resInMem2) == np.all(resInMem)
         log = logging.getLogger("ACME")
-        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        logFileList = [
+            handler.target.baseFilename
+            for handler in log.handlers
+            if isinstance(handler, handlers.MemoryHandler)
+        ]
         assert len(logFileList) == 1
         with open(logFileList[0], "r", encoding="utf8") as fl:
             logTxt = fl.read()
-        assert "Generating a single output file only possible if `write_worker_results` is `True`" in logTxt
+        assert (
+            "Generating a single output file only possible if `write_worker_results` is `True`"
+            in logTxt
+        )
         os.unlink(logFileList[0])
 
         if testclient is None:
-            cluster_cleanup(pmap.client)
+            cluster_cleanup(pmap.config.client)
+        time.sleep(sleeptime)
 
         # Underbook SLURM (more calls than workers)
         n_workers = int(self.nChannels / 2)
         mem_per_worker = "2GB"
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         partition=defaultQ,
-                         n_workers=n_workers,
-                         mem_per_worker=mem_per_worker,
-                         stop_client=False,
-                         setup_timeout=120,
-                         setup_interactive=False) as pmap:
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            partition=defaultQ,
+            n_workers=n_workers,
+            mem_per_worker=mem_per_worker,
+            stop_client=False,
+            setup_timeout=120,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Post-hoc check of client to ensure custom settings were respected
-        client = pmap.client
-        assert pmap.n_calls == self.nChannels
+        client = pmap.config.client
+        assert pmap.config.n_calls == self.nChannels
         if useSLURM is True and testclient is None:
-            assert pmap.n_workers == n_workers
-            assert len(client.cluster.workers) == pmap.n_workers
+            assert pmap.config.n_workers == n_workers
+            assert len(client.cluster.workers) == pmap.config.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
             assert actualPartition == defaultQ
-            memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+            memory = np.unique(
+                [
+                    w["memory_limit"]
+                    for w in client.cluster.scheduler_info["workers"].values()
+                ]
+            )
             assert memory.size == 1
             assert round(memory[0] / 1000**3) == int(mem_per_worker.replace("GB", ""))
 
         # Let `cluster_cleanup` murder the custom setup and ensure it did its job
         if testclient is None:
-            cluster_cleanup(pmap.client)
+            cluster_cleanup(pmap.config.client)
             with pytest.raises(ValueError):
                 dd.get_client()
         time.sleep(1)
@@ -818,30 +1101,39 @@ class TestParallelMap():
         # Overbook SLURM (more workers than calls)
         n_workers = self.nChannels + 2
         mem_per_worker = "3000MB"
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         partition=defaultQ,
-                         n_workers=n_workers,
-                         mem_per_worker=mem_per_worker,
-                         stop_client=False,
-                         setup_interactive=False) as pmap:
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            partition=defaultQ,
+            n_workers=n_workers,
+            mem_per_worker=mem_per_worker,
+            stop_client=False,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Post-hoc check of client to ensure custom settings were respected
-        client = pmap.client
-        assert pmap.n_calls == self.nChannels
+        client = pmap.config.client
+        assert pmap.config.n_calls == self.nChannels
         if useSLURM and testclient is None:
-            assert pmap.n_workers == n_workers
-            assert len(client.cluster.workers) == pmap.n_workers
+            assert pmap.config.n_workers == n_workers
+            assert len(client.cluster.workers) == pmap.config.n_workers
             actualPartition = client.cluster.job_header.split("-p ")[1].split("\n")[0]
             assert actualPartition == defaultQ
-            memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+            memory = np.unique(
+                [
+                    w["memory_limit"]
+                    for w in client.cluster.scheduler_info["workers"].values()
+                ]
+            )
             assert memory.size == 1
-            assert round(memory[0] / 1000**3) * 1000 == int(mem_per_worker.replace("MB", ""))
+            assert round(memory[0] / 1000**3) * 1000 == int(
+                mem_per_worker.replace("MB", "")
+            )
         if testclient is None:
-            cluster_cleanup(pmap.client)
+            cluster_cleanup(pmap.config.client)
 
         # Close any open HDF5 files to not trigger any `OSError`s, close running clusters
         # and clean up tmp dirs and created directories/log-files
@@ -857,7 +1149,7 @@ class TestParallelMap():
 
         # Wait a second (literally) so that no new parallel workers started by
         # `test_existing_cluster` erroneously use existing HDF files
-        time.sleep(1.0)
+        time.sleep(sleeptime)
 
         return testclient
 
@@ -871,25 +1163,34 @@ class TestParallelMap():
         outDirs = []
 
         # Parallelize across channels, write results to disk
-        with ParallelMap(lowpass_medium,
-                         sigName,
-                         range(self.nChannels),
-                         partition=defaultQ,
-                         setup_timeout=120,
-                         setup_interactive=False) as pmap:
-             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            lowpass_medium,
+            sigName,
+            range(self.nChannels),
+            partition=defaultQ,
+            setup_timeout=120,
+            setup_interactive=False,
+        ) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure output container was created correctly
         payloadDir = pmap.results_container.replace(".h5", "_payload")
-        assert len(glob(os.path.join(payloadDir, "*.h5"))) == pmap.n_calls
+        assert len(glob(os.path.join(payloadDir, "*.h5"))) == pmap.config.n_calls
 
         # Compare computed results to expected values
         with h5py.File(pmap.results_container, "r") as h5col:
             dset = "comp_{}/result_{}"
             for chNo in range(self.nChannels):
                 assert len(h5col[f"comp_{chNo}"].keys()) == 4
-                assert np.mean(np.abs(h5col[dset.format(chNo, 0)][()] - self.orig[:, chNo])) < self.tol
+                assert (
+                    np.mean(
+                        np.abs(h5col[dset.format(chNo, 0)][()] - self.orig[:, chNo])
+                    )
+                    < self.tol
+                )
                 assert h5col[dset.format(chNo, 1)][()] == chNo
                 assert np.array_equal(h5col[dset.format(chNo, 2)][()], self.b)
                 assert np.array_equal(h5col[dset.format(chNo, 3)][()], self.a)
@@ -898,18 +1199,22 @@ class TestParallelMap():
         colRes = str(pmap.results_container)
 
         # Same with `single_file`
-        with ParallelMap(lowpass_medium,
-                         sigName,
-                         range(self.nChannels),
-                         partition=defaultQ,
-                         setup_interactive=False,
-                         setup_timeout=120,
-                         single_file=True) as pmap:
+        with ParallelMap(
+            lowpass_medium,
+            sigName,
+            range(self.nChannels),
+            partition=defaultQ,
+            setup_interactive=False,
+            setup_timeout=120,
+            single_file=True,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure only one (data) file was generated
-        assert glob(os.path.join(pmap.out_dir, "*.h5")) == [pmap.results_container]
+        assert glob(os.path.join(pmap.config.output_dir, "*.h5")) == [
+            pmap.results_container
+        ]
 
         # Compare single file to link collection computed above
         with h5py.File(colRes, "r") as h5col:
@@ -917,19 +1222,33 @@ class TestParallelMap():
                 dset = "comp_{}/result_{}"
                 for chNo in range(self.nChannels):
                     assert len(h5single[f"comp_{chNo}"].keys()) == 4
-                    assert np.array_equal(h5single[dset.format(chNo, 0)][()], h5col[dset.format(chNo, 0)][()])
-                    assert h5col[dset.format(chNo, 1)][()] == h5single[dset.format(chNo, 1)][()]
-                    assert np.array_equal(h5col[dset.format(chNo, 2)][()], h5single[dset.format(chNo, 2)][()])
-                    assert np.array_equal(h5col[dset.format(chNo, 3)][()], h5single[dset.format(chNo, 3)][()])
+                    assert np.array_equal(
+                        h5single[dset.format(chNo, 0)][()],
+                        h5col[dset.format(chNo, 0)][()],
+                    )
+                    assert (
+                        h5col[dset.format(chNo, 1)][()]
+                        == h5single[dset.format(chNo, 1)][()]
+                    )
+                    assert np.array_equal(
+                        h5col[dset.format(chNo, 2)][()],
+                        h5single[dset.format(chNo, 2)][()],
+                    )
+                    assert np.array_equal(
+                        h5col[dset.format(chNo, 3)][()],
+                        h5single[dset.format(chNo, 3)][()],
+                    )
 
         # Same, but collect results in memory: ensure nothing freaky happens
-        with ParallelMap(lowpass_medium,
-                         sigName,
-                         range(self.nChannels),
-                         write_worker_results=False,
-                         partition=defaultQ,
-                         setup_timeout=120,
-                         setup_interactive=False) as pmap:
+        with ParallelMap(
+            lowpass_medium,
+            sigName,
+            range(self.nChannels),
+            write_worker_results=False,
+            partition=defaultQ,
+            setup_timeout=120,
+            setup_interactive=False,
+        ) as pmap:
             resInMem = pmap.compute()
 
         # Be double-paranoid: ensure on-disk and in-memory results match up
@@ -937,10 +1256,16 @@ class TestParallelMap():
             dset = "comp_{}/result_{}"
             for chNo in range(self.nChannels):
                 assert len(resInMem[chNo]) == 4
-                assert np.array_equal(h5col[dset.format(chNo, 0)][()], resInMem[chNo][0])
+                assert np.array_equal(
+                    h5col[dset.format(chNo, 0)][()], resInMem[chNo][0]
+                )
                 assert h5col[dset.format(chNo, 1)][()] == resInMem[chNo][1]
-                assert np.array_equal(h5col[dset.format(chNo, 2)][()], resInMem[chNo][2])
-                assert np.array_equal(h5col[dset.format(chNo, 3)][()], resInMem[chNo][3])
+                assert np.array_equal(
+                    h5col[dset.format(chNo, 2)][()], resInMem[chNo][2]
+                )
+                assert np.array_equal(
+                    h5col[dset.format(chNo, 3)][()], resInMem[chNo][3]
+                )
 
         # Clean up created results directories
         for folder in outDirs:
@@ -948,7 +1273,7 @@ class TestParallelMap():
 
         # Wait a second (literally) so that no new parallel workers started by
         # `test_existing_cluster` erroneously use existing HDF files
-        time.sleep(1.0)
+        time.sleep(sleeptime)
 
         return testclient
 
@@ -966,17 +1291,21 @@ class TestParallelMap():
 
         # On ESI/BIC clusters: start a SLURM client once to speed up test execution
         if testclient is None and useSLURM and (onESI or onBIC):
-            client = setup_func(partition=defaultQ, n_workers=self.nChannels, interactive=False)
+            client = setup_func(
+                partition=defaultQ, n_workers=self.nChannels, interactive=False
+            )
 
         # Parallelize across channels, write results to disk
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         result_shape=(None, nSamples),
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            result_shape=(None, nSamples),
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             resOnDisk = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Remember results for later use
         colRes = str(pmap.results_container)
@@ -988,18 +1317,25 @@ class TestParallelMap():
             assert h5col["result_0"].is_virtual
             for chNo, h5name in enumerate(resOnDisk):
                 with h5py.File(h5name, "r") as h5f:
-                    assert np.mean(np.abs(h5f["result_0"][()] - self.orig[:, chNo])) < self.tol
-                    assert np.array_equal(h5col["result_0"][chNo, :], h5f["result_0"][()])
+                    assert (
+                        np.mean(np.abs(h5f["result_0"][()] - self.orig[:, chNo]))
+                        < self.tol
+                    )
+                    assert np.array_equal(
+                        h5col["result_0"][chNo, :], h5f["result_0"][()]
+                    )
 
         # As above but don't specify `nSamples`
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         result_shape=(None, np.inf),
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            result_shape=(None, np.inf),
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         infRes = str(pmap.results_container)
 
@@ -1009,20 +1345,26 @@ class TestParallelMap():
                 assert np.array_equal(h5col["result_0"][()], h5inf["result_0"][()])
 
         # Same but don't use a virtual dataset and transpose the final array
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         result_shape=(nSamples, None),
-                         single_file=True,
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            result_shape=(nSamples, None),
+            single_file=True,
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         singleRes = str(pmap.results_container)
 
         # Ensure only one (data) file was generated
-        assert glob(os.path.join(pmap.out_dir, "*.h5")) == [pmap.results_container]
+        assert glob(os.path.join(pmap.config.output_dir, "*.h5")) == [
+            pmap.results_container
+        ]
 
         # Compare single file to virtual dataset
         with h5py.File(colRes, "r") as h5col:
@@ -1032,257 +1374,329 @@ class TestParallelMap():
                 assert np.array_equal(h5single["result_0"][()].T, h5col["result_0"][()])
 
         # Use a resizable single hdf container (not specifying `nSamples`)
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         result_shape=(np.inf, None),
-                         single_file=True,
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            result_shape=(np.inf, None),
+            single_file=True,
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         singleInfRes = str(pmap.results_container)
 
         # Ensure not specifying `nSamples` did not change anything
         with h5py.File(singleRes, "r") as h5single:
             with h5py.File(singleInfRes, "r") as h5singleinf:
-                assert np.array_equal(h5single["result_0"][()], h5singleinf["result_0"][()])
+                assert np.array_equal(
+                    h5single["result_0"][()], h5singleinf["result_0"][()]
+                )
 
         # More elaborate stacking/expendable dimension
-        with ParallelMap(simple_func,
-                         [elem * np.ones((3, 3)) for elem in [2, 4]],
-                         4,
-                         result_shape=(3, None, 3),
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            simple_func,
+            [elem * np.ones((3, 3)) for elem in [2, 4]],
+            4,
+            result_shape=(3, None, 3),
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         tripleDim = str(pmap.results_container)
 
-        with ParallelMap(simple_func,
-                         [elem * np.ones((3, 3)) for elem in [2, 4]],
-                         4,
-                         result_shape=(np.inf, None, 3),
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            simple_func,
+            [elem * np.ones((3, 3)) for elem in [2, 4]],
+            4,
+            result_shape=(np.inf, None, 3),
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         tripleDimInf = str(pmap.results_container)
 
         with h5py.File(tripleDim, "r") as h5triple:
             with h5py.File(tripleDimInf, "r") as h5tripleinf:
-                assert np.array_equal(h5triple["result_0"][()], h5tripleinf["result_0"][()])
+                assert np.array_equal(
+                    h5triple["result_0"][()], h5tripleinf["result_0"][()]
+                )
 
-        with ParallelMap(simple_func,
-                         [elem * np.ones((3, 3)) for elem in [2, 4]],
-                         4,
-                         result_shape=(3, None, 3),
-                         partition=defaultQ,
-                         single_file=True,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            simple_func,
+            [elem * np.ones((3, 3)) for elem in [2, 4]],
+            4,
+            result_shape=(3, None, 3),
+            partition=defaultQ,
+            single_file=True,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         tripleDimSingle = str(pmap.results_container)
 
-        with ParallelMap(simple_func,
-                         [elem * np.ones((3, 3)) for elem in [2, 4]],
-                         4,
-                         result_shape=(np.inf, None, 3),
-                         partition=defaultQ,
-                         single_file=True,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            simple_func,
+            [elem * np.ones((3, 3)) for elem in [2, 4]],
+            4,
+            result_shape=(np.inf, None, 3),
+            partition=defaultQ,
+            single_file=True,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         tripleDimSingleInf = str(pmap.results_container)
 
         with h5py.File(tripleDimSingle, "r") as h5triple:
             with h5py.File(tripleDimSingleInf, "r") as h5tripleinf:
-                assert np.array_equal(h5triple["result_0"][()], h5tripleinf["result_0"][()])
+                assert np.array_equal(
+                    h5triple["result_0"][()], h5tripleinf["result_0"][()]
+                )
 
         with h5py.File(tripleDim, "r") as h5triple:
             with h5py.File(tripleDimSingleInf, "r") as h5tripleinf:
-                assert np.array_equal(h5triple["result_0"][()], h5tripleinf["result_0"][()])
+                assert np.array_equal(
+                    h5triple["result_0"][()], h5tripleinf["result_0"][()]
+                )
 
         # Finally, ensure in-memory results-collection works as expected
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         result_shape=(None, nSamples),
-                         write_worker_results=False,
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            result_shape=(None, nSamples),
+            write_worker_results=False,
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             resInMem = pmap.compute()
         with h5py.File(colRes, "r") as h5col:
             assert np.array_equal(h5col["result_0"][()], resInMem)
 
         # Ensure dtype is respected
-        with ParallelMap(lowpass_simple,
-                         sigName,
-                         range(self.nChannels),
-                         result_shape=(None, nSamples),
-                         result_dtype="float16",
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            lowpass_simple,
+            sigName,
+            range(self.nChannels),
+            result_shape=(None, nSamples),
+            result_dtype="float16",
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
         with h5py.File(pmap.results_container, "r") as h5f:
             assert h5f["result_0"].dtype.name == "float16"
 
         # Ensure invalid dtypes don't pass through
         with pytest.raises(TypeError) as tperr:
-            with ParallelMap(lowpass_simple,
-                             sigName,
-                             range(self.nChannels),
-                             result_shape=(None, nSamples),
-                             result_dtype=np.ones((3,)),
-                             partition=defaultQ,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                lowpass_simple,
+                sigName,
+                range(self.nChannels),
+                result_shape=(None, nSamples),
+                result_dtype=np.ones((3,)),
+                partition=defaultQ,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
         assert "`result_dtype` has to be a string" in str(tperr)
         with pytest.raises(TypeError) as tperr:
-            with ParallelMap(lowpass_simple,
-                             sigName,
-                             range(self.nChannels),
-                             result_shape=(None, nSamples),
-                             result_dtype="invalid",
-                             partition=defaultQ,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                lowpass_simple,
+                sigName,
+                range(self.nChannels),
+                result_shape=(None, nSamples),
+                result_dtype="invalid",
+                partition=defaultQ,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
         assert "`result_dtype` has to be a valid NumPy datatype" in str(tperr)
 
         # Ensure borked shapes are caught
         with pytest.raises(TypeError) as tperr:
-            with ParallelMap(lowpass_simple,
-                             sigName,
-                             range(self.nChannels),
-                             result_shape=3,
-                             partition=defaultQ,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                lowpass_simple,
+                sigName,
+                range(self.nChannels),
+                result_shape=3,
+                partition=defaultQ,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
         assert "`result_shape` has to be either `None` or tuple" in str(tperr)
         with pytest.raises(ValueError) as valerr:
-            with ParallelMap(lowpass_simple,
-                             sigName,
-                             range(self.nChannels),
-                             result_shape=(None, None, nSamples),
-                             partition=defaultQ,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                lowpass_simple,
+                sigName,
+                range(self.nChannels),
+                result_shape=(None, None, nSamples),
+                partition=defaultQ,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
         assert "`result_shape` must contain exactly one `None`" in str(valerr)
         with pytest.raises(ValueError) as valerr:
-            with ParallelMap(lowpass_simple,
-                             sigName,
-                             range(self.nChannels),
-                             result_shape=(3, nSamples),
-                             partition=defaultQ,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                lowpass_simple,
+                sigName,
+                range(self.nChannels),
+                result_shape=(3, nSamples),
+                partition=defaultQ,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
         assert "`result_shape` must contain exactly one `None`" in str(valerr)
         with pytest.raises(ValueError) as valerr:
-            with ParallelMap(lowpass_simple,
-                             sigName,
-                             range(self.nChannels),
-                             result_shape=("invalid", None, nSamples),
-                             partition=defaultQ,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                lowpass_simple,
+                sigName,
+                range(self.nChannels),
+                result_shape=("invalid", None, nSamples),
+                partition=defaultQ,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
         assert "`result_shape` must only contain numerical values" in str(valerr)
         with pytest.raises(ValueError) as valerr:
-            with ParallelMap(lowpass_simple,
-                             sigName,
-                             range(self.nChannels),
-                             result_shape=(-3, None, nSamples),
-                             partition=defaultQ,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                lowpass_simple,
+                sigName,
+                range(self.nChannels),
+                result_shape=(-3, None, nSamples),
+                partition=defaultQ,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
         assert "`result_shape` must only contain non-negative integers" in str(valerr)
         with pytest.raises(ValueError) as valerr:
-            with ParallelMap(lowpass_simple,
-                             sigName,
-                             range(self.nChannels),
-                             result_shape=(np.pi, None, nSamples),
-                             partition=defaultQ,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                lowpass_simple,
+                sigName,
+                range(self.nChannels),
+                result_shape=(np.pi, None, nSamples),
+                partition=defaultQ,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
         assert "`result_shape` must only contain non-negative integers" in str(valerr)
         with pytest.raises(ValueError) as valerr:
-            with ParallelMap(lowpass_simple,
-                             sigName,
-                             range(self.nChannels),
-                             result_shape=(None, np.inf),
-                             partition=defaultQ,
-                             write_worker_results=False,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                lowpass_simple,
+                sigName,
+                range(self.nChannels),
+                result_shape=(None, np.inf),
+                partition=defaultQ,
+                write_worker_results=False,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
-        assert "`np.inf` in `result_shape` is only valid if `write_worker_results` is `True`" in str(valerr)
+        assert (
+            "`np.inf` in `result_shape` is only valid if `write_worker_results` is `True`"
+            in str(valerr)
+        )
         with pytest.raises(ValueError) as valerr:
-            with ParallelMap(lowpass_simple,
-                             sigName,
-                             range(self.nChannels),
-                             result_shape=(None, np.inf, np.inf),
-                             partition=defaultQ,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                lowpass_simple,
+                sigName,
+                range(self.nChannels),
+                result_shape=(None, np.inf, np.inf),
+                partition=defaultQ,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
         assert "cannot use more than one `np.inf` in `result_shape`" in str(valerr)
 
         # Emergency pickling
-        with ParallelMap(pickle_func,
-                         self.sig,
-                         self.b,
-                         self.a,
-                         range(self.nChannels),
-                         sabotage_hdf5=True,
-                         n_inputs=self.nChannels,
-                         result_shape=(nSamples, None),
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            pickle_func,
+            self.sig,
+            self.b,
+            self.a,
+            range(self.nChannels),
+            sabotage_hdf5=True,
+            n_inputs=self.nChannels,
+            result_shape=(nSamples, None),
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             mixedResults = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure pickles and hdf5's live together happily
         resultsContainer = os.path.basename(mixedResults[0])
-        resultsContainer = os.path.join(os.path.dirname(mixedResults[0]),
-                                        resultsContainer[:resultsContainer.rfind("_0")] + ".h5")
+        resultsContainer = os.path.join(
+            os.path.dirname(mixedResults[0]),
+            resultsContainer[: resultsContainer.rfind("_0")] + ".h5",
+        )
         payloadDir = resultsContainer.replace(".h5", "_payload")
         assert pmap.results_container is None
         assert not os.path.isfile(resultsContainer)
         assert not os.path.isdir(payloadDir)
         assert all(os.path.isfile(fle) for fle in mixedResults)
-        assert len(mixedResults) == pmap.n_calls
+        assert len(mixedResults) == pmap.config.n_calls
 
         # Ensure deliberate pickling doesn't clash w/(erroneous) shape spec
-        time.sleep(1)
-        with ParallelMap(pickle_func,
-                         self.sig,
-                         self.b,
-                         self.a,
-                         range(self.nChannels),
-                         sabotage_hdf5=False,
-                         n_inputs=self.nChannels,
-                         result_shape=(nSamples, None),
-                         write_pickle=True,
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            pickle_func,
+            self.sig,
+            self.b,
+            self.a,
+            range(self.nChannels),
+            sabotage_hdf5=False,
+            n_inputs=self.nChannels,
+            result_shape=(nSamples, None),
+            write_pickle=True,
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             pickles = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
         assert all(os.path.isfile(fle) for fle in pickles)
-        assert len(pickles) == pmap.n_calls
+        assert len(pickles) == pmap.config.n_calls
 
         # Ensure multiple return values are handled correctly
-        with ParallelMap(lowpass_medium,
-                         sigName,
-                         range(self.nChannels),
-                         result_shape=(None, nSamples),
-                         single_file=False,
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            lowpass_medium,
+            sigName,
+            range(self.nChannels),
+            result_shape=(None, nSamples),
+            single_file=False,
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Save results for later
         multiRet = str(pmap.results_container)
@@ -1290,48 +1704,56 @@ class TestParallelMap():
         # Compare computed results to stored "reference"
         with h5py.File(colRes, "r") as h5col:
             with h5py.File(pmap.results_container, "r") as h5f:
-                assert len(h5f.keys()) == pmap.n_calls + 1
+                assert len(h5f.keys()) == pmap.config.n_calls + 1
                 assert h5f["result_0"].is_virtual is True
                 assert np.array_equal(h5f["result_0"][()], h5col["result_0"][()])
-                for k in range(pmap.n_calls):
+                for k in range(pmap.config.n_calls):
                     assert len(h5f[f"comp_{k}"].keys()) == 3
                     assert h5f[f"comp_{k}/result_1"][()] == k
                     assert np.array_equal(h5f[f"comp_{k}/result_2"][()], self.b)
                     assert np.array_equal(h5f[f"comp_{k}/result_3"][()], self.a)
 
         # Same w/single output container
-        with ParallelMap(lowpass_medium,
-                         sigName,
-                         range(self.nChannels),
-                         result_shape=(None, nSamples),
-                         single_file=True,
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
-             pmap.compute()
-        outDirs.append(pmap.out_dir)
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            lowpass_medium,
+            sigName,
+            range(self.nChannels),
+            result_shape=(None, nSamples),
+            single_file=True,
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
+            pmap.compute()
+        outDirs.append(pmap.config.output_dir)
 
         # Compare results
         with h5py.File(multiRet, "r") as h5ref:
             with h5py.File(pmap.results_container, "r") as h5f:
-                assert len(h5f.keys()) == pmap.n_calls + 1
-                for k in range(pmap.n_calls):
-                    for rk in range(1,4):
+                assert len(h5f.keys()) == pmap.config.n_calls + 1
+                for k in range(pmap.config.n_calls):
+                    for rk in range(1, 4):
                         dset = f"comp_{k}/result_{rk}"
                         assert np.array_equal(h5f[dset], h5ref[dset])
 
         # Finally, ensure in-memory results-collection works w/multiple returns
-        with ParallelMap(lowpass_medium,
-                         sigName,
-                         range(self.nChannels),
-                         result_shape=(None, nSamples),
-                         write_worker_results=False,
-                         partition=defaultQ,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            lowpass_medium,
+            sigName,
+            range(self.nChannels),
+            result_shape=(None, nSamples),
+            write_worker_results=False,
+            partition=defaultQ,
+            setup_interactive=False,
+        ) as pmap:
             resInMem = pmap.compute()
         with h5py.File(multiRet, "r") as h5ref:
             assert np.array_equal(h5ref["result_0"][()], resInMem[0])
             rCount = 1
-            for k in range(pmap.n_calls):
+            for k in range(pmap.config.n_calls):
                 assert h5ref[f"comp_{k}/result_1"][()] == resInMem[rCount]
                 rCount += 1
                 assert np.array_equal(h5ref[f"comp_{k}/result_2"][()], resInMem[rCount])
@@ -1345,7 +1767,7 @@ class TestParallelMap():
 
         # Wait a second (literally) so that no new parallel workers started by
         # `test_existing_cluster` erroneously use existing HDF files
-        time.sleep(1.0)
+        time.sleep(sleeptime)
 
         # Close SLURM client allocated on ESI/BIC clusters
         if testclient is None and useSLURM and (onESI or onBIC):
@@ -1360,34 +1782,40 @@ class TestParallelMap():
         outDirs = []
 
         # Execute `pickle_func` w/regular HDF5 saving
-        with ParallelMap(pickle_func,
-                         self.sig,
-                         self.b,
-                         self.a,
-                         range(self.nChannels),
-                         sabotage_hdf5=False,
-                         n_inputs=self.nChannels,
-                         partition=defaultQ,
-                         setup_timeout=120,
-                         setup_interactive=False) as pmap:
+        with ParallelMap(
+            pickle_func,
+            self.sig,
+            self.b,
+            self.a,
+            range(self.nChannels),
+            sabotage_hdf5=False,
+            n_inputs=self.nChannels,
+            partition=defaultQ,
+            setup_timeout=120,
+            setup_interactive=False,
+        ) as pmap:
             hdfResults = pmap.compute()
         colRes = str(pmap.results_container)
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
         time.sleep(5)
 
         # Execute `pickle_func` w/pickling
-        with ParallelMap(pickle_func,
-                         self.sig,
-                         self.b,
-                         self.a,
-                         range(self.nChannels),
-                         n_inputs=self.nChannels,
-                         write_pickle=True,
-                         partition=defaultQ,
-                         setup_timeout=120,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            pickle_func,
+            self.sig,
+            self.b,
+            self.a,
+            range(self.nChannels),
+            n_inputs=self.nChannels,
+            write_pickle=True,
+            partition=defaultQ,
+            setup_timeout=120,
+            setup_interactive=False,
+        ) as pmap:
             pklResults = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure HDF5 and pickle match up
         with h5py.File(colRes, "r") as h5col:
@@ -1399,59 +1827,81 @@ class TestParallelMap():
 
         # Ensure single_file and pickling does not work
         with pytest.raises(ValueError) as valerr:
-            with ParallelMap(pickle_func,
-                             self.sig,
-                             self.b,
-                             self.a,
-                             range(self.nChannels),
-                             n_inputs=self.nChannels,
-                             write_pickle=True,
-                             single_file=True,
-                             partition=defaultQ,
-                             setup_timeout=120,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                pickle_func,
+                self.sig,
+                self.b,
+                self.a,
+                range(self.nChannels),
+                n_inputs=self.nChannels,
+                write_pickle=True,
+                single_file=True,
+                partition=defaultQ,
+                setup_timeout=120,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
-        assert "Pickling of results does not support single output file creation" in str(valerr.value)
+        assert (
+            "Pickling of results does not support single output file creation"
+            in str(valerr.value)
+        )
 
         # Test emergency pickling
-        with ParallelMap(pickle_func,
-                         self.sig,
-                         self.b,
-                         self.a,
-                         range(self.nChannels),
-                         sabotage_hdf5=True,
-                         n_inputs=self.nChannels,
-                         partition=defaultQ,
-                         setup_timeout=120,
-                         setup_interactive=False) as pmap:
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            pickle_func,
+            self.sig,
+            self.b,
+            self.a,
+            range(self.nChannels),
+            sabotage_hdf5=True,
+            n_inputs=self.nChannels,
+            partition=defaultQ,
+            setup_timeout=120,
+            setup_interactive=False,
+        ) as pmap:
             mixedResults = pmap.compute()
-        outDirs.append(pmap.out_dir)
+        outDirs.append(pmap.config.output_dir)
 
         # Ensure warning is issued if pickling is requested but result writing is turned off
-        with ParallelMap(simple_func,
-                         [2, 4, 6, 8],
-                         4,
-                         partition=defaultQ,
-                         write_worker_results=False,
-                         write_pickle=True,
-                         logfile=True,
-                         n_workers=1,
-                         setup_timeout=120,
-                         setup_interactive=False) as pmap:
-                results = pmap.compute()
-        assert pmap.out_dir is None
+        if testclient:
+            time.sleep(sleeptime)
+        with ParallelMap(
+            simple_func,
+            [2, 4, 6, 8],
+            4,
+            partition=defaultQ,
+            write_worker_results=False,
+            write_pickle=True,
+            logfile=True,
+            n_workers=1,
+            setup_timeout=120,
+            setup_interactive=False,
+        ) as pmap:
+            results = pmap.compute()
+        assert pmap.config.output_dir is None
         assert results == list(map(simple_func, [2, 4, 6, 8], [4, 4, 4, 4]))
         log = logging.getLogger("ACME")
-        logFileList = [handler.target.baseFilename for handler in log.handlers if isinstance(handler, handlers.MemoryHandler)]
+        logFileList = [
+            handler.target.baseFilename
+            for handler in log.handlers
+            if isinstance(handler, handlers.MemoryHandler)
+        ]
         assert len(logFileList) == 1
         with open(logFileList[0], "r", encoding="utf8") as fl:
             logTxt = fl.read()
-        assert "Pickling of results only possible if `write_worker_results` is `True`" in logTxt
+        assert (
+            "Pickling of results only possible if `write_worker_results` is `True`"
+            in logTxt
+        )
 
         # Collection container should have been auto-removed
         resultsContainer = os.path.basename(mixedResults[0])
-        resultsContainer = os.path.join(os.path.dirname(mixedResults[0]),
-                                        resultsContainer[:resultsContainer.rfind("_0")] + ".h5")
+        resultsContainer = os.path.join(
+            os.path.dirname(mixedResults[0]),
+            resultsContainer[: resultsContainer.rfind("_0")] + ".h5",
+        )
         payloadDir = resultsContainer.replace(".h5", "_payload")
         assert pmap.results_container is None
         assert not os.path.isfile(resultsContainer)
@@ -1467,56 +1917,67 @@ class TestParallelMap():
                 assert fname.endswith(".h5")
                 with h5py.File(fname, "r") as h5f:
                     with h5py.File(hdfResults[chNo], "r") as h5ref:
-                        assert np.array_equal(h5f["result_0"][()], h5ref["result_0"][()])
+                        assert np.array_equal(
+                            h5f["result_0"][()], h5ref["result_0"][()]
+                        )
 
         # Ensure emergency pickling and single file does not work
         with pytest.raises(RuntimeError):
-            with ParallelMap(pickle_func,
-                             self.sig,
-                             self.b,
-                             self.a,
-                             range(self.nChannels),
-                             sabotage_hdf5=True,
-                             n_inputs=self.nChannels,
-                             single_file=True,
-                             partition=defaultQ,
-                             setup_timeout=120,
-                             setup_interactive=False) as pmap:
+            with ParallelMap(
+                pickle_func,
+                self.sig,
+                self.b,
+                self.a,
+                range(self.nChannels),
+                sabotage_hdf5=True,
+                n_inputs=self.nChannels,
+                single_file=True,
+                partition=defaultQ,
+                setup_timeout=120,
+                setup_interactive=False,
+            ) as pmap:
                 pmap.compute()
 
-
         # Test write breakdown (both for HDF5 saving and pickling)
-        pmap = ParallelMap(pickle_func,
-                           self.sig,
-                           self.b,
-                           self.a,
-                           range(self.nChannels),
-                           sabotage_hdf5=True,
-                           n_inputs=self.nChannels,
-                           partition=defaultQ,
-                           setup_timeout=120,
-                           setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
+        if testclient:
+            time.sleep(sleeptime)
+        pmap = ParallelMap(
+            pickle_func,
+            self.sig,
+            self.b,
+            self.a,
+            range(self.nChannels),
+            sabotage_hdf5=True,
+            n_inputs=self.nChannels,
+            partition=defaultQ,
+            setup_timeout=120,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
         with pytest.raises(RuntimeError) as runerr:
             pmap.compute()
-        assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
-        pmap = ParallelMap(pickle_func,
-                           self.sig,
-                           self.b,
-                           self.a,
-                           range(self.nChannels),
-                           sabotage_hdf5=True,
-                           n_inputs=self.nChannels,
-                           write_pickle=True,
-                           partition=defaultQ,
-                           setup_timeout=120,
-                           setup_interactive=False)
-        outDirs.append(pmap.daemon.out_dir)
+        assert "Parallel computation failed" in str(runerr.value)
+        if testclient:
+            time.sleep(sleeptime)
+        pmap = ParallelMap(
+            pickle_func,
+            self.sig,
+            self.b,
+            self.a,
+            range(self.nChannels),
+            sabotage_hdf5=True,
+            n_inputs=self.nChannels,
+            write_pickle=True,
+            partition=defaultQ,
+            setup_timeout=120,
+            setup_interactive=False,
+        )
+        outDirs.append(pmap.daemon.config.output_dir)
         pmap.kwargv["outFile"][0] = "/path/to/nowhere"
         with pytest.raises(RuntimeError) as runerr:
             pmap.compute()
-        assert "<ACMEdaemon> Parallel computation failed" in str(runerr.value)
+        assert "Parallel computation failed" in str(runerr.value)
 
         # Clean up testing folder
         for folder in outDirs:
@@ -1529,24 +1990,30 @@ class TestParallelMap():
     def test_cancel(self):
 
         # Setup temp-directory layout for subprocess-scripts and prepare interpreters
-        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{mArch}")
+        tempDir = os.path.join(
+            os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{mArch}"
+        )
         shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
-        pshells = [os.path.join(os.path.split(sys.executable)[0], pyExec) for pyExec in ["python", "ipython"]]
+        pshells = [
+            os.path.join(os.path.split(sys.executable)[0], pyExec)
+            for pyExec in ["python", "ipython"]
+        ]
 
         # Prepare ad-hoc script for execution in new process
         scriptName = os.path.join(tempDir, "dummy.py")
-        scriptContents = \
-            "from acme import ParallelMap, cluster_cleanup\n" +\
-            "import time\n" +\
-            "def long_running(dummy):\n" +\
-            "   time.sleep(10)\n" +\
-            "   return\n" +\
-            "if __name__ == '__main__':\n" +\
-            "   cluster_cleanup() \n" +\
-            f"   with ParallelMap(long_running, [None]*2, setup_interactive=False, partition='{defaultQ}', write_worker_results=False) as pmap: \n" +\
-            "       pmap.compute()\n" +\
-            "   print('ALL DONE')\n"
+        scriptContents = (
+            "from acme import ParallelMap, cluster_cleanup\n"
+            + "import time\n"
+            + "def long_running(dummy):\n"
+            + "   time.sleep(10)\n"
+            + "   return\n"
+            + "if __name__ == '__main__':\n"
+            + "   cluster_cleanup() \n"
+            + f"   with ParallelMap(long_running, [None]*2, setup_interactive=False, partition='{defaultQ}', write_worker_results=False) as pmap: \n"
+            + "       pmap.compute()\n"
+            + "   print('ALL DONE')\n"
+        )
         with open(scriptName, "w", encoding="utf8") as f:
             f.write(scriptContents)
 
@@ -1554,9 +2021,14 @@ class TestParallelMap():
         for pshell in pshells:
 
             # Launch new process in background (`stdbuf` prevents buffering of stdout)
-            proc = subprocess.Popen("stdbuf -o0 " + pshell + " " + scriptName,
-                                    shell=True, start_new_session=True,
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+            proc = subprocess.Popen(
+                "stdbuf -o0 " + pshell + " " + scriptName,
+                shell=True,
+                start_new_session=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=0,
+            )
 
             # Wait for ACME to start up (as soon as logging info is shown, `pmap.compute()` is running)
             # However: don't wait indefinitely - if `pmap.compute` is not started within 30s, abort
@@ -1564,7 +2036,9 @@ class TestParallelMap():
             buffer = bytearray()
             timeout = 90
             t0 = time.time()
-            for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
+            for line in itertools.takewhile(
+                lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")
+            ):
                 buffer.extend(line)
                 if logStr in line.decode("utf8"):
                     break
@@ -1583,30 +2057,39 @@ class TestParallelMap():
         # Almost identical script, this time use an externally started client
         if onESI:
             scriptName = os.path.join(tempDir, "dummy2.py")
-            scriptContents = \
-                "from acme import ParallelMap, esi_cluster_setup\n" +\
-                "import time\n" +\
-                "def long_running(dummy):\n" +\
-                "   time.sleep(10)\n" +\
-                "   return\n" +\
-                "if __name__ == '__main__':\n" +\
-                f"   client = esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n" +\
-                "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False, verbose=True) as pmap: \n" +\
-                "       pmap.compute()\n" +\
-                "   print('ALL DONE')\n"
+            scriptContents = (
+                "from acme import ParallelMap, esi_cluster_setup\n"
+                + "import time\n"
+                + "def long_running(dummy):\n"
+                + "   time.sleep(10)\n"
+                + "   return\n"
+                + "if __name__ == '__main__':\n"
+                + f"   client = esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n"
+                + "   with ParallelMap(long_running, [None]*2, setup_interactive=False, write_worker_results=False, verbose=True) as pmap: \n"
+                + "       pmap.compute()\n"
+                + "   print('ALL DONE')\n"
+            )
             with open(scriptName, "w", encoding="utf8") as f:
                 f.write(scriptContents)
 
             # Test script functionality in both Python and iPython
             for pshell in pshells:
-                proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
-                                        shell=True, start_new_session=True,
-                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+                proc = subprocess.Popen(
+                    "stdbuf -o0 " + sys.executable + " " + scriptName,
+                    shell=True,
+                    start_new_session=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    bufsize=0,
+                )
                 logStr = "This is ACME"
                 buffer = bytearray()
                 timeout = 60
                 t0 = time.time()
-                for line in itertools.takewhile(lambda x: time.time() - t0 < timeout, iter(proc.stdout.readline, b"")):
+                for line in itertools.takewhile(
+                    lambda x: time.time() - t0 < timeout,
+                    iter(proc.stdout.readline, b""),
+                ):
                     buffer.extend(line)
                     if logStr in line.decode("utf8"):
                         break
@@ -1619,17 +2102,23 @@ class TestParallelMap():
 
             # Ensure random exception does not immediately kill an active client
             scriptName = os.path.join(tempDir, "dummy3.py")
-            scriptContents = \
-                "from acme import esi_cluster_setup\n" +\
-                "import time\n" +\
-                "if __name__ == '__main__':\n" +\
-                f"   esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n" +\
-                "   time.sleep(60)\n"
+            scriptContents = (
+                "from acme import esi_cluster_setup\n"
+                + "import time\n"
+                + "if __name__ == '__main__':\n"
+                + f"   esi_cluster_setup(partition='{defaultQ}',n_workers=1, interactive=False)\n"
+                + "   time.sleep(60)\n"
+            )
             with open(scriptName, "w", encoding="utf8") as f:
                 f.write(scriptContents)
-            proc = subprocess.Popen("stdbuf -o0 " + sys.executable + " " + scriptName,
-                                    shell=True, start_new_session=True,
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+            proc = subprocess.Popen(
+                "stdbuf -o0 " + sys.executable + " " + scriptName,
+                shell=True,
+                start_new_session=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=0,
+            )
 
             # Give the client time to start up, then send a floating-point exception
             # (equivalent to a `ZeroDivsionError` to the child process)
@@ -1642,7 +2131,10 @@ class TestParallelMap():
             assert proc.poll() is None
             proc.terminate()
             proc.wait()
-            assert proc.returncode in [-sys_signal.SIGFPE.value, -sys_signal.SIGTERM.value]
+            assert proc.returncode in [
+                -sys_signal.SIGFPE.value,
+                -sys_signal.SIGTERM.value,
+            ]
 
         # Clean up tmp folder
         shutil.rmtree(tempDir, ignore_errors=True)
@@ -1654,24 +2146,34 @@ class TestParallelMap():
         # using pytest's monkeypatch fixture user-input is simulated. If a user
         # decides to not move ahead after the dryrun the auto-generated output
         # directory must be cleaned up
-        monkeypatch.setattr("builtins.input", lambda _ : "n")
-        pmap = ParallelMap(simple_func, [2, 4, 6, 8], 4, setup_interactive=True, dryrun=True)
-        time.sleep(1.0)
+        monkeypatch.setattr("builtins.input", lambda _: "n")
+        monkeypatch.setattr("sys.stdin.isatty", lambda: "True")
+        pmap = ParallelMap(
+            simple_func,
+            [2, 4, 6, 8],
+            4,
+            setup_interactive=True,
+            dryrun=True,
+            cleanup_threshold_days=999,
+        )
+        time.sleep(sleeptime)
 
         # Ensure auto-generated output dir has been successfully removed
-        outDir = pmap.daemon.out_dir
+        outDir = pmap.daemon.config.output_dir
         assert os.path.exists(outDir) is False
 
         # Now go through with the dry-run
-        monkeypatch.setattr("builtins.input", lambda _ : "y")
-        with ParallelMap(simple_func,
-                         [2, 4, 6, 8],
-                         4,
-                         setup_interactive=True,
-                         setup_timeout=120,
-                         dryrun=True) as pmap:
+        monkeypatch.setattr("builtins.input", lambda _: "y")
+        with ParallelMap(
+            simple_func,
+            [2, 4, 6, 8],
+            4,
+            setup_interactive=True,
+            setup_timeout=120,
+            dryrun=True,
+        ) as pmap:
             pmap.compute()
-        shutil.rmtree(pmap.out_dir, ignore_errors=True)
+        shutil.rmtree(pmap.config.output_dir, ignore_errors=True)
 
     def test_memest(self):
 
@@ -1679,7 +2181,9 @@ class TestParallelMap():
         cluster_cleanup()
 
         # Create tmp directory for logfile
-        tempDir = os.path.join(os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{mArch}")
+        tempDir = os.path.join(
+            os.path.abspath(os.path.expanduser("~")), f"acme_tmp_{mArch}"
+        )
         shutil.rmtree(tempDir, ignore_errors=True)
         os.makedirs(tempDir, exist_ok=True)
         customLog = os.path.join(tempDir, "mem_log.txt")
@@ -1697,14 +2201,16 @@ class TestParallelMap():
         # a 2GB array is allocated, set final sleep wait period to 2 seconds, so
         # total runtime of the function should be b/w 5-10 seconds (depending on how long
         # array allocation takes)
-        pmap = ParallelMap(memtest_func,
-                           np.arange(2),
-                           2,
-                           sleeper=2,
-                           arrsize=arrsize,
-                           logfile=customLog,
-                           setup_timeout=120,
-                           setup_interactive=False)
+        pmap = ParallelMap(
+            memtest_func,
+            np.arange(2),
+            2,
+            sleeper=2,
+            arrsize=arrsize,
+            logfile=customLog,
+            setup_timeout=120,
+            setup_interactive=False,
+        )
 
         # If executed locally, the above call did not invoke `estimate_memuse` since
         # there's no partition to choose
@@ -1712,7 +2218,7 @@ class TestParallelMap():
 
             # Fire off `estimate_memuse` manually
             tic = time.perf_counter()
-            memEst = pmap.daemon.estimate_memuse()
+            memEst = pmap.daemon.profiler.estimate_memory(pmap.daemon.config.output_dir)
             toc = time.perf_counter()
 
             # Ensure 2.12GB array allocation was profiled correctly (2.x GB are rounded
@@ -1742,21 +2248,23 @@ class TestParallelMap():
 
         # Profiling completed full run of `memtest_func`: ensure any auto-created
         # output HDF5 files were removed
-        outDirs.append(pmap.daemon.out_dir)
-        assert len(os.listdir(os.path.dirname(pmap.kwargv['outFile'][0]))) == 0
+        outDirs.append(pmap.daemon.config.output_dir)
+        assert len(os.listdir(os.path.dirname(pmap.kwargv["outFile"][0]))) == 0
 
         # Syncopy-related test: ensure memory profiling works also if ACME
         # does not handle result collection
         syncopylog = os.path.join(tempDir, "syncopylog.txt")
-        pmap = ParallelMap(memtest_func,
-                           np.arange(100),
-                           2,
-                           sleeper=300,
-                           arrsize=arrsize,
-                           logfile=syncopylog,
-                           setup_timeout=10,
-                           write_worker_results=False,
-                           setup_interactive=False)
+        pmap = ParallelMap(
+            memtest_func,
+            np.arange(100),
+            2,
+            sleeper=300,
+            arrsize=arrsize,
+            logfile=syncopylog,
+            setup_timeout=10,
+            write_worker_results=False,
+            setup_interactive=False,
+        )
         with open(syncopylog, "r", encoding="utf8") as f:
             logTxt = f.read()
         assert "memEstRun" not in logTxt
@@ -1774,19 +2282,21 @@ class TestParallelMap():
             setupTimeout = 90
         else:
             setupTimeout = 45
-        pmap = ParallelMap(memtest_func,
-                           np.arange(100),
-                           2,
-                           sleeper=300,
-                           arrsize=arrsize,
-                           logfile=customLog2,
-                           setup_timeout=setupTimeout,
-                           setup_interactive=False)
+        pmap = ParallelMap(
+            memtest_func,
+            np.arange(100),
+            2,
+            sleeper=300,
+            arrsize=arrsize,
+            logfile=customLog2,
+            setup_timeout=setupTimeout,
+            setup_interactive=False,
+        )
 
         # Again, fire off `estimate_memuse` manually if tests are run locally
         if not useSLURM:
             tic = time.perf_counter()
-            memEst = pmap.daemon.estimate_memuse()
+            memEst = pmap.daemon.profiler.estimate_memory(pmap.daemon.config.output_dir)
             toc = time.perf_counter()
 
             # Ensure 2.12GB array allocation was profiled correctly
@@ -1814,8 +2324,8 @@ class TestParallelMap():
             assert "based on estimated memory consumption of 3 GB" in logTxt
 
         # Profiling should not have generated any output
-        outDirs.append(pmap.daemon.out_dir)
-        assert len(os.listdir(os.path.dirname(pmap.kwargv['outFile'][0]))) == 0
+        outDirs.append(pmap.daemon.config.output_dir)
+        assert len(os.listdir(os.path.dirname(pmap.kwargv["outFile"][0]))) == 0
 
         # Prepare final "full" tests
         del pmap
@@ -1825,17 +2335,19 @@ class TestParallelMap():
         # Assert that `partition="auto"` has no effect in `LocalCluster` case
         if not useSLURM:
 
-            with ParallelMap(memtest_func,
-                             np.arange(2),
-                             2,
-                             sleeper=2,
-                             arrsize=arrsize,
-                             logfile=customLog3) as pmap:
+            with ParallelMap(
+                memtest_func,
+                np.arange(2),
+                2,
+                sleeper=2,
+                arrsize=arrsize,
+                logfile=customLog3,
+            ) as pmap:
                 pmap.compute()
             with open(customLog3, "r", encoding="utf8") as f:
                 logTxt = f.read()
             assert "Estimating memory consumption" not in logTxt
-            outDirs.append(pmap.out_dir)
+            outDirs.append(pmap.config.output_dir)
 
         else:
 
@@ -1844,17 +2356,21 @@ class TestParallelMap():
 
                 # Simulate call of ParallelMap(partition="auto",...) but w/wrong mem_per_worker!
                 with pytest.raises(IOError):
-                    setup_func(partition="auto", mem_per_worker="invalid", interactive=False)
+                    setup_func(
+                        partition="auto", mem_per_worker="invalid", interactive=False
+                    )
                 time.sleep(10)
 
                 # Simulate `ParallelMap(partition="auto",...)` call by invoking
                 # `esi_cluster_setup`/`bic_cluster_setup` with `mem_per_worker='esstimate_memuse:XY'`
                 memUse = "estimate_memuse:12"
-                client = setup_func(partition="auto",
-                                    mem_per_worker=memUse,
-                                    n_workers=1,
-                                    timeout=180,
-                                    interactive=False)
+                client = setup_func(
+                    partition="auto",
+                    mem_per_worker=memUse,
+                    n_workers=1,
+                    timeout=180,
+                    interactive=False,
+                )
 
                 job_head = client.cluster.job_header.split("-p ")[1].split("\n")[0]
 
@@ -1863,7 +2379,14 @@ class TestParallelMap():
                     if onx86:
                         assert "16GB" in job_head
                     else:
-                        memory = np.unique([w["memory_limit"] for w in client.cluster.scheduler_info["workers"].values()])
+                        memory = np.unique(
+                            [
+                                w["memory_limit"]
+                                for w in client.cluster.scheduler_info[
+                                    "workers"
+                                ].values()
+                            ]
+                        )
                         assert memory.size == 1
                         assert round(memory[0] / 1000**3) == int(memUse.split(":")[1])
                 else:
@@ -1872,14 +2395,16 @@ class TestParallelMap():
                 cluster_cleanup(client)
 
                 # Full run (finally) w/10 workers, 5 of em get mem-profiled
-                with ParallelMap(memtest_func,
-                                 np.arange(10),
-                                 2,
-                                 sleeper=35,
-                                 arrsize=arrsize,
-                                 partition="auto",
-                                 logfile=customLog3,
-                                 setup_interactive=False) as pmap:
+                with ParallelMap(
+                    memtest_func,
+                    np.arange(10),
+                    2,
+                    sleeper=35,
+                    arrsize=arrsize,
+                    partition="auto",
+                    logfile=customLog3,
+                    setup_interactive=False,
+                ) as pmap:
                     pmap.compute()
 
                 # Check correct partition and no. of workers profiled
@@ -1888,7 +2413,7 @@ class TestParallelMap():
                 assert "Estimated memory consumption across 5 runs" in logTxt
                 if mArch == "x86_64":
                     assert "Picked partition 8GBS" in logTxt
-                outDirs.append(pmap.out_dir)
+                outDirs.append(pmap.config.output_dir)
 
         # Clean up
         shutil.rmtree(tempDir, ignore_errors=True)
@@ -1907,11 +2432,13 @@ class TestParallelMap():
         if useSLURM:
             if onESI or onBIC:
                 slurmOut = f"/mnt/hpc/home/{getpass.getuser()}/acme_out"
-                client = setup_func(partition=defaultQ,
-                                    n_workers=10,
-                                    timeout=240,
-                                    job_extra=[f"--output={slurmOut}"],
-                                    interactive=False)
+                client = setup_func(
+                    partition=defaultQ,
+                    n_workers=10,
+                    timeout=240,
+                    job_extra=[f"--output={slurmOut}"],
+                    interactive=False,
+                )
             else:
                 return
             assert f"--output={slurmOut}" in client.cluster.job_header
@@ -1921,10 +2448,19 @@ class TestParallelMap():
 
         # Re-run tests with pre-allocated client (except for those in `skipTests`); ensure
         # client "survives" multiple independent test runs and is not accidentally closed
-        skipTests = ["test_existing_cluster", "test_cancel", "test_dryrun",
-                     "test_memest", "test_github_examples", "_prep_data"]
-        all_tests = [attr for attr in self.__dir__()
-                     if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)]
+        skipTests = [
+            "test_existing_cluster",
+            "test_cancel",
+            "test_dryrun",
+            "test_memest",
+            "test_github_examples",
+            "_prep_data",
+        ]
+        all_tests = [
+            attr
+            for attr in self.__dir__()
+            if (inspect.ismethod(getattr(self, attr)) and attr not in skipTests)
+        ]
         for test in all_tests:
             print("Running test ", test)
             clnt = getattr(self, test)(testclient=client)

@@ -1,6 +1,7 @@
 <!--
-Copyright (c) 2025 Ernst Strüngmann Institute (ESI) for Neuroscience
+Copyright © 2020-2025 Ernst Strüngmann Institute (ESI) for Neuroscience
 in Cooperation with Max Planck Society
+Copyright © 2026 Ernst Strüngmann Institute (ESI) of the Max Planck Society
 SPDX-License-Identifier: CC-BY-NC-SA-1.0
 -->
 
@@ -172,7 +173,7 @@ out = np.zeros((4,))
 
 with h5py.File(pmap.results_container, "r") as h5f:
   for k, key in enumerate(h5f.keys()):
-    out[k] = h5f[key]["result_0"][()]
+    out[k] = np.squeeze(h5f[key]["result_0"][()])
 ```
 
 See also [Where Are My Results?](https://esi-acme.readthedocs.io/en/latest/userguide.html#where-are-my-results)
