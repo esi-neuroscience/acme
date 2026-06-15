@@ -62,6 +62,7 @@ class ACMEdaemon(object):
         stop_client: Union[bool, str] = "auto",
         verbose: Optional[bool] = None,
         logfile: Optional[Union[bool, str]] = None,
+        cleanup_threshold_days: Optional[int] = None,
     ) -> None:
         """
         Manager class for performing concurrent user function calls
@@ -160,6 +161,7 @@ class ACMEdaemon(object):
             stop_client=stop_client,
             verbose=verbose,
             logfile=logfile,
+            cleanup_threshold_days=cleanup_threshold_days,
         )
         self.config.validate()
 

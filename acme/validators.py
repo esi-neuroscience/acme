@@ -11,14 +11,16 @@ import numbers
 import numpy as np
 import tempfile
 import os
+import sys
 import datetime
 import inspect
 import getpass
+import shutil
 import logging
 from typing import Optional, Tuple, Union, Callable
 
 # Local imports
-from .shared import _scalar_parser, is_esi_node, is_bic_node
+from .shared import _scalar_parser, is_esi_node, is_bic_node, user_input, user_yesno
 
 # Fetch logger
 log = logging.getLogger("ACME")
@@ -380,8 +382,130 @@ def validate_n_workers(
     return nwrk
 
 
+def _cleanup_old_acme_directories(
+    base_dir: str,
+    threshold_days: Optional[int],
+    interactive: bool,
+    threshold_dir_count: int = 20,
+) -> None:
+    """
+    Clean up old ACME directories in the specified base directory
+
+    Parameters
+    ----------
+    base_dir : str
+        Base directory to scan for ACME directories
+    threshold_days : int or None
+        Number of days threshold. If 0, delete all ACME directories.
+        If > 0, delete ACME directories older than threshold_days days.
+    interactive : bool
+        If `True` ask for confirmation before deleting anything
+    threshold_dir_count : int
+        If more than `threshold_dir_count` ACME folders are found, issue a warning,
+        no matter if `threshold_days` has been provided
+    """
+
+    log.debug("Scanning directory %s for left-over ACME folders", base_dir)
+
+    # Get current time
+    now = datetime.datetime.now()
+
+    # Scan for ACME directories
+    try:
+        entries = os.listdir(base_dir)
+    except (OSError, PermissionError) as exc:
+        log.warning("Could not scan directory %s for cleanup: %s", base_dir, str(exc))
+        return
+
+    acme_dirs = []
+    for entry in entries:
+        if entry.startswith("ACME_"):
+            full_path = os.path.join(base_dir, entry)
+            if os.path.isdir(full_path):
+                acme_dirs.append((entry, full_path))
+
+    if not acme_dirs:
+        log.debug("No ACME directories found in %s", base_dir)
+        return
+
+    # No matter if cleanup was requested, issue a warning if "many" ACME directories
+    # were found - and ask to delete if we're running interactively
+    if threshold_days is None:
+        msg = "Found %d ACME directories in %s" % (len(acme_dirs), base_dir)
+        if len(acme_dirs) > threshold_dir_count:
+            log.warning(msg)
+            if interactive:
+                query = "Do you want to [k]eep these directories or delete entries older than N days?"
+                invalid_choice_msg = "Please pick a number between 1 and 99 days or respond with k to keep all"
+                choice = user_input(
+                    query,
+                    valid=["k"] + [str(x) for x in range(1, 100)],
+                    default="7",
+                    invalid_choice_msg=invalid_choice_msg,
+                )
+                if choice == "k":
+                    return
+                threshold_days = int(choice)
+            else:
+                # Non-interactive mode: just warn and return without cleanup
+                return
+        else:
+            log.debug(msg)
+            return
+
+    log.info("Cleanup requested with threshold: %d days", threshold_days)
+
+    # Determine which directories to delete
+    dirs_to_delete = []
+    for dir_name, full_path in acme_dirs:
+        try:
+            # Get directory modification time
+            mtime = os.path.getmtime(full_path)
+            dir_time = datetime.datetime.fromtimestamp(mtime)
+
+            # Calculate age in days
+            age_days = (now - dir_time).days
+
+            # Check if directory should be deleted
+            if threshold_days == 0:
+                # Delete all ACME directories
+                dirs_to_delete.append((dir_name, full_path, age_days))
+            elif age_days > threshold_days:
+                # Delete directories older than threshold
+                dirs_to_delete.append((dir_name, full_path, age_days))
+
+        except (OSError, PermissionError) as exc:
+            log.warning(
+                "Could not check modification time for %s: %s", full_path, str(exc)
+            )
+
+    # Delete the directories
+    if dirs_to_delete:
+        log.info("Found %d ACME directories to clean up", len(dirs_to_delete))
+        if interactive:
+            query = "Do you want to proceed removing %d directories?" % (
+                len(dirs_to_delete)
+            )
+            if not user_yesno(query, default="no"):
+                log.info("No cleanup performed. ")
+                return
+        for dir_name, full_path, age_days in dirs_to_delete:
+            try:
+                shutil.rmtree(full_path)
+                log.info(
+                    "Deleted old ACME directory %s (age: %d days)", dir_name, age_days
+                )
+            except (OSError, PermissionError) as exc:
+                log.warning("Could not delete directory %s: %s", full_path, str(exc))
+    else:
+        log.info("No ACME directories need cleanup in %s", base_dir)
+
+
 def validate_outputdir(
-    output_dir: Union[str, None], func: Optional[Callable] = None
+    output_dir: Union[str, None],
+    func: Optional[Callable] = None,
+    cleanup_threshold_days: Optional[int] = None,
+    interactive: bool = True,
 ) -> str:
     """
     Coming soon...
@@ -400,13 +524,21 @@ def validate_outputdir(
     else:
         # On the ESI cluster, save results on HPC mount, otherwise use location of `func`
         if is_esi_node() or is_bic_node():
-            outDir = f"/mnt/hpc/home/{getpass.getuser()}/"
+            baseDir = f"/mnt/hpc/home/{getpass.getuser()}/"
         else:  # pragma: no cover
             if func is None:
-                func = inspect.currentframe()
-            outDir = os.path.dirname(os.path.abspath(inspect.getfile(func)))
+                # Use current working directory for cleanup when no function is provided
+                baseDir = os.getcwd()
+            else:
+                baseDir = os.path.dirname(os.path.abspath(inspect.getfile(func)))
+
+        # Scan for old ACME directories (turn off user query under pytest)
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            interactive = False
+        _cleanup_old_acme_directories(baseDir, cleanup_threshold_days, interactive)
+
         outDir = os.path.join(
-            outDir, f"ACME_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
+            baseDir, f"ACME_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}"
         )
     log.debug("Using output directory %s", outDir)
 
@@ -448,3 +580,24 @@ def validate_partition(partition: str) -> None:
             raise ValueError(err)
     log.debug("Found SLURM partition selection %s", partition)
     return
+
+
+def validate_setup_interactive(setup_interactive: bool) -> bool:
+    """
+    Coming soon
+    """
+
+    # Check type
+    validate_boolean(setup_interactive, "setup_interactive")
+
+    # Change to `False` if `True` but running non-interactively
+    if setup_interactive:
+        try:
+            return sys.stdin is not None and sys.stdin.isatty()
+        except (AttributeError, OSError, ValueError):
+            log.warning(
+                "Cannot read from stdin - setting `setup_interactive` to `False`"
+            )
+            return False
+
+    return setup_interactive

@@ -8,7 +8,7 @@ import toml
 import yaml
 
 # Manually set release version
-releaseVersion = "2025.11"
+releaseVersion = "2026.6"
 
 # Read dependencies from setup.cfg + pyproject.toml and create conda environment file
 envFile = "acme.yml"

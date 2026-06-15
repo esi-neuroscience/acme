@@ -49,7 +49,7 @@ if __name__ == "__main__":
     # # with ParallelMap(f, [elem * np.ones((3,)) for elem in [2, 4, 6, 8]], 4, result_shape=(None, np.inf), verbose=True, single_file=True) as pmap:
     # #     pmap.compute()
 
-    pmap = ParallelMap(f, [2, 4, 6, 8], 4)
+    pmap = ParallelMap(f, [2, 4, 6, 8], 4, verbose=False)
 
     # with ParallelMap(
     #     f,

@@ -23,6 +23,7 @@ from .validators import (
     validate_outputdir,
     validate_boolean,
     validate_partition,
+    validate_setup_interactive,
 )
 from .shared import is_slurm_node, _scalar_parser
 
@@ -74,6 +75,9 @@ class ACMEConfig:
     verbose: Optional[bool] = None
     logfile: Optional[Union[bool, str]] = None
 
+    # Cleanup configuration
+    cleanup_threshold_days: Optional[int] = None
+
     # Internal state
     acme_func: Optional[Callable] = None
     collect_results: Optional[bool] = True
@@ -106,6 +110,12 @@ class ACMEConfig:
         self.task_ids = list(range(self.n_calls))
         self.has_slurm = is_slurm_node()
 
+        # Validate dryrun setting
+        validate_boolean(self.dryrun, "dryrun")
+
+        # Ensure `setup_interactive` makes sense (do not use if stdin is unavailable)
+        self.setup_interactive = validate_setup_interactive(self.setup_interactive)
+
         # Create config dictionary for boolean flags validation
         output_config = {
             "write_worker_results": self.write_worker_results,
@@ -118,7 +128,12 @@ class ACMEConfig:
 
         # Validate output directory
         if self.write_worker_results:
-            self.output_dir = validate_outputdir(self.output_dir, self.func)
+            self.output_dir = validate_outputdir(
+                self.output_dir,
+                self.func,
+                self.cleanup_threshold_days,
+                self.setup_interactive,
+            )
         else:
             self.output_dir = None
 
@@ -152,10 +167,6 @@ class ACMEConfig:
         self.n_workers = validate_n_workers(
             self.n_workers, self.n_calls, self.has_slurm
         )
-
-        # Validate Booleans
-        validate_boolean(self.dryrun, "dryrun")
-        validate_boolean(self.setup_interactive, "setup_interactive")
 
         # Validate timeout for starting computing client
         try:

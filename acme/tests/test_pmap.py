@@ -2147,8 +2147,14 @@ class TestParallelMap:
         # decides to not move ahead after the dryrun the auto-generated output
         # directory must be cleaned up
         monkeypatch.setattr("builtins.input", lambda _: "n")
+        monkeypatch.setattr("sys.stdin.isatty", lambda: "True")
         pmap = ParallelMap(
-            simple_func, [2, 4, 6, 8], 4, setup_interactive=True, dryrun=True
+            simple_func,
+            [2, 4, 6, 8],
+            4,
+            setup_interactive=True,
+            dryrun=True,
+            cleanup_threshold_days=999,
         )
         time.sleep(sleeptime)
 
