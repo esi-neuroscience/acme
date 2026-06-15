@@ -25,6 +25,9 @@ linux_x86:
     - conda clean --all -y
     - conda env update -f acme.yml --prune
     - conda activate acme
+    - export PYTHONPATH=$CI_PROJECT_DIR
+    - rm -rf $CI_PROJECT_DIR/acme/__pycache__
+    - rm -rf $CI_PROJECT_DIR/acme/tests/__pycache__
     - tox
 
 macos_m1:
