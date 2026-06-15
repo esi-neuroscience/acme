@@ -22,4 +22,4 @@ message: If you use this software, please cite it based on metadata found in thi
   clusters.
 repository-code: https://github.com/esi-neuroscience/acme
 title: 'ACME: Asynchronous Computing Made ESI'
-version: '2025.11'
+version: '2026.6'
