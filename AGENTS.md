@@ -12,20 +12,29 @@ SPDX-License-Identifier: CC0-1.0
 Single-package Python library for parallel computing via Dask and SLURM.
 
 **Main entrypoints:**
-- `ParallelMap` - user-facing context manager in `acme/frontend.py`
+- `ParallelMap` - user-facing context manager in `acme/frontend.py:31`
 - `ACMEdaemon` - computational backend in `acme/backend.py`
 - Cluster setup helpers in `acme/dask_helpers.py`:
   - `esi_cluster_setup` - ESI HPC cluster (Frankfurt)
   - `bic_cluster_setup` - CoBIC HPC cluster (Frankfurt)
   - `slurm_cluster_setup` - generic SLURM clusters
   - `local_cluster_setup` - local multiprocessing
+  - `cluster_cleanup` - shutdown and cleanup Dask/SLURM clusters
 
 **Core modules:**
 - `frontend.py` - user interface
 - `backend.py` - execution scaffolding
+- `config.py` - centralized configuration container with validation
+- `client_orchestrator.py` - client lifecycle management
+- `argument_processor.py` - input argument distribution
+- `validators.py` - parameter validation
+- `memory_profiler.py` - memory usage tracking
 - `shared.py` - utilities, HPC node detection
 - `dask_helpers.py` - Dask/SLURM integration
 - `logger.py` - logging setup
+
+**Architecture flow:**
+`ParallelMap` → `ACMEConfig` (validation) → `ClientOrchestrator` → `ACMEdaemon` → Dask/SLURM clients
 
 ## Developer Commands
 
@@ -75,6 +84,7 @@ flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statist
 - Tests in `acme/tests/`
 - `pytest.ini` configuration in `acme/tests/pytest.ini`
 - `conftest.py` provides cluster-specific fixtures and skips
+- `run_tests.sh` handles SLURM vs local execution automatically
 
 ## Testing Quirks
 
@@ -86,6 +96,7 @@ flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statist
 - `acme/tests/run_tests.sh` handles both SLURM and local execution
 - Automatically wraps pytest in `srun` when on cluster nodes with appropriate partition selection
 - Adds coverage options (`--cov=../../acme`)
+- Sets PYTHONPATH to local repo root for editable package testing
 
 **Important test prerequisites:**
 - Requires SLURM for cluster-specific tests
@@ -97,7 +108,7 @@ flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statist
 **Python version support:** 3.8-3.14 (setup.cfg:42-43)
 
 **Key dependencies:**
-- dask >= 2022.12.1, <= 2025.11.0  (strict upper bound)
+- dask >= 2022.12.1, <= 2026.6.0  (strict upper bound)
 - dask-jobqueue >= 0.8, < 1.0
 - h5py >= 3, < 4
 - numpy >= 1.0, < 3.0
@@ -130,7 +141,8 @@ flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statist
 
 **Logging:**
 - Module-wide logging configured in `__init__.py` via `prepare_log("ACME")`
-- dask-jobqueue FutureWarnings are suppressed globally
+- Import-level warnings filter suppresses dask-jobqueue FutureWarnings
+- Version detection via git sub-process if not installed in site-packages
 
 **Only work locally and respect authorship** 
 - Use a dedicated branch and never push to remote
